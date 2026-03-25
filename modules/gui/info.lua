@@ -329,13 +329,14 @@ self.grid:AddElement(6, 8,
     local lastUpdate = 0
     local perfDone = false
     f:SetScript("OnUpdate", function()
+        -- 仅在面板可见时运行，避免不必要的 CPU 消耗
+        if panel and not panel:IsVisible() then return end
         local time = GetTime()
         if time - lastUpdate >= Setup.UPDATE_INTERVAL then
             Setup:ActiveScripts()
             if not perfDone then
                 Setup:Performance()
-                        Setup:SupportedAddons()
-
+                Setup:SupportedAddons()
                 perfDone = true
             end
             lastUpdate = time

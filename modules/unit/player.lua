@@ -569,8 +569,8 @@ end
         if Setup.healthBar then
             if value then
                 local _, class = UnitClass('player')
-                if class and RAID_CLASS_COLORS[class] then
-                    local color = RAID_CLASS_COLORS[class]
+                local color = DFRL:GetClassColor(class)
+                if color then
                     Setup.healthBar:SetFillColor(color.r, color.g, color.b, 1)
                 else
                     Setup.healthBar:SetFillColor(0, 1, 0, 1)

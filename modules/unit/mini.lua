@@ -539,8 +539,8 @@ DFRL:NewMod("Mini", 1, function()
             end
             if self.colorClass and UnitIsPlayer("targettarget") then
                 local _, class = UnitClass("targettarget")
-                if class and RAID_CLASS_COLORS[class] then
-                    local color = RAID_CLASS_COLORS[class]
+                local color = DFRL:GetClassColor(class)
+                if color then
                     Setup.totHealthBar:SetFillColor(color.r, color.g, color.b)
                     return
                 end
@@ -570,8 +570,8 @@ DFRL:NewMod("Mini", 1, function()
                 if UnitExists("party" .. i) and Setup.partyHealthBars[i] then
                     if self.colorClass then
                         local _, class = UnitClass("party" .. i)
-                        if class and RAID_CLASS_COLORS[class] then
-                            local color = RAID_CLASS_COLORS[class]
+                        local color = DFRL:GetClassColor(class)
+                        if color then
                             Setup.partyHealthBars[i]:SetFillColor(color.r, color.g, color.b)
                         else
                             Setup.partyHealthBars[i]:SetFillColor(0, 1, 0)

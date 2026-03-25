@@ -10,6 +10,12 @@ DFRL:NewMod("Talents", 1, function()
     local branchTextures = {}
     local arrowTextures = {}
 
+    local learnMode = 'learned'  -- 'learned' 或 'planned'
+    local planData = nil         -- 当前规划数据引用
+    local MAX_PLANS = 20         -- 最大方案数
+    local MAX_TALENT_POINTS = 51 -- 最大天赋点数（Turtle WoW）
+    local Update                 -- 前向声明，Update 实际定义在后面
+
     local TALENT_BRANCH_TEXTURECOORDS = {
         up = {[1] = {0.12890625, 0.25390625, 0, 0.484375}, [-1] = {0.12890625, 0.25390625, 0.515625, 1.0}},
         down = {[1] = {0, 0.125, 0, 0.484375}, [-1] = {0, 0.125, 0.515625, 1.0}},
@@ -28,6 +34,180 @@ DFRL:NewMod("Talents", 1, function()
         right = {[1] = {1.0, 0.5, 0, 0.5}, [-1] = {1.0, 0.5, 0.5, 1.0}},
         left = {[1] = {0.5, 1.0, 0, 0.5}, [-1] = {0.5, 1.0, 0.5, 1.0}}
     }
+
+    -- ========== 规划模式函数 ==========
+
+    -- 创建空方案数据结构
+    local function CreateEmptyPlan(index)
+        return {
+            name = '方案 ' .. index,
+            points = 0,
+            [1] = { points = 0 },
+            [2] = { points = 0 },
+            [3] = { points = 0 },
+        }
+    end
+
+    -- 初始化规划数据（从 SavedVariablesPerCharacter 加载）
+    local function InitPlanData()
+        if not DFRL_CUR_PROFILE['TalentPlans'] then
+            DFRL_CUR_PROFILE['TalentPlans'] = {
+                selectedPlan = 1,
+                plans = {},
+            }
+        end
+        planData = DFRL_CUR_PROFILE['TalentPlans']
+        if not planData.plans[1] then
+            planData.plans[1] = CreateEmptyPlan(1)
+        end
+        if not planData.selectedPlan or not planData.plans[planData.selectedPlan] then
+            planData.selectedPlan = 1
+        end
+    end
+
+    -- 获取当前选中方案表
+    local function GetCurrentPlan()
+        if not planData then return nil end
+        return planData.plans[planData.selectedPlan]
+    end
+
+    -- 规划模式下获取天赋信息（用规划 rank 覆盖实际 rank）
+    local function GetPlannedTalentInfo(tab, id)
+        local name, iconTexture, tier, column, rank, maxRank, isExceptional, meetsPrereq = GetTalentInfo(tab, id)
+        local plan = GetCurrentPlan()
+        if plan and learnMode == 'planned' then
+            rank = plan[tab][id] or 0
+        end
+        return name, iconTexture, tier, column, rank, maxRank, isExceptional, meetsPrereq
+    end
+
+    -- 规划模式下重新计算前置条件满足状态
+    local function GetPlannedPrereqs(tab, id)
+        local prereqs = { GetTalentPrereqs(tab, id) }
+        for i = 1, table.getn(prereqs), 3 do
+            local tier, column = prereqs[i], prereqs[i + 1]
+            if tier and column then
+                local node = branchArrays[tab][tier][column]
+                if node and node.id then
+                    local _, _, _, _, pRank, pMaxRank = GetPlannedTalentInfo(tab, node.id)
+                    prereqs[i + 2] = (pRank == pMaxRank) and 1 or nil
+                end
+            end
+        end
+        return unpack(prereqs)
+    end
+
+    -- 左键加点（规划模式）
+    local function PlanTalent(tab, id)
+        local plan = GetCurrentPlan()
+        if not plan then return end
+        local _, _, tier, _, _, maxRank = GetTalentInfo(tab, id)
+        local plannedRank = plan[tab][id] or 0
+        -- 总点数上限
+        if plan.points >= MAX_TALENT_POINTS then return end
+        -- 已满级
+        if plannedRank >= maxRank then return end
+        -- 层级解锁：该树已分配点数 >= (tier-1)*5
+        if plan[tab].points < (tier - 1) * 5 then return end
+        -- 前置条件检查
+        local prereqs = { GetTalentPrereqs(tab, id) }
+        for i = 1, table.getn(prereqs), 3 do
+            local pTier, pCol = prereqs[i], prereqs[i + 1]
+            if pTier and pCol then
+                local node = branchArrays[tab][pTier][pCol]
+                if node and node.id then
+                    local pRank = plan[tab][node.id] or 0
+                    local _, _, _, _, _, pMaxRank = GetTalentInfo(tab, node.id)
+                    if pRank < pMaxRank then return end -- 前置未满
+                end
+            end
+        end
+        -- 执行加点
+        plan[tab][id] = plannedRank + 1
+        plan[tab].points = plan[tab].points + 1
+        plan.points = plan.points + 1
+        Update()
+    end
+
+    -- 右键减点（规划模式）
+    local function UnplanTalent(tab, id)
+        local plan = GetCurrentPlan()
+        if not plan then return end
+        local plannedRank = plan[tab][id] or 0
+        if plannedRank <= 0 then return end
+        local _, _, tier, _, _, maxRank = GetTalentInfo(tab, id)
+        -- 检查：移除此点后，高层天赋是否仍然满足层级解锁
+        local newTabPoints = plan[tab].points - 1
+        for t = 1, 8 do
+            for c = 1, 4 do
+                local node = branchArrays[tab][t][c]
+                if node and node.id and node.id ~= id then
+                    local pRank = plan[tab][node.id] or 0
+                    if pRank > 0 then
+                        local _, _, nodeTier = GetTalentInfo(tab, node.id)
+                        if (nodeTier - 1) * 5 > newTabPoints then
+                            return -- 移除会破坏高层解锁
+                        end
+                    end
+                end
+            end
+        end
+        -- 检查：当前满级时减点是否有其他天赋依赖
+        if plannedRank == maxRank then
+            local numTalents = GetNumTalents(tab)
+            for otherIdx = 1, numTalents do
+                local otherRank = plan[tab][otherIdx] or 0
+                if otherRank > 0 and otherIdx ~= id then
+                    local prereqs = { GetTalentPrereqs(tab, otherIdx) }
+                    for i = 1, table.getn(prereqs), 3 do
+                        local pTier, pCol = prereqs[i], prereqs[i + 1]
+                        if pTier and pCol then
+                            local node = branchArrays[tab][pTier][pCol]
+                            if node and node.id == id then
+                                return -- 有其他天赋依赖此天赋
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        -- 执行减点
+        plan[tab][id] = plannedRank - 1
+        if plan[tab][id] == 0 then plan[tab][id] = nil end
+        plan[tab].points = plan[tab].points - 1
+        plan.points = plan.points - 1
+        Update()
+    end
+
+    -- 重置规划（tab 非 nil 重置单树，nil 重置全部；需 Shift 确认）
+    local function ResetPlan(tab)
+        if not IsShiftKeyDown() then return end
+        local plan = GetCurrentPlan()
+        if not plan then return end
+        if tab then
+            local oldPoints = plan[tab].points
+            plan[tab] = { points = 0 }
+            plan.points = plan.points - oldPoints
+        else
+            plan.points = 0
+            for t = 1, 3 do
+                plan[t] = { points = 0 }
+            end
+        end
+        Update()
+    end
+
+    -- 切换方案（循环 1~MAX_PLANS）
+    local function SwitchPlan(index)
+        if not planData then return end
+        if index < 1 then index = MAX_PLANS end
+        if index > MAX_PLANS then index = 1 end
+        if not planData.plans[index] then
+            planData.plans[index] = CreateEmptyPlan(index)
+        end
+        planData.selectedPlan = index
+        Update()
+    end
 
     local function CreateMainFrame()
         frame = CreateFrame('Frame', 'BLF_TalentFrame', UIParent)
@@ -94,6 +274,93 @@ DFRL:NewMod("Talents", 1, function()
         local pointsLeft = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
         pointsLeft:SetPoint('BOTTOM', frame, 'BOTTOM', 0, 20)
         frame.pointsLeft = pointsLeft
+
+        -- 已学/规划模式切换 radio
+        local learnedCB = DFRL.tools.CreateIndiCheckbox(frame, nil, '已学')
+        learnedCB:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', 150, 17)
+        learnedCB:SetChecked(true)
+
+        local plannedCB = DFRL.tools.CreateIndiCheckbox(frame, nil, '规划')
+        plannedCB:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', 260, 17)
+        plannedCB:SetChecked(false)
+        plannedCB.label:SetTextColor(0, 1, 1)
+
+        -- 方案导航（默认隐藏，规划模式才显示）
+        local prevPlanBtn = CreateFrame('Button', nil, frame)
+        prevPlanBtn:SetWidth(16)
+        prevPlanBtn:SetHeight(16)
+        prevPlanBtn:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', 370, 19)
+        prevPlanBtn:SetNormalTexture('Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up')
+        prevPlanBtn:SetPushedTexture('Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down')
+        prevPlanBtn:SetHighlightTexture('Interface\\Buttons\\UI-Common-MouseHilight')
+        prevPlanBtn:SetScript('OnClick', function()
+            if planData then SwitchPlan(planData.selectedPlan - 1) end
+        end)
+        prevPlanBtn:Hide()
+
+        local planLabel = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+        planLabel:SetPoint('LEFT', prevPlanBtn, 'RIGHT', 5, 0)
+        planLabel:SetText('方案 1/' .. MAX_PLANS)
+        planLabel:SetTextColor(0, 1, 1)
+        planLabel:Hide()
+
+        local nextPlanBtn = CreateFrame('Button', nil, frame)
+        nextPlanBtn:SetWidth(16)
+        nextPlanBtn:SetHeight(16)
+        nextPlanBtn:SetPoint('LEFT', planLabel, 'RIGHT', 5, 0)
+        nextPlanBtn:SetNormalTexture('Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up')
+        nextPlanBtn:SetPushedTexture('Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down')
+        nextPlanBtn:SetHighlightTexture('Interface\\Buttons\\UI-Common-MouseHilight')
+        nextPlanBtn:SetScript('OnClick', function()
+            if planData then SwitchPlan(planData.selectedPlan + 1) end
+        end)
+        nextPlanBtn:Hide()
+
+        local resetBtn = CreateFrame('Button', nil, frame, 'UIPanelButtonTemplate')
+        resetBtn:SetWidth(60)
+        resetBtn:SetHeight(22)
+        resetBtn:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -120, 17)
+        resetBtn:SetText('重置')
+        resetBtn:SetScript('OnClick', function()
+            ResetPlan(nil)
+        end)
+        resetBtn:SetScript('OnEnter', function()
+            GameTooltip:SetOwner(this, 'ANCHOR_TOP')
+            GameTooltip:SetText('Shift+点击 重置全部规划点')
+            GameTooltip:Show()
+        end)
+        resetBtn:SetScript('OnLeave', function() GameTooltip:Hide() end)
+        resetBtn:Hide()
+
+        frame.prevPlanBtn = prevPlanBtn
+        frame.planLabel = planLabel
+        frame.nextPlanBtn = nextPlanBtn
+        frame.resetBtn = resetBtn
+
+        -- 模式切换逻辑
+        local function SetPlanUIVisible(visible)
+            local fn = visible and 'Show' or 'Hide'
+            prevPlanBtn[fn](prevPlanBtn)
+            planLabel[fn](planLabel)
+            nextPlanBtn[fn](nextPlanBtn)
+            resetBtn[fn](resetBtn)
+        end
+
+        learnedCB:SetScript('OnClick', function()
+            learnMode = 'learned'
+            learnedCB:SetChecked(true)
+            plannedCB:SetChecked(false)
+            SetPlanUIVisible(false)
+            Update()
+        end)
+
+        plannedCB:SetScript('OnClick', function()
+            learnMode = 'planned'
+            plannedCB:SetChecked(true)
+            learnedCB:SetChecked(false)
+            SetPlanUIVisible(true)
+            Update()
+        end)
 
         local scaleCheckbox = DFRL.tools.CreateIndiCheckbox(frame, nil, 'Small')
         scaleCheckbox:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', 50, 17)
@@ -268,21 +535,49 @@ DFRL:NewMod("Talents", 1, function()
         local rank = button:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
         rank:SetPoint('BOTTOM', button, 'BOTTOM', -0, -12)
 
+        -- 规划点数叠加显示（青色小字，已学模式下有规划点时显示）
+        local plannedRankBg = button:CreateTexture(nil, 'OVERLAY')
+        plannedRankBg:SetTexture(0, 0, 0, 0.6)
+        plannedRankBg:SetWidth(14)
+        plannedRankBg:SetHeight(12)
+        plannedRankBg:SetPoint('BOTTOMLEFT', button, 'BOTTOMLEFT', -4, -2)
+        plannedRankBg:Hide()
+
+        local plannedRank = button:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+        plannedRank:SetPoint('CENTER', plannedRankBg, 'CENTER', 0, 0)
+        plannedRank:SetTextColor(0, 1, 1)
+        plannedRank:Hide()
+
         button.icon = icon
         button.border = border
         button.hoverBorder = hoverBorder
         button.rank = rank
+        button.plannedRankBg = plannedRankBg
+        button.plannedRank = plannedRank
         button.tabIndex = tabIndex
         button.talentIndex = talentIndex
 
-        button:SetScript('OnClick', function()
-            local _, _, talentTier, _, talentRank, talentMaxRank, _, talentMeetsPrereq = GetTalentInfo(this.tabIndex, this.talentIndex)
-            local characterPoints = UnitCharacterPoints('player')
-            local _, _, tabPointsSpent = GetTalentTabInfo(this.tabIndex)
-            local talentTierUnlocked = ((talentTier - 1) * 5 <= tabPointsSpent)
+        button:RegisterForClicks('LeftButtonUp', 'RightButtonUp')
 
-            if talentMeetsPrereq and talentTierUnlocked and characterPoints > 0 and talentRank < talentMaxRank then
-                LearnTalent(this.tabIndex, this.talentIndex)
+        button:SetScript('OnClick', function()
+            if learnMode == 'planned' then
+                -- 规划模式：左键加点，右键减点
+                if arg1 == 'LeftButton' then
+                    PlanTalent(this.tabIndex, this.talentIndex)
+                elseif arg1 == 'RightButton' then
+                    UnplanTalent(this.tabIndex, this.talentIndex)
+                end
+            else
+                -- 已学模式：左键学习天赋
+                if arg1 == 'LeftButton' then
+                    local _, _, talentTier, _, talentRank, talentMaxRank, _, talentMeetsPrereq = GetTalentInfo(this.tabIndex, this.talentIndex)
+                    local characterPoints = UnitCharacterPoints('player')
+                    local _, _, tabPointsSpent = GetTalentTabInfo(this.tabIndex)
+                    local talentTierUnlocked = ((talentTier - 1) * 5 <= tabPointsSpent)
+                    if talentMeetsPrereq and talentTierUnlocked and characterPoints > 0 and talentRank < talentMaxRank then
+                        LearnTalent(this.tabIndex, this.talentIndex)
+                    end
+                end
             end
         end)
 
@@ -297,11 +592,28 @@ DFRL:NewMod("Talents", 1, function()
             GameTooltip:Hide()
         end)
 
+        -- 滚轮加减点（仅规划模式）
+        button:EnableMouseWheel(true)
+        button:SetScript('OnMouseWheel', function()
+            if learnMode == 'planned' then
+                if arg1 > 0 then
+                    PlanTalent(this.tabIndex, this.talentIndex)
+                else
+                    UnplanTalent(this.tabIndex, this.talentIndex)
+                end
+            end
+        end)
+
         return button
     end
 
     local function CheckPrereqsMaxed(tabIndex, talentIndex)
-        local prereqs = {GetTalentPrereqs(tabIndex, talentIndex)}
+        local prereqs
+        if learnMode == 'planned' then
+            prereqs = { GetPlannedPrereqs(tabIndex, talentIndex) }
+        else
+            prereqs = { GetTalentPrereqs(tabIndex, talentIndex) }
+        end
         for i = 1, table.getn(prereqs), 3 do
             local prereqTier, prereqColumn, prereqMaxed = prereqs[i], prereqs[i+1], prereqs[i+2]
             if prereqTier and prereqColumn and not prereqMaxed then
@@ -457,31 +769,103 @@ DFRL:NewMod("Talents", 1, function()
         end
     end
 
-    local function Update()
+    Update = function()
         if not frame or not frame:IsVisible() then return end
 
+        local isPlanned = (learnMode == 'planned')
+        local plan = GetCurrentPlan()
+
         for tabIndex = 1, 3 do
-            local name, _, pointsSpent = GetTalentTabInfo(tabIndex)
+            local name, _, realPointsSpent = GetTalentTabInfo(tabIndex)
+            local pointsSpent = (isPlanned and plan) and plan[tabIndex].points or realPointsSpent
+
             if name then
                 treeFrames[tabIndex].header:SetText(name)
-                treeFrames[tabIndex].pointsText:SetText(pointsSpent .. ' points')
+                if isPlanned and plan then
+                    treeFrames[tabIndex].pointsText:SetText('|cff00ffff规划' .. plan[tabIndex].points .. '|r / 已学' .. realPointsSpent .. ' points')
+                else
+                    treeFrames[tabIndex].pointsText:SetText(realPointsSpent .. ' points')
+                end
             end
 
             ResetBranches(tabIndex)
 
+            -- 预填充 branchArrays.id 并缓存 GetTalentInfo 结果（避免重复 C-bridge 调用）
             local numTalents = GetNumTalents(tabIndex)
+            local talentCache = {}
+            for talentIndex = 1, numTalents do
+                local tName, tIcon, tTier, tCol, tRank, tMax, tExc, tPrereq = GetTalentInfo(tabIndex, talentIndex)
+                talentCache[talentIndex] = { tName, tIcon, tTier, tCol, tRank, tMax, tExc, tPrereq }
+                if tTier and tCol then
+                    branchArrays[tabIndex][tTier][tCol].id = talentIndex
+                end
+            end
+
             for talentIndex = 1, numTalents do
                 local buttonKey = tabIndex .. '_' .. talentIndex
                 local button = talentButtons[buttonKey]
                 if button then
-                    local talentName, iconTexture, tier, column, rank, maxRank, _, _ = GetTalentInfo(tabIndex, talentIndex)
+                    -- 从缓存读取天赋数据
+                    local cached = talentCache[talentIndex]
+                    local talentName, iconTexture, tier, column, rank, maxRank = cached[1], cached[2], cached[3], cached[4], cached[5], cached[6]
+                    -- 规划模式用规划 rank 覆盖
+                    if isPlanned and plan then
+                        rank = plan[tabIndex][talentIndex] or 0
+                    end
+
                     if talentName then
                         button.icon:SetTexture(iconTexture)
                         button.rank:SetText(rank .. '/' .. maxRank)
 
-                        local cp1 = UnitCharacterPoints('player')
+                        -- 规划点数叠加显示
+                        local plannedR = (plan and plan[tabIndex][talentIndex]) or 0
+                        if isPlanned then
+                            -- 规划模式：rank 文字用青色
+                            if rank > 0 then
+                                button.rank:SetTextColor(0, 1, 1)
+                            else
+                                button.rank:SetTextColor(1, 0.82, 0)
+                            end
+                            button.plannedRank:Hide()
+                            button.plannedRankBg:Hide()
+                        else
+                            -- 已学模式：恢复默认颜色
+                            button.rank:SetTextColor(1, 0.82, 0)
+                            -- 若当前方案有规划点，用青色小字显示
+                            if plannedR > 0 then
+                                button.plannedRank:SetText('+' .. plannedR)
+                                button.plannedRank:Show()
+                                button.plannedRankBg:Show()
+                            else
+                                button.plannedRank:Hide()
+                                button.plannedRankBg:Hide()
+                            end
+                        end
+
+                        -- 条件计算解锁状态
+                        local cp1
+                        if isPlanned and plan then
+                            cp1 = MAX_TALENT_POINTS - plan.points
+                        else
+                            cp1 = UnitCharacterPoints('player')
+                        end
                         local tierUnlocked = ((tier - 1) * 5 <= pointsSpent)
-                        local prereqsMaxed = CheckPrereqsMaxed(tabIndex, talentIndex)
+
+                        -- 获取前置条件（缓存结果供后续 SetTalentPrereqs 使用）
+                        local prereqResults
+                        if isPlanned then
+                            prereqResults = { GetPlannedPrereqs(tabIndex, talentIndex) }
+                        else
+                            prereqResults = { GetTalentPrereqs(tabIndex, talentIndex) }
+                        end
+                        -- 从缓存结果判断前置是否全部满足
+                        local prereqsMaxed = 1
+                        for pi = 1, table.getn(prereqResults), 3 do
+                            if prereqResults[pi] and prereqResults[pi+1] and not prereqResults[pi+2] then
+                                prereqsMaxed = nil
+                                break
+                            end
+                        end
 
                         if rank == maxRank then
                             button.border:SetVertexColor(1.0, 0.82, 0, 1.0)
@@ -497,28 +881,35 @@ DFRL:NewMod("Talents", 1, function()
                             button.icon:SetDesaturated(1)
                         end
 
-                        branchArrays[tabIndex][tier][column].id = talentIndex
+                        -- 分支线条（复用已缓存的 prereqResults）
                         local forceDesaturated
-                        if UnitCharacterPoints('player') <= 0 and rank == 0 then
+                        if cp1 <= 0 and rank == 0 then
                             forceDesaturated = 1
                         else
                             forceDesaturated = nil
                         end
-                        local tierUnlocked2
-                        if (tier - 1) * 5 <= pointsSpent then
-                            tierUnlocked2 = 1
-                        else
-                            tierUnlocked2 = nil
-                        end
-                        SetTalentPrereqs(tabIndex, tier, column, forceDesaturated, tierUnlocked2, GetTalentPrereqs(tabIndex, talentIndex))
+                        local tierUnlocked2 = tierUnlocked and 1 or nil
+                        SetTalentPrereqs(tabIndex, tier, column, forceDesaturated, tierUnlocked2, unpack(prereqResults))
                     end
                 end
             end
             DrawBranches(tabIndex)
         end
 
-        local points = UnitCharacterPoints('player')
-        frame.pointsLeft:SetText('Talent Points Available: |cFFFFFFFF' .. points .. '|r')
+        -- 底部总点文字
+        if isPlanned and plan then
+            local used = plan.points
+            local left = MAX_TALENT_POINTS - used
+            frame.pointsLeft:SetText('|cff00ffff已规划: ' .. used .. '/' .. MAX_TALENT_POINTS .. '  剩余: ' .. left .. '|r')
+        else
+            local points = UnitCharacterPoints('player')
+            frame.pointsLeft:SetText('Talent Points Available: |cFFFFFFFF' .. points .. '|r')
+        end
+
+        -- 更新方案标签文字
+        if frame.planLabel and planData then
+            frame.planLabel:SetText('方案 ' .. planData.selectedPlan .. '/' .. MAX_PLANS)
+        end
     end
 
     local function CreateAllTalents()
@@ -539,6 +930,7 @@ DFRL:NewMod("Talents", 1, function()
             CreateMainFrame()
             CreateTreeFrames()
             CreateAllTalents()
+            InitPlanData()
         end
         if frame:IsVisible() then
             frame:Hide()

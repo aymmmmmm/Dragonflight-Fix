@@ -20,7 +20,7 @@ DFRL.activeScripts = {}
 DFRL.gui = {}
 
 -- db version
-DFRL.DBversion = "1.0"
+DFRL.DBversion = "2.0"
 
 -- boot flag
 local boot = false
@@ -55,23 +55,22 @@ function DFRL:CheckAddon(name)
     elseif name == "Immersion" then
         self.addon4 = true
     end
-
-    if IsAddOnLoaded("ShaguTweaks") then
-        self.addon1 = true
-    end
-    if IsAddOnLoaded("ShaguTweaks-extras") then
-        self.addon2 = true
-    end
-    if IsAddOnLoaded("Bagshui") then
-        self.addon3 = true
-    end
-    if IsAddOnLoaded("Immersion") then
-        self.addon4 = true
-    end
 end
 
 function print(msg)
     DEFAULT_CHAT_FRAME:AddMessage("|cffffd100DFRL: |r".. tostring(msg))
+end
+
+-- 职业颜色工具：优先使用 DFRL.classColors，回退到 RAID_CLASS_COLORS
+-- 返回 {r, g, b} 表或 nil
+function DFRL:GetClassColor(class)
+    if not class then return nil end
+    local custom = self.classColors and self.classColors[class]
+    if custom then return custom end
+    if RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] then
+        return RAID_CLASS_COLORS[class]
+    end
+    return nil
 end
 
 -- environment
@@ -169,13 +168,32 @@ function DFRL:InitTempDB()
 end
 
 function DFRL:VersionCheckDB()
-    if not DFRL_DB_SETUP.version or DFRL_DB_SETUP.version ~= self.DBversion then
+    local oldVer = DFRL_DB_SETUP.version
+    if oldVer == self.DBversion then return end
+
+    -- 版本不匹配：合并新增默认值到现有数据，而非清空
+    if oldVer and next(DFRL_PROFILES) then
+        for profileName, profileData in pairs(DFRL_PROFILES) do
+            for mod, def in pairs(self.defaults) do
+                if not profileData[mod] then
+                    profileData[mod] = {}
+                end
+                for key, val in pairs(def) do
+                    if profileData[mod][key] == nil then
+                        profileData[mod][key] = val[1]
+                    end
+                end
+            end
+        end
+        print("配置已迁移至 v" .. self.DBversion)
+    else
+        -- 首次安装或无有效数据，清空重建
         DFRL_PROFILES = {}
-        DFRL_DB_SETUP = {}
         DFRL_CUR_PROFILE = {}
-        DFRL_DB_SETUP.version = self.DBversion
-        print("Version mismatch - wiping all DFRL DB's")
     end
+
+    DFRL_DB_SETUP = {}
+    DFRL_DB_SETUP.version = self.DBversion
 end
 
 function DFRL:SetTempDB(mod, key, value)
@@ -313,6 +331,7 @@ DFRL:SetScript("OnEvent", function()
     end
     if event == "ADDON_LOADED" and arg1 == "Dragonflight-Fix" then
         if boot then return end
+        boot = true
         DFRL:InitTempDB()
         DFRL:RunMods()
         print("欢迎使用 |cffffd200Dragonflight:|r Fix。")

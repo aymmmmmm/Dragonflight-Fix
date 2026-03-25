@@ -18,6 +18,14 @@ core\first.lua
 
 # DATA
 data\tables.lua
+data\debuffs.lua
+
+# LIBS
+libs\libtipscan.lua
+libs\libspell.lua
+libs\libdebuff.lua
+libs\libguid.lua
+libs\libevents.lua
 
 # MODULES
 modules\bars\bars.lua
@@ -35,10 +43,14 @@ modules\ui\ui.lua
 modules\ui\tooltip.lua
 modules\ui\talents.lua
 modules\ui\errorHandler.lua
+modules\ui\cooldowns.lua
+modules\ui\itemcompare.lua
+modules\ui\colors.lua
 modules\unit\player.lua
 modules\unit\target.lua
 modules\unit\mini.lua
 modules\unit\pvp.lua
+modules\unit\auras.lua
 modules\xprep\xprep.lua
 modules\track\track.lua
 # modules\test.lua

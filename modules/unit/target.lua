@@ -358,8 +358,8 @@ DFRL:NewMod("Target", 1, function()
 
         if self.barColorState.colorClass and UnitIsPlayer('target') then
             local _, class = UnitClass('target')
-            if class and RAID_CLASS_COLORS[class] then
-                local color = RAID_CLASS_COLORS[class]
+            local color = DFRL:GetClassColor(class)
+            if color then
                 self.healthBar:SetFillColor(color.r, color.g, color.b, 1)
                 return
             end
