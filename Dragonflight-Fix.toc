@@ -30,6 +30,7 @@ libs\libevents.lua
 # MODULES
 modules\bars\bars.lua
 modules\bars\range.lua
+modules\bars\orbs.lua
 modules\cast\cast.lua
 modules\chat\chat.lua
 modules\bags\bags.lua

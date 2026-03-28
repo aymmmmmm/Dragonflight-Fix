@@ -30,8 +30,8 @@ DFUI:NewDefaults("Mini", {
     colorClass = {false, "checkbox", nil, nil, "生命值条", 15, "根据职业着色目标的目标和队伍生命值条", nil, nil},
     enablePulse = {true, "checkbox", nil, nil, "生命值条", 16, "启用所有迷你框架低血量脉冲动画", nil, nil},
     pulseColor = {{1, 1, 1}, "colour", nil, "enablePulse", "生命值条", 17, "所有迷你框架脉冲动画颜色", nil, nil},
-    enableCutout = {true, "checkbox", nil, nil, "Health Bars", 18, "Enable cutout animation on damage for all mini frames", nil, nil},
-    cutoutColor = {{1, 0, 0}, "colour", nil, "enableCutout", "Health Bars", 19, "Color for cutout animation on all mini frames", nil, nil},
+    enableCutout = {true, "checkbox", nil, nil, "生命值条", 18, "启用所有迷你框架伤害切割动画", nil, nil},
+    cutoutColor = {{1, 0, 0}, "colour", nil, "enableCutout", "生命值条", 19, "所有迷你框架切割动画颜色", nil, nil},
 })
 
 DFUI:NewMod("Mini", 1, function()

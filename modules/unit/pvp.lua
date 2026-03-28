@@ -1,6 +1,6 @@
 DFUI:NewDefaults("PVPIcon", {
     enabled = { true },
-    pvpDark = {false, "checkbox", nil, nil, "外观", 1, "为PvP图标使用深色", nil, nil},
+    pvpDark = {false, "checkbox", nil, nil, "PVP", 1, "为PvP图标使用深色", nil, nil},
 })
 
 DFUI:NewMod("PVPIcon", 1, function()

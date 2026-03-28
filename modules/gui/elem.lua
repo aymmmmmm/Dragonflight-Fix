@@ -84,6 +84,7 @@ DFUI:NewMod("Gui-elem", 3, function()
             ["Xprep"]   = {15, 1},
             ["Colors"]  = {14, 5},
             ["Cooldowns"] = {6, 3},
+            ["Orbs"]    = {6, 4},
             ["ItemCompare"] = {10, 5},
             ["Auras"]   = {14, 6},
         },
@@ -230,6 +231,20 @@ DFUI:NewMod("Gui-elem", 3, function()
             return a.order < b.order
         end)
 
+        -- module display names for tab 14 (unit frames) module headers
+        local moduleDisplayNames = {
+            ["Player"]  = "玩家框架",
+            ["PVPIcon"] = "PVP图标",
+            ["Target"]  = "目标框架",
+            ["Mini"]    = "小型框架",
+            ["Colors"]  = "配色设置",
+            ["Auras"]   = "光环设置",
+            ["Bars"]    = "动作条",
+            ["RangeIndicator"] = "距离指示器",
+            ["Cooldowns"] = "冷却数字",
+            ["Orbs"]    = "血球/蓝球",
+        }
+
         -- process each module in order
         for _, moduleInfo in ipairs(sortedModules) do
             local moduleName = moduleInfo.name
@@ -245,6 +260,32 @@ DFUI:NewMod("Gui-elem", 3, function()
             local moduleKey = tabIndex .. "_" .. moduleName
             if not self.moduleHeaders[moduleKey] then
                 self.moduleHeaders[moduleKey] = true
+
+                -- show module header for tabs with multiple modules
+                if tabIndex == 6 or tabIndex == 14 then
+                    local displayName = moduleDisplayNames[moduleName] or moduleName
+                    local yOffset = self.tabPositions[tabIndex]
+
+                    local headerFrame = CreateFrame("Frame", nil, scrollChild)
+                    headerFrame:SetWidth(400)
+                    headerFrame:SetHeight(20)
+                    headerFrame:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, yOffset - self.MODULE_TOP_SPACING)
+
+                    local headerText = headerFrame:CreateFontString(nil, "OVERLAY")
+                    headerText:SetFont(self.font .. "BigNoodleTitling.ttf", 16, "OUTLINE")
+                    headerText:SetPoint("LEFT", headerFrame, "LEFT", 0, 0)
+                    headerText:SetText(displayName)
+                    headerText:SetTextColor(1, 0.82, 0)
+
+                    local lineLeft = headerFrame:CreateTexture(nil, "ARTWORK")
+                    lineLeft:SetTexture("Interface\\Buttons\\WHITE8X8")
+                    lineLeft:SetHeight(1)
+                    lineLeft:SetPoint("LEFT", headerText, "RIGHT", 8, 0)
+                    lineLeft:SetPoint("RIGHT", headerFrame, "RIGHT", 0, 0)
+                    lineLeft:SetVertexColor(1, 0.82, 0, 0.3)
+
+                    self.tabPositions[tabIndex] = yOffset - self.MODULE_TOP_SPACING - 20
+                end
             end
 
             local sortedCategories = {}
