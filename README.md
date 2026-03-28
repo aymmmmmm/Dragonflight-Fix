@@ -51,7 +51,7 @@
 
 1. 下载本项目
 2. 将文件夹放入 WoW 目录：`Interface\AddOns\`
-3. **文件夹必须命名为 `Dragonflight-Fix`**（不能是其他名字）
+3. **文件夹必须命名为 `Dragonflight-Fix`**（GitHub 下载的 zip 解压后需将 `dragonflight-fix-main` 重命名）
 4. 启动游戏，通过 ESC 菜单或 `/dfui` 命令打开设置面板
 
 ### 推荐依赖
