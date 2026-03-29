@@ -9,20 +9,27 @@ DFUI:NewDefaults("Orbs", {
     orbAlpha = {1, "slider", {0.1, 1, 0.05}, "showOrbs", "通用", 3, "球体透明度", nil, nil},
     orbXOffset = {0, "slider", {-500, 500, 1}, "showOrbs", "位置", 4, "水平偏移", nil, nil},
     orbYOffset = {0, "slider", {-400, 400, 1}, "showOrbs", "位置", 5, "垂直偏移", nil, nil},
-    showFrame = {true, "checkbox", nil, "showOrbs", "外观", 6, "显示球体边框", nil, nil},
-    showGloss = {true, "checkbox", nil, "showOrbs", "外观", 7, "显示高光反射", nil, nil},
-    showText = {true, "checkbox", nil, "showOrbs", "文字", 8, "显示数值", nil, nil},
-    textFormat = {"percent", "dropdown", {"percent", "current", "current/max"}, "showText", "文字", 9, "数值格式", nil, nil},
-    textSize = {12, "slider", {8, 22}, "showText", "文字", 10, "文字大小", nil, nil},
-    lowHealthAlert = {0.25, "slider", {0.1, 0.5, 0.05}, "showOrbs", "警告", 11, "低血量警告阈值", nil, nil},
-    replaceGryphons = {true, "checkbox", nil, "showOrbs", "通用", 12, "替换鹰首纹章", nil, nil},
+    showFrame = {true, "checkbox", nil, "showOrbs", "边框", 6, "显示球体边框", nil, nil},
+    frameScale = {1, "slider", {0.3, 2, 0.05}, "showFrame", "边框", 7, "边框大小", nil, nil},
+    frameLX = {0, "slider", {-100, 100, 1}, "showFrame", "左边框", 8, "左边框水平偏移", nil, nil},
+    frameLY = {0, "slider", {-100, 100, 1}, "showFrame", "左边框", 9, "左边框垂直偏移", nil, nil},
+    frameRX = {0, "slider", {-100, 100, 1}, "showFrame", "右边框", 10, "右边框水平偏移", nil, nil},
+    frameRY = {0, "slider", {-100, 100, 1}, "showFrame", "右边框", 11, "右边框垂直偏移", nil, nil},
+    showGloss = {true, "checkbox", nil, "showOrbs", "外观", 12, "显示高光反射", nil, nil},
+    showText = {true, "checkbox", nil, "showOrbs", "文字", 13, "显示数值", nil, nil},
+    textFormat = {"percent", "dropdown", {"percent", "current", "current/max"}, "showText", "文字", 14, "数值格式", nil, nil},
+    textSize = {12, "slider", {8, 22}, "showText", "文字", 15, "文字大小", nil, nil},
+    lowHealthAlert = {0.25, "slider", {0.1, 0.5, 0.05}, "showOrbs", "警告", 16, "低血量警告阈值", nil, nil},
 })
 
 DFUI:NewMod("Orbs", 6, function()
+    -- clean up stale keys from previous versions
+    local staleKeys = {"replaceGryphons", "frameCropBottom", "frameXOffset", "frameYOffset", "frameDecorX", "frameDecorY", "showFrameDecor"}
     local setup = DFUI.tempDB.Orbs
-    if not setup.showOrbs then return end
-
-    local texpath = DFUI:GetInfoOrCons("tex") .. "orbs/"
+    for _, key in ipairs(staleKeys) do
+        setup[key] = nil
+    end
+    local texpath = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\orbs\\"
     local ORB_SIZE = 150
     local FILL_TEX = texpath .. "orb_filling21.tga"
 
@@ -34,7 +41,7 @@ DFUI:NewMod("Orbs", 6, function()
         orb:SetWidth(ORB_SIZE)
         orb:SetHeight(ORB_SIZE)
         orb:SetFrameStrata("LOW")
-        orb:SetFrameLevel(3)
+        orb:SetFrameLevel(5)
         orb:SetScale(setup.orbScale or 0.6)
         orb:SetAlpha(setup.orbAlpha or 1)
 
@@ -58,7 +65,14 @@ DFUI:NewMod("Orbs", 6, function()
         else
             orb.frame:SetTexture(texpath .. "orb_frame_right.tga")
         end
-        orb.frame:SetAllPoints()
+        local fScale = setup.frameScale or 1
+        orb.frame:SetWidth(ORB_SIZE * fScale)
+        orb.frame:SetHeight(ORB_SIZE * fScale)
+        if side == "left" then
+            orb.frame:SetPoint("CENTER", orb, "CENTER", setup.frameLX or 0, setup.frameLY or 0)
+        else
+            orb.frame:SetPoint("CENTER", orb, "CENTER", setup.frameRX or 0, setup.frameRY or 0)
+        end
         if not setup.showFrame then orb.frame:Hide() end
 
         orb.gloss = orb:CreateTexture(nil, "OVERLAY")
@@ -117,9 +131,7 @@ DFUI:NewMod("Orbs", 6, function()
             end
         end
 
-        function orb:SetLowAlert(on)
-            if on then self.lowGlow:Show() else self.lowGlow:Hide() end
-        end
+        function orb:SetLowAlert(on) end -- replaced after glow functions are defined
 
         orb:EnableMouse(true)
         orb:SetScript("OnEnter", function()
@@ -146,6 +158,23 @@ DFUI:NewMod("Orbs", 6, function()
     local manaOrb = CreateOrb("DFUI_ManaOrb", "right")
     manaOrb:SetPoint("LEFT", actionBar, "RIGHT", -45 - (setup.orbXOffset or 0), 10 + (setup.orbYOffset or 0))
     manaOrb.tipTitle = "法力值"
+
+    -- initial visibility
+    if not setup.showOrbs then
+        healthOrb:Hide()
+        manaOrb:Hide()
+    end
+
+    -- shared reposition function (used by callbacks and PLAYER_ENTERING_WORLD)
+    local function RepositionOrbs()
+        local db = DFUI.tempDB.Orbs
+        local xOff = db.orbXOffset or 0
+        local yOff = db.orbYOffset or 0
+        healthOrb:ClearAllPoints()
+        healthOrb:SetPoint("RIGHT", actionBar, "LEFT", 45 + xOff, 10 + yOff)
+        manaOrb:ClearAllPoints()
+        manaOrb:SetPoint("LEFT", actionBar, "RIGHT", -45 - xOff, 10 + yOff)
+    end
 
     -- ================================================================
     -- Power colors - use DFUI.powerColors from Colors module
@@ -214,13 +243,20 @@ DFUI:NewMod("Orbs", 6, function()
 
     eventFrame:SetScript("OnEvent", function()
         if event == "PLAYER_ENTERING_WORLD" then
+            -- clear stale DFUI_FRAMEPOS entries to prevent Frames module from overriding orb positions
+            if DFUI_FRAMEPOS then
+                DFUI_FRAMEPOS["DFUI_HealthOrb"] = nil
+                DFUI_FRAMEPOS["DFUI_ManaOrb"] = nil
+            end
+            -- re-apply orb positions (Frames module's RestoreFramePositions may have cleared them)
+            RepositionOrbs()
             UpdatePowerColor()
             lastHP, lastHPMax, lastMP, lastMPMax = -1, -1, -1, -1
             UpdateHealth()
             UpdatePower()
             return
         end
-        if event == "UNIT_DISPLAYPOWER" then
+        if event == "UNIT_DISPLAYPOWER" and arg1 == "player" then
             UpdatePowerColor()
             lastMP, lastMPMax = -1, -1
             UpdatePower()
@@ -234,20 +270,38 @@ DFUI:NewMod("Orbs", 6, function()
         end
     end)
 
-    -- low health glow animation only (frame-rate for smooth pulse)
+    -- low health glow animation - only attach OnUpdate when needed
     local glowPhase = 0
-    eventFrame:SetScript("OnUpdate", function()
-        if healthOrb.lowGlow:IsShown() then
+    local glowActive = false
+
+    local function StartGlowPulse()
+        if glowActive then return end
+        glowActive = true
+        glowPhase = 0
+        eventFrame:SetScript("OnUpdate", function()
             glowPhase = glowPhase + arg1 * 3
             healthOrb.lowGlow:SetAlpha(0.4 + 0.4 * math.abs(math.sin(glowPhase)))
-        end
-    end)
-
-    -- replace gryphons
-    if setup.replaceGryphons then
-        if _G["DFUI_LeftGryphon"] then _G["DFUI_LeftGryphon"]:Hide() end
-        if _G["DFUI_RightGryphon"] then _G["DFUI_RightGryphon"]:Hide() end
+        end)
     end
+
+    local function StopGlowPulse()
+        if not glowActive then return end
+        glowActive = false
+        eventFrame:SetScript("OnUpdate", nil)
+    end
+
+    local function SetLowAlert(orb, on)
+        if on then
+            orb.lowGlow:Show()
+            StartGlowPulse()
+        else
+            orb.lowGlow:Hide()
+            StopGlowPulse()
+        end
+    end
+
+    healthOrb.SetLowAlert = SetLowAlert
+    manaOrb.SetLowAlert = SetLowAlert
 
     -- ================================================================
     -- Callbacks (real-time config)
@@ -257,16 +311,6 @@ DFUI:NewMod("Orbs", 6, function()
     callbacks.orbScale = function(v) healthOrb:SetScale(v); manaOrb:SetScale(v) end
     callbacks.orbAlpha = function(v) healthOrb:SetAlpha(v); manaOrb:SetAlpha(v) end
 
-    local function RepositionOrbs()
-        local db = DFUI.tempDB.Orbs
-        local xOff = db.orbXOffset or 0
-        local yOff = db.orbYOffset or 0
-        healthOrb:ClearAllPoints()
-        healthOrb:SetPoint("RIGHT", actionBar, "LEFT", 45 + xOff, 10 + yOff)
-        manaOrb:ClearAllPoints()
-        manaOrb:SetPoint("LEFT", actionBar, "RIGHT", -45 - xOff, 10 + yOff)
-    end
-
     callbacks.orbXOffset = function() RepositionOrbs() end
     callbacks.orbYOffset = function() RepositionOrbs() end
 
@@ -274,6 +318,31 @@ DFUI:NewMod("Orbs", 6, function()
         if v then healthOrb.frame:Show(); manaOrb.frame:Show()
         else healthOrb.frame:Hide(); manaOrb.frame:Hide() end
     end
+
+    callbacks.frameScale = function(v)
+        local s = v or 1
+        healthOrb.frame:SetWidth(ORB_SIZE * s)
+        healthOrb.frame:SetHeight(ORB_SIZE * s)
+        manaOrb.frame:SetWidth(ORB_SIZE * s)
+        manaOrb.frame:SetHeight(ORB_SIZE * s)
+    end
+
+    local function RepositionLeftFrame()
+        local db = DFUI.tempDB.Orbs
+        healthOrb.frame:ClearAllPoints()
+        healthOrb.frame:SetPoint("CENTER", healthOrb, "CENTER", db.frameLX or 0, db.frameLY or 0)
+    end
+
+    local function RepositionRightFrame()
+        local db = DFUI.tempDB.Orbs
+        manaOrb.frame:ClearAllPoints()
+        manaOrb.frame:SetPoint("CENTER", manaOrb, "CENTER", db.frameRX or 0, db.frameRY or 0)
+    end
+
+    callbacks.frameLX = function() RepositionLeftFrame() end
+    callbacks.frameLY = function() RepositionLeftFrame() end
+    callbacks.frameRX = function() RepositionRightFrame() end
+    callbacks.frameRY = function() RepositionRightFrame() end
 
     callbacks.showGloss = function(v)
         if v then healthOrb.gloss:Show(); manaOrb.gloss:Show()
@@ -301,17 +370,19 @@ DFUI:NewMod("Orbs", 6, function()
         UpdateHealth()
     end
 
-    callbacks.replaceGryphons = function(v)
+    callbacks.showOrbs = function(v)
         if v then
-            if _G["DFUI_LeftGryphon"] then _G["DFUI_LeftGryphon"]:Hide() end
-            if _G["DFUI_RightGryphon"] then _G["DFUI_RightGryphon"]:Hide() end
+            healthOrb:Show()
+            manaOrb:Show()
+            lastHP, lastHPMax, lastMP, lastMPMax = -1, -1, -1, -1
+            UpdateHealth()
+            UpdatePower()
         else
-            if _G["DFUI_LeftGryphon"] then _G["DFUI_LeftGryphon"]:Show() end
-            if _G["DFUI_RightGryphon"] then _G["DFUI_RightGryphon"]:Show() end
+            healthOrb:Hide()
+            manaOrb:Hide()
+            StopGlowPulse()
         end
     end
-
-    callbacks.showOrbs = function() end
 
     DFUI:NewCallbacks("Orbs", callbacks)
 end)
