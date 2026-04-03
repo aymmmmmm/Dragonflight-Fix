@@ -73,7 +73,7 @@ DFUI:NewMod("Gui-prof", 4, function()
         local curProf = self.curProf[char] or "Default"
         if not self.ui.curText then
             self.ui.curText = self.ui.frame:CreateFontString(nil, "OVERLAY")
-            self.ui.curText:SetFont(self.font .. "BigNoodleTitling.ttf", self.TEXT_SIZE, "OUTLINE")
+            self.ui.curText:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.TEXT_SIZE), "OUTLINE")
             self.ui.curText:SetPoint("TOPLEFT", self.ui.frame, "TOPLEFT", 10, -10)
         end
         self.ui.curText:SetText("当前:   |cff80ff80" .. curProf .. "|r")
@@ -111,7 +111,7 @@ DFUI:NewMod("Gui-prof", 4, function()
             profCount = profCount + 1
 
             local text = self.ui.frame:CreateFontString(nil, "OVERLAY")
-            text:SetFont(self.font .. "BigNoodleTitling.ttf", self.TEXT_SIZE, "OUTLINE")
+            text:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.TEXT_SIZE), "OUTLINE")
             text:SetPoint("TOPLEFT", self.ui.frame, "TOPLEFT", 10, yOffset)
             text:SetText(name)
             table.insert(self.ui.texts, text)

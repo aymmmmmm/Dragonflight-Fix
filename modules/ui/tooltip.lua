@@ -1,8 +1,8 @@
 DFUI:NewDefaults("Tooltip", {
     enabled = {true},
     toolTipMouse = {false, "checkbox", nil, nil, "功能调整", 1, "在光标上方显示提示信息", nil, nil},
-    toolTipX = {0, "slider", {-400, 200, 15}, nil, "功能调整", 2, "调整提示信息的X偏移", nil, nil},
-    toolTipY = {0, "slider", {-200, 200, 15}, nil, "功能调整", 3, "调整提示信息的Y偏移", nil, nil},
+    toolTipX = {0, "slider", {-400, 200, 1}, nil, "功能调整", 2, "调整提示信息的X偏移", nil, nil},
+    toolTipY = {0, "slider", {-200, 200, 1}, nil, "功能调整", 3, "调整提示信息的Y偏移", nil, nil},
     showTargetTarget = {true, "checkbox", nil, nil, "增强信息", 1, "显示目标的目标", nil, nil},
     showDistance = {true, "checkbox", nil, nil, "增强信息", 2, "显示距离(需要UnitXP)", nil, nil},
 })

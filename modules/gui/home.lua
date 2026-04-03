@@ -126,7 +126,7 @@ DFUI:NewMod("Gui-home", 3, function()
                         else
                             Setup.logoText:SetText(Setup.HOME_TEXTS[cur])
                             if cur == 3 then
-                                Setup.logoText:SetFont(Setup.font .. "BigNoodleTitling.ttf", 40, "OUTLINE")
+                                Setup.logoText:SetFont(Setup.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(40), "OUTLINE")
                             end
                             phase = "fadein"
                             accumulatedTime = 0

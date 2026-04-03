@@ -1,6 +1,6 @@
 DFUI:NewDefaults("Collector", {
     enabled = { true },
-    collectDarkMode = {0, "slider", {0, 1}, nil, "appearance", 1, "Adjust dark mode intensity", nil, nil},
+    collectDarkMode = {0, "slider", {0, 1, 0.1}, nil, "appearance", 1, "Adjust dark mode intensity", nil, nil},
 })
 
 DFUI:NewMod("Collector", 1, function()

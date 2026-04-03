@@ -1,6 +1,13 @@
 setfenv(1, DFUI:GetEnv())
 local DFUI_GUI_FONT = DFUI._guiFont or (DFUI:GetInfoOrCons("font") .. "BigNoodleTitling.ttf")
 
+function DFUI.tools.ScaledSize(size)
+    local scale = DFUI:GetTempDB("GUI-Dragonflight", "guiFontScale") or 1.0
+    if scale < 0.5 then scale = 1.0 end
+    return math.floor(size * scale + 0.5)
+end
+local SS = DFUI.tools.ScaledSize
+
 function DFUI.tools.GradientLine(frame, anchor, yOffset, height, width)
     width = width or frame:GetWidth() - 10
 
@@ -108,7 +115,7 @@ end
 
 function DFUI.tools.CreateFont(parent, size, text, colour, align)
     local font = parent:CreateFontString(nil, "OVERLAY")
-    font:SetFont(DFUI_GUI_FONT, size or 14, "OUTLINE")
+    font:SetFont(DFUI_GUI_FONT, SS(size or 14), "OUTLINE")
     colour = colour or {1, 1, 1}
     font:SetTextColor(colour[1], colour[2], colour[3])
     font:SetText(text)
@@ -132,7 +139,7 @@ function DFUI.tools.CreateButton(parent, text, width, height, noBackdrop, textCo
     end
 
     local btnTxt = btn:CreateFontString(nil, "OVERLAY")
-    btnTxt:SetFont(DFUI_GUI_FONT, 12, "OUTLINE")
+    btnTxt:SetFont(DFUI_GUI_FONT, SS(12), "OUTLINE")
     btnTxt:SetPoint("CENTER", btn, "CENTER", 0, 0)
     btnTxt:SetText(text)
 
@@ -176,7 +183,7 @@ function DFUI.tools.CreateIndiCheckbox(parent, name, text)
     checkbox:SetHeight(20)
 
     local label = checkbox:CreateFontString(nil, "BACKGROUND")
-    label:SetFont(DFUI_GUI_FONT, 12, "OUTLINE")
+    label:SetFont(DFUI_GUI_FONT, SS(12), "OUTLINE")
     label:SetPoint("LEFT", checkbox, "RIGHT", 5, 0)
     label:SetText(text or "Checkbox")
     label:SetTextColor(.9,.9,.9)
@@ -219,14 +226,14 @@ function DFUI.tools.CreateIndiSlider(parent, name, text, minVal, maxVal, step)
     local label = slider:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label:SetPoint("BOTTOMLEFT", slider, "TOPLEFT", 0, -0)
     label:SetText(text or "Slider")
-    label:SetFont(DFUI_GUI_FONT, 12, "OUTLINE")
+    label:SetFont(DFUI_GUI_FONT, SS(12), "OUTLINE")
     label:SetTextColor(.9,.9,.9)
     slider.label = label
 
     local valueText = slider:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     valueText:SetPoint("LEFT", slider, "RIGHT", 1, -0)
     valueText:SetTextColor(1, 1, 1)
-    valueText:SetFont(DFUI_GUI_FONT, 12, "OUTLINE")
+    valueText:SetFont(DFUI_GUI_FONT, SS(12), "OUTLINE")
     slider.valueText = valueText
 
     slider:SetValue(minVal or 0)
@@ -337,7 +344,7 @@ function DFUI.tools.CreateEditBox(parent, width, height, letters, numbers, max)
     })
     box:SetBackdropColor(0, 0, 0, 0.8)
     box:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
-    box:SetFont(DFUI_GUI_FONT, 14, "OUTLINE")
+    box:SetFont(DFUI_GUI_FONT, SS(14), "OUTLINE")
     box:SetTextColor(1, 1, 1)
     box:SetTextInsets(5, 5, 5, 5)
     box:SetAutoFocus(false)
@@ -408,7 +415,7 @@ function DFUI.tools.CreateCategoryHeader(parent, categoryName, noBG, width, heig
     end
 
     local categoryTitle = categoryBg:CreateFontString(nil, "OVERLAY")
-    categoryTitle:SetFont(DFUI_GUI_FONT, txtSize or 14, "OUTLINE")
+    categoryTitle:SetFont(DFUI_GUI_FONT, SS(txtSize or 14), "OUTLINE")
     categoryTitle:SetPoint("CENTER", categoryBg, "CENTER", 0, 1)
     local words = string.gfind(categoryName, "%S+")
     local capitalizedWords = {}
@@ -431,7 +438,7 @@ function DFUI.tools.CreateCheckbox(parent, name, moduleName, key, noCall)
     checkbox:SetHeight(20)
 
     local label = checkbox:CreateFontString(nil, "BACKGROUND")
-    label:SetFont(DFUI_GUI_FONT, 12, "OUTLINE")
+    label:SetFont(DFUI_GUI_FONT, SS(12), "OUTLINE")
     label:SetPoint("LEFT", checkbox, "RIGHT", 5, 0)
     local displayTxt = string.gsub(key, "(%l)(%u)", "%1 %2")
     displayTxt = string.upper(string.sub(displayTxt, 1, 1)) .. string.sub(displayTxt, 2)
@@ -460,7 +467,7 @@ function DFUI.tools.CreateShaguCheckbox(parent, name, key)
     checkbox:SetHeight(20)
 
     local label = checkbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label:SetFont(DFUI_GUI_FONT, 14, "OUTLINE")
+    label:SetFont(DFUI_GUI_FONT, SS(14), "OUTLINE")
     label:SetPoint("LEFT", checkbox, "RIGHT", 5, 0)
     label:SetText(key)
     label:SetTextColor(.9,.9,.9)
@@ -504,20 +511,23 @@ function DFUI.tools.CreateSlider(parent, name, moduleName, key, minVal, maxVal, 
     })
 
     slider:SetMinMaxValues(minVal or 0, maxVal or 5)
+    if step then slider:SetValueStep(step) end
+
+    local fmt = (step and step >= 1) and "%d" or "%.1f"
 
     local label = slider:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label:SetPoint("BOTTOMLEFT", slider, "TOPLEFT", 0, -0)
     local displayTxt = string.gsub(key, "(%l)(%u)", "%1 %2")
     displayTxt = string.upper(string.sub(displayTxt, 1, 1)) .. string.sub(displayTxt, 2)
     label:SetText(displayTxt)
-    label:SetFont(DFUI_GUI_FONT, 12, "OUTLINE")
+    label:SetFont(DFUI_GUI_FONT, SS(12), "OUTLINE")
     label:SetTextColor(.9,.9,.9)
     slider.label = label
 
     local valueText = slider:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     valueText:SetPoint("LEFT", slider, "RIGHT", 1, -0)
     valueText:SetTextColor(1, 1, 1)
-    valueText:SetFont(DFUI_GUI_FONT, 12, "OUTLINE")
+    valueText:SetFont(DFUI_GUI_FONT, SS(12), "OUTLINE")
     slider.valueText = valueText
 
     slider.moduleName = moduleName
@@ -525,12 +535,17 @@ function DFUI.tools.CreateSlider(parent, name, moduleName, key, minVal, maxVal, 
 
     local currentValue = DFUI:GetTempDB(moduleName, key)
     slider:SetValue(currentValue)
-    valueText:SetText(string.format("%.1f", currentValue))
+    valueText:SetText(string.format(fmt, currentValue))
 
     slider:SetScript("OnValueChanged", function()
         local newValue = this:GetValue()
-        local roundedValue = math.floor(newValue * 10 + 0.5) / 10
-        this.valueText:SetText(string.format("%.1f", roundedValue))
+        local roundedValue
+        if step and step >= 1 then
+            roundedValue = math.floor(newValue + 0.5)
+        else
+            roundedValue = math.floor(newValue * 10 + 0.5) / 10
+        end
+        this.valueText:SetText(string.format(fmt, roundedValue))
         if noCall then
             DFUI:SetTempDBNoCallback(this.moduleName, this.configKey, roundedValue)
         else
@@ -622,14 +637,14 @@ function DFUI.tools.CreateColour(parent, name, moduleName, key)
     local displayText = string.gsub(key, "(%l)(%u)", "%1 %2")
     displayText = string.upper(string.sub(displayText, 1, 1)) .. string.sub(displayText, 2)
     label:SetText(displayText)
-    label:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
+    label:SetFont("Fonts\\FRIZQT__.TTF", SS(11), "")
     label:SetTextColor(.9,.9,.9)
     slider.label = label
 
     local valueText = slider:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     valueText:SetPoint("LEFT", slider, "RIGHT", 1, -0)
     valueText:SetTextColor(1, 1, 1)
-    valueText:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
+    valueText:SetFont("Fonts\\FRIZQT__.TTF", SS(10), "")
     slider.valueText = valueText
 
     slider.moduleName = moduleName
@@ -695,7 +710,7 @@ function DFUI.tools.CreateDropDown(parent, name, moduleName, key, items, noCall,
 
     local btn = DFUI.tools.CreateButton(parent, nil, w, h)
     local btnTxt = btn:CreateFontString(nil, "OVERLAY")
-    btnTxt:SetFont(DFUI_GUI_FONT, 12, "OUTLINE")
+    btnTxt:SetFont(DFUI_GUI_FONT, SS(12), "OUTLINE")
     btnTxt:SetPoint("CENTER", btn, "CENTER", 0, 0)
     local displayTxt = string.gsub(key, "(%l)(%u)", "%1 %2")
     displayTxt = string.upper(string.sub(displayTxt, 1, 1)) .. string.sub(displayTxt, 2)
@@ -850,7 +865,7 @@ end
 
 function DFUI.tools.CreateFontWarner(parent, size, text, colour, pulse, time)
     local fontString = parent:CreateFontString(nil, "OVERLAY")
-    fontString:SetFont(DFUI_GUI_FONT, size or 14, "OUTLINE")
+    fontString:SetFont(DFUI_GUI_FONT, SS(size or 14), "OUTLINE")
 
     if colour then
         fontString:SetTextColor(colour[1], colour[2], colour[3])

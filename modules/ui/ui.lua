@@ -5,8 +5,8 @@ DFUI:NewDefaults("Ui", {
     characterPanel = {false, "checkbox", nil, nil, "外观", 3, "为角色面板启用深色模式", nil, nil},
     hideErrorMessage = {false, "checkbox", nil, nil, "界面调整", 4, "隐藏顶部UI错误消息(例如'法术尚未准备好')", nil, nil},
     lowHpWarn = {true, "checkbox", nil, nil, "界面调整", 5, "低血量时显示红色边框", nil, nil},
-    lowHpThreshold = {70, "slider", {5, 95}, nil, "界面调整", 6, "低血量警告的生命值阈值", nil, nil},
-    cameraDistanceFactor = {3, "slider", {1, 5}, nil, "界面调整", 7, "扩展最大镜头距离", nil, nil},
+    lowHpThreshold = {70, "slider", {5, 95, 5}, nil, "界面调整", 6, "低血量警告的生命值阈值", nil, nil},
+    cameraDistanceFactor = {3, "slider", {1, 5, 1}, nil, "界面调整", 7, "扩展最大镜头距离", nil, nil},
     showPlates = {false, "checkbox", nil, nil, "界面调整", 8, "仅在战斗中显示姓名板", nil, nil},
 })
 

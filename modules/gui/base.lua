@@ -166,13 +166,13 @@ DFUI:NewMod("Gui-base", 2, function()
     function Setup:TitleText()
         if not self.dragonText then
             self.dragonText = self.titleFrame:CreateFontString(nil, "OVERLAY")
-            self.dragonText:SetFont(self.font.. "BigNoodleTitling.ttf", self.CONSTANTS.TITLE_FONT_SIZE, "OUTLINE")
+            self.dragonText:SetFont(self.font.. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.CONSTANTS.TITLE_FONT_SIZE), "OUTLINE")
             self.dragonText:SetTextColor(1, .82, 0, 1)
             self.dragonText:SetPoint("LEFT", self.titleFrame, "LEFT", 30, 0)
             self.dragonText:SetText("巨龙时代:")
 
             self.reloadedText = self.titleFrame:CreateFontString(nil, "OVERLAY")
-            self.reloadedText:SetFont(self.font.. "BigNoodleTitling.ttf", self.CONSTANTS.TITLE_FONT_SIZE, "OUTLINE")
+            self.reloadedText:SetFont(self.font.. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.CONSTANTS.TITLE_FONT_SIZE), "OUTLINE")
             self.reloadedText:SetTextColor(1, 1, 1, 1)
             self.reloadedText:SetPoint("LEFT", self.dragonText, "RIGHT", 5, 0)
             self.reloadedText:SetText("Fix")
@@ -219,7 +219,7 @@ DFUI:NewMod("Gui-base", 2, function()
             tex:SetVertexColor(0, 0, 0, self.CONSTANTS.BACKGROUND_ALPHA)
 
             self.profileText = self.subFrame:CreateFontString(nil, "OVERLAY")
-            self.profileText:SetFont(self.font.. "BigNoodleTitling.ttf", 14, "OUTLINE")
+            self.profileText:SetFont(self.font.. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(14), "OUTLINE")
             self.profileText:SetTextColor(1, .82, 0, 1)
             self.profileText:SetPoint("LEFT", self.subFrame, "LEFT", 10, 0)
 
@@ -228,7 +228,7 @@ DFUI:NewMod("Gui-base", 2, function()
             self.profileText:SetText("档案:   |cffffffff" .. profileName .. "|r")
 
             self.fpsText = self.subFrame:CreateFontString(nil, "OVERLAY")
-            self.fpsText:SetFont(self.font.. "BigNoodleTitling.ttf", 14, "OUTLINE")
+            self.fpsText:SetFont(self.font.. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(14), "OUTLINE")
             self.fpsText:SetTextColor(1, .82, 0, 1)
             self.fpsText:SetPoint("RIGHT", self.subFrame, "RIGHT", -10, 0)
 
@@ -258,9 +258,6 @@ DFUI:NewMod("Gui-base", 2, function()
                 tab:SetWidth(self.CONSTANTS.TAB_BUTTON_WIDTH)
 
                 local yOffset = -10 - (i - 1) * self.CONSTANTS.TAB_VERTICAL_SPACING
-                if i > 5 then
-                    yOffset = yOffset - self.CONSTANTS.TAB_GROUP_SEPARATOR
-                end
                 tab:SetPoint("TOP", self.tabFrame, "TOP", 0, yOffset)
 
                 local highlight = tab:CreateTexture(nil, "OVERLAY")
@@ -271,7 +268,7 @@ DFUI:NewMod("Gui-base", 2, function()
                 tab.highlight = highlight
 
                 local text = tab:CreateFontString(nil, "OVERLAY")
-                text:SetFont(self.font.. "BigNoodleTitling.ttf", self.CONSTANTS.TAB_FONT_SIZE, "OUTLINE")
+                text:SetFont(self.font.. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.CONSTANTS.TAB_FONT_SIZE), "OUTLINE")
                 text:SetTextColor(.7, .7, .7, 1)
                 text:SetPoint("CENTER", tab, "CENTER")
                 tab:SetFontString(text)
@@ -468,7 +465,7 @@ DFUI:NewMod("Gui-base", 2, function()
     function Setup:PanelTitles()
         if not self.panelTitle then
             self.panelTitle = self.mainFrame:CreateFontString(nil, "OVERLAY")
-            self.panelTitle:SetFont(self.font.. "BigNoodleTitling.ttf", 18, "OUTLINE")
+            self.panelTitle:SetFont(self.font.. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(18), "OUTLINE")
             self.panelTitle:SetTextColor(1, .82, 0, 1)
             self.panelTitle:SetPoint("TOP", self.scrollFrame, "TOP", -20, 25)
 

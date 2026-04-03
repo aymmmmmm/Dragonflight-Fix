@@ -1,7 +1,7 @@
 DFUI:NewDefaults("Chat", {
     enabled = {true},
     showButtons = {true, "checkbox", nil, nil, "外观", 1, "显示或隐藏聊天按钮", "BUG: 暴雪高亮在错误位置闪烁 - 即将修复", nil},
-    chatDarkMode = {0, "slider", {0, 1}, "showButtons", "外观", 2, "调整深色模式强度", nil, nil},
+    chatDarkMode = {0, "slider", {0, 1, 0.1}, "showButtons", "外观", 2, "调整深色模式强度", nil, nil},
     chatColor = {{1, 1, 1}, "colour", nil, "showButtons", "外观", 3, "更改聊天颜色", nil, nil},
     blizzardButtons = {false, "checkbox", nil, "showButtons", "聊天基础", 4, "使用暴雪原版聊天按钮", nil, nil},
     fadeChat = {false, "checkbox", nil, nil, "聊天基础", 5, "10秒后淡出聊天文字", nil, nil},

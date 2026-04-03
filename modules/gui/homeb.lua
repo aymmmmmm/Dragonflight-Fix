@@ -15,9 +15,10 @@ DFUI:NewDefaults("GUI-Dragonflight", {
         "DieDieDie"
     }, nil, "主屏幕", 1, "更改GUI中所有字体", nil, nil},
     smallerFrame = {true, "checkbox", nil, nil, "主屏幕", 2, "更改主框架的缩放", nil, nil},
-    sideView = {.3, "slider", {.1, .8}, nil, "主屏幕", 3, "更改侧视图的透明度", "", nil},
+    sideView = {.3, "slider", {.1, .8, 0.1}, nil, "主屏幕", 3, "更改侧视图的透明度", "", nil},
     homeMinMaxColor = {{1, .82, 0}, "colour", nil, nil, "主屏幕", 4, "更改关闭和最小化按钮的颜色", nil, nil},
     homeTimeColor = {{1, .82, 0}, "colour", nil, nil, "主屏幕", 5, "更改主屏幕时间的颜色", nil, nil},
+    guiFontScale = {1.0, "slider", {0.7, 1.5, 0.1}, nil, "主屏幕", 6, "调整配置界面字体大小（需重载UI）", "", nil},
 })
 
 DFUI:NewMod("GUI-Dragonflight", 4, function()
@@ -349,6 +350,11 @@ DFUI:NewMod("GUI-Dragonflight", 4, function()
         if Base.selectedTab > 4 then
             Base.rightTex:SetAlpha(value)
         end
+    end
+
+    callbacks.guiFontScale = function(value)
+        -- 字体缩放需重载UI生效，提前保存以便 /rl 后能读到新值
+        DFUI:SaveTempDB()
     end
 
     callbacks.globalFont = function(value)

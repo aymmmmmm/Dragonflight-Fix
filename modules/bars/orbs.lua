@@ -5,12 +5,12 @@
 DFUI:NewDefaults("Orbs", {
     enabled = {false},
     showOrbs = {true, "checkbox", nil, nil, "通用", 1, "显示血球/蓝球", nil, nil},
-    orbScale = {0.6, "slider", {0.3, 1.5, 0.05}, "showOrbs", "通用", 2, "球体大小", nil, nil},
-    orbAlpha = {1, "slider", {0.1, 1, 0.05}, "showOrbs", "通用", 3, "球体透明度", nil, nil},
+    orbScale = {0.6, "slider", {0.3, 1.5, 0.1}, "showOrbs", "通用", 2, "球体大小", nil, nil},
+    orbAlpha = {1, "slider", {0.1, 1, 0.1}, "showOrbs", "通用", 3, "球体透明度", nil, nil},
     orbXOffset = {0, "slider", {-500, 500, 1}, "showOrbs", "位置", 4, "水平偏移", nil, nil},
     orbYOffset = {0, "slider", {-400, 400, 1}, "showOrbs", "位置", 5, "垂直偏移", nil, nil},
     showFrame = {true, "checkbox", nil, "showOrbs", "边框", 6, "显示球体边框", nil, nil},
-    frameScale = {1, "slider", {0.3, 2, 0.05}, "showFrame", "边框", 7, "边框大小", nil, nil},
+    frameScale = {1, "slider", {0.3, 2, 0.1}, "showFrame", "边框", 7, "边框大小", nil, nil},
     frameLX = {0, "slider", {-100, 100, 1}, "showFrame", "左边框", 8, "左边框水平偏移", nil, nil},
     frameLY = {0, "slider", {-100, 100, 1}, "showFrame", "左边框", 9, "左边框垂直偏移", nil, nil},
     frameRX = {0, "slider", {-100, 100, 1}, "showFrame", "右边框", 10, "右边框水平偏移", nil, nil},
@@ -18,8 +18,8 @@ DFUI:NewDefaults("Orbs", {
     showGloss = {true, "checkbox", nil, "showOrbs", "外观", 12, "显示高光反射", nil, nil},
     showText = {true, "checkbox", nil, "showOrbs", "文字", 13, "显示数值", nil, nil},
     textFormat = {"percent", "dropdown", {"percent", "current", "current/max"}, "showText", "文字", 14, "数值格式", nil, nil},
-    textSize = {12, "slider", {8, 22}, "showText", "文字", 15, "文字大小", nil, nil},
-    lowHealthAlert = {0.25, "slider", {0.1, 0.5, 0.05}, "showOrbs", "警告", 16, "低血量警告阈值", nil, nil},
+    textSize = {12, "slider", {8, 22, 1}, "showText", "文字", 15, "文字大小", nil, nil},
+    lowHealthAlert = {0.25, "slider", {0.1, 0.5, 0.1}, "showOrbs", "警告", 16, "低血量警告阈值", nil, nil},
 })
 
 DFUI:NewMod("Orbs", 6, function()

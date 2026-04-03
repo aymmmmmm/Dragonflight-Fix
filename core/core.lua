@@ -351,6 +351,11 @@ DFUI:SetScript("OnEvent", function()
         DFF_PROFILES = nil; DFF_DB_SETUP = nil; DFF_CUR_PROFILE = nil; DFF_FRAMEPOS = nil
         DFRL_PROFILES = nil; DFRL_DB_SETUP = nil; DFRL_CUR_PROFILE = nil; DFRL_FRAMEPOS = nil
 
+        -- Detect addons that loaded before us (alphabetically earlier)
+        for _, name in ipairs({"Bagshui", "ShaguTweaks", "ShaguTweaks-extras"}) do
+            if IsAddOnLoaded(name) then DFUI:CheckAddon(name) end
+        end
+
         DFUI:InitTempDB()
         DFUI:RunMods()
         print("欢迎使用 |cffffd200Dragonflight:|r Fix。")

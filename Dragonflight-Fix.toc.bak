@@ -19,7 +19,6 @@ core\first.lua
 # DATA
 data\tables.lua
 data\debuffs.lua
-data\talents_desc.lua
 
 # LIBS
 libs\libtipscan.lua

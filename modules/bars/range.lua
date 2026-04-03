@@ -3,7 +3,7 @@ DFUI:NewDefaults("RangeIndicator", {
     enabled = { true },
     indicatorDark = {false, "checkbox", nil, nil, "外观", 1, "使用暗色替代红色", nil, nil},
     indicatorFade = {true, "checkbox", nil, nil, "外观", 2, "启用淡入/淡出动画", nil, nil},
-    indicatorAlpha = {.5, "slider", {0, 1}, nil, "外观", 3, "调整距离指示器透明度", nil, nil},
+    indicatorAlpha = {.5, "slider", {0, 1, 0.1}, nil, "外观", 3, "调整距离指示器透明度", nil, nil},
     indicatorSimple = {false, "checkbox", nil, nil, "外观", 4, "使用简单X替代纹理", nil, nil},
 })
 

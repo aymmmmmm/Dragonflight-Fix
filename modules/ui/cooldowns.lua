@@ -6,7 +6,7 @@
 DFUI:NewDefaults("Cooldowns", {
     enabled = {true},
     showText = {true, "checkbox", nil, nil, "通用", 1, "显示冷却数字", nil, nil},
-    fontSize = {14, "slider", {8, 32}, nil, "通用", 2, "字号", nil, nil},
+    fontSize = {14, "slider", {8, 32, 1}, nil, "通用", 2, "字号", nil, nil},
     minDuration = {1.5, "slider", {0, 5, 0.5}, nil, "通用", 3, "最小显示时长(秒)", nil, nil},
 })
 

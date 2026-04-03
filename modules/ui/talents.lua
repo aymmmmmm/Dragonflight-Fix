@@ -71,6 +71,47 @@ DFUI:NewMod("Talents", 1, function()
         return planData.plans[planData.selectedPlan]
     end
 
+    -- 职业 → classMask 映射（与 DBC TalentTab.classMask 对应）
+    local CLASS_MASKS = {
+        WARRIOR = 1, PALADIN = 2, HUNTER = 4, ROGUE = 8,
+        PRIEST = 16, SHAMAN = 64, MAGE = 128, WARLOCK = 256, DRUID = 1024,
+    }
+
+    -- 运行时天赋 spell 映射缓存: talentSpellCache[tabIndex][talentIndex] = { spellId1, spellId2, ... }
+    local talentSpellCache = {}
+
+    -- 构建 (tabIndex, talentIndex) → spell IDs 的映射
+    local function BuildTalentSpellCache()
+        if not DFUI_TalentSpellMap then return end
+        local _, classEN = UnitClass('player')
+        local classMask = CLASS_MASKS[classEN]
+        if not classMask then return end
+
+        for tabIndex = 1, 3 do
+            talentSpellCache[tabIndex] = {}
+            local numTalents = GetNumTalents(tabIndex)
+            for talentIndex = 1, numTalents do
+                local _, _, tier, column = GetTalentInfo(tabIndex, talentIndex)
+                if tier and column then
+                    local key = classMask .. '_' .. (tabIndex - 1) .. '_' .. (tier - 1) .. '_' .. (column - 1)
+                    local spells = DFUI_TalentSpellMap[key]
+                    if spells then
+                        talentSpellCache[tabIndex][talentIndex] = spells
+                    end
+                end
+            end
+        end
+    end
+
+    -- 获取指定天赋指定 rank 的 spell ID
+    local function GetTalentSpellForRank(tabIndex, talentIndex, rank)
+        local spells = talentSpellCache[tabIndex] and talentSpellCache[tabIndex][talentIndex]
+        if spells and rank >= 1 and rank <= table.getn(spells) then
+            return spells[rank]
+        end
+        return nil
+    end
+
     -- 规划模式下获取天赋信息（用规划 rank 覆盖实际 rank）
     local function GetPlannedTalentInfo(tab, id)
         local name, iconTexture, tier, column, rank, maxRank, isExceptional, meetsPrereq = GetTalentInfo(tab, id)
@@ -559,6 +600,53 @@ DFUI:NewMod("Talents", 1, function()
 
         button:RegisterForClicks('LeftButtonUp', 'RightButtonUp')
 
+        -- 规划模式 tooltip 构建函数
+        local function ShowTalentTooltip(btn)
+            GameTooltip:SetOwner(btn, 'ANCHOR_RIGHT')
+            if learnMode == 'planned' and DFUI_TalentDescriptions then
+                local tName, _, _, _, rank, maxRank = GetPlannedTalentInfo(btn.tabIndex, btn.talentIndex)
+                if rank >= 1 then
+                    -- 已点：显示当前等级
+                    local spellId = GetTalentSpellForRank(btn.tabIndex, btn.talentIndex, rank)
+                    local data = spellId and DFUI_TalentDescriptions[spellId]
+                    if data then
+                        GameTooltip:SetText(data.name, 1, 1, 1)
+                        GameTooltip:AddLine(data.rank .. '    (' .. rank .. '/' .. maxRank .. ')', 1, 1, 1)
+                        GameTooltip:AddLine(' ')
+                        GameTooltip:AddLine('当前等级:', 0, 1, 0)
+                        GameTooltip:AddLine(data.desc, 1, 0.82, 0, true)
+                        -- 未满级则追加下一等级
+                        if rank < maxRank then
+                            local nextSpellId = GetTalentSpellForRank(btn.tabIndex, btn.talentIndex, rank + 1)
+                            local nextData = nextSpellId and DFUI_TalentDescriptions[nextSpellId]
+                            if nextData then
+                                GameTooltip:AddLine(' ')
+                                GameTooltip:AddLine('下一等级:', 0, 1, 0)
+                                GameTooltip:AddLine(nextData.desc, 1, 0.82, 0, true)
+                            end
+                        end
+                        GameTooltip:Show()
+                        return
+                    end
+                else
+                    -- 未点：只显示下一等级（rank 1）
+                    local nextSpellId = GetTalentSpellForRank(btn.tabIndex, btn.talentIndex, 1)
+                    local nextData = nextSpellId and DFUI_TalentDescriptions[nextSpellId]
+                    if nextData then
+                        GameTooltip:SetText(nextData.name, 1, 1, 1)
+                        GameTooltip:AddLine('(0/' .. maxRank .. ')', 0.5, 0.5, 0.5)
+                        GameTooltip:AddLine(' ')
+                        GameTooltip:AddLine('下一等级:', 0, 1, 0)
+                        GameTooltip:AddLine(nextData.desc, 1, 0.82, 0, true)
+                        GameTooltip:Show()
+                        return
+                    end
+                end
+            end
+            -- 回退到原生 tooltip
+            GameTooltip:SetTalent(btn.tabIndex, btn.talentIndex)
+        end
+
         button:SetScript('OnClick', function()
             if learnMode == 'planned' then
                 -- 规划模式：左键加点，右键减点
@@ -567,6 +655,7 @@ DFUI:NewMod("Talents", 1, function()
                 elseif arg1 == 'RightButton' then
                     UnplanTalent(this.tabIndex, this.talentIndex)
                 end
+                ShowTalentTooltip(this)
             else
                 -- 已学模式：左键学习天赋
                 if arg1 == 'LeftButton' then
@@ -583,8 +672,7 @@ DFUI:NewMod("Talents", 1, function()
 
         button:SetScript('OnEnter', function()
             this.hoverBorder:Show()
-            GameTooltip:SetOwner(this, 'ANCHOR_RIGHT')
-            GameTooltip:SetTalent(this.tabIndex, this.talentIndex)
+            ShowTalentTooltip(this)
         end)
 
         button:SetScript('OnLeave', function()
@@ -601,6 +689,7 @@ DFUI:NewMod("Talents", 1, function()
                 else
                     UnplanTalent(this.tabIndex, this.talentIndex)
                 end
+                ShowTalentTooltip(this)
             end
         end)
 
@@ -771,6 +860,11 @@ DFUI:NewMod("Talents", 1, function()
 
     Update = function()
         if not frame or not frame:IsVisible() then return end
+
+        -- 首次构建天赋 spell 映射缓存
+        if not talentSpellCache[1] then
+            BuildTalentSpellCache()
+        end
 
         local isPlanned = (learnMode == 'planned')
         local plan = GetCurrentPlan()

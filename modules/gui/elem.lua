@@ -272,7 +272,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                     headerFrame:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, yOffset - self.MODULE_TOP_SPACING)
 
                     local headerText = headerFrame:CreateFontString(nil, "OVERLAY")
-                    headerText:SetFont(self.font .. "BigNoodleTitling.ttf", 16, "OUTLINE")
+                    headerText:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(16), "OUTLINE")
                     headerText:SetPoint("LEFT", headerFrame, "LEFT", 0, 0)
                     headerText:SetText(displayName)
                     headerText:SetTextColor(1, 0.82, 0)
@@ -357,14 +357,14 @@ DFUI:NewMod("Gui-elem", 3, function()
                         local elementKey = elementModule .. "." .. elementName
                         if not self.checkboxes[elementKey] then
                             local descLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                            descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", self.DESCRIPTION_FONT_SIZE, "OUTLINE")
+                            descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
                             descLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, currentY - 3)
                             descLabel:SetText(data.description or "")
                             descLabel:SetTextColor(.9,.9,.9)
 
                             if data.extraDescription then
                                 local extraDescLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                                extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", self.EXTRA_DESCRIPTION_FONT_SIZE, "OUTLINE")
+                                extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.EXTRA_DESCRIPTION_FONT_SIZE), "OUTLINE")
                                 extraDescLabel:SetPoint("LEFT", descLabel, "RIGHT", 10, 0)
                                 extraDescLabel:SetText(data.extraDescription)
                                 extraDescLabel:SetTextColor(1, 0.5, 0.5)
@@ -375,7 +375,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                             checkbox:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -166, currentY)
                             checkbox:SetChecked(currentValue)
                             if checkbox.label then
-                                checkbox.label:SetFont(self.font .. "BigNoodleTitling.ttf", self.VALUE_FONT_SIZE, "OUTLINE")
+                                checkbox.label:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
                             end
 
                             self.checkboxes[elementKey] = checkbox
@@ -418,14 +418,14 @@ DFUI:NewMod("Gui-elem", 3, function()
                         local elementKey = elementModule .. "." .. elementName
                         if not self.sliders[elementKey] then
                             local descLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                            descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", self.DESCRIPTION_FONT_SIZE, "OUTLINE")
+                            descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
                             descLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, currentY - 6)
                             descLabel:SetText(data.description or "")
                             descLabel:SetTextColor(.9,.9,.9)
 
                             if data.extraDescription then
                                 local extraDescLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                                extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", self.EXTRA_DESCRIPTION_FONT_SIZE, "OUTLINE")
+                                extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.EXTRA_DESCRIPTION_FONT_SIZE), "OUTLINE")
                                 extraDescLabel:SetPoint("LEFT", descLabel, "RIGHT", 10, 0)
                                 extraDescLabel:SetText(data.extraDescription)
                                 extraDescLabel:SetTextColor(1, 0.5, 0.5)
@@ -437,7 +437,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                             slider:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -50, currentY)
                             slider:SetValue(currentValue)
                             if slider.label then
-                                slider.label:SetFont(self.font .. "BigNoodleTitling.ttf", self.VALUE_FONT_SIZE, "OUTLINE")
+                                slider.label:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
                             end
 
                             self.sliders[elementKey] = slider
@@ -504,14 +504,14 @@ DFUI:NewMod("Gui-elem", 3, function()
                         local elementKey = elementModule .. "." .. elementName
                         if not self.dropdowns[elementKey] then
                             local descLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                            descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", self.DESCRIPTION_FONT_SIZE, "OUTLINE")
+                            descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
                             descLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, currentY - 10)
                             descLabel:SetText(data.description or "")
                             descLabel:SetTextColor(.9,.9,.9)
 
                             if data.extraDescription then
                                 local extraDescLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                                extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", self.EXTRA_DESCRIPTION_FONT_SIZE, "OUTLINE")
+                                extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.EXTRA_DESCRIPTION_FONT_SIZE), "OUTLINE")
                                 extraDescLabel:SetPoint("LEFT", descLabel, "RIGHT", 10, 0)
                                 extraDescLabel:SetText(data.extraDescription)
                                 extraDescLabel:SetTextColor(1, 0.5, 0.5)
@@ -522,7 +522,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                             local dropdown = DFUI.tools.CreateDropDown(scrollChild, nil, elementModule, elementName, typeMeta.items)
                             dropdown:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -50, currentY)
                             if dropdown.text then
-                                dropdown.text:SetFont(self.font .. "BigNoodleTitling.ttf", self.VALUE_FONT_SIZE, "OUTLINE")
+                                dropdown.text:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
                             end
 
                             self.dropdowns[elementKey] = dropdown
@@ -565,14 +565,14 @@ DFUI:NewMod("Gui-elem", 3, function()
                         local elementKey = elementModule .. "." .. elementName
                         if not self.colours[elementKey] then
                             local descLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                            descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", self.DESCRIPTION_FONT_SIZE, "OUTLINE")
+                            descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
                             descLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, currentY - 6)
                             descLabel:SetText(data.description or "")
                             descLabel:SetTextColor(.9,.9,.9)
 
                             if data.extraDescription then
                                 local extraDescLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                                extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", self.EXTRA_DESCRIPTION_FONT_SIZE, "OUTLINE")
+                                extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.EXTRA_DESCRIPTION_FONT_SIZE), "OUTLINE")
                                 extraDescLabel:SetPoint("LEFT", descLabel, "RIGHT", 10, 0)
                                 extraDescLabel:SetText(data.extraDescription)
                                 extraDescLabel:SetTextColor(1, 0.5, 0.5)
@@ -582,7 +582,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                             local colour = DFUI.tools.CreateColour(scrollChild, nil, elementModule, elementName)
                             colour:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -50, currentY)
                             if colour.label then
-                                colour.label:SetFont(self.font .. "BigNoodleTitling.ttf", self.VALUE_FONT_SIZE, "OUTLINE")
+                                colour.label:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
                             end
 
                             self.colours[elementKey] = colour

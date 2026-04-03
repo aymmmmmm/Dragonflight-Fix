@@ -131,7 +131,7 @@ DFUI:NewMod("Gui-shag", 3, function()
 
                     -- create description label on left
                     local desc = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-                    desc:SetFont(self.font .. "BigNoodleTitling.ttf", self.DESCRIPTION_FONT_SIZE, "OUTLINE")
+                    desc:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
                     desc:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -yPos)
                     desc:SetText(element.data.description or element.key)
                     desc:SetTextColor(.9, .9, .9)
@@ -148,7 +148,7 @@ DFUI:NewMod("Gui-shag", 3, function()
                 end
             elseif module == "extras" and not DFUI.gui.shaguExtrasData then
                 local txt = panel:CreateFontString(nil, "OVERLAY")
-                txt:SetFont(self.font .. "BigNoodleTitling.ttf", 30, "OUTLINE")
+                txt:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(30), "OUTLINE")
                 txt:SetPoint("TOP", panel, "TOP", 10, -yPos-50)
                 txt:SetText("缺少SHAGU TWEAKS EXTRAS\n安装以获取更多选项")
                 txt:SetTextColor(1, 0.5, 0.5)

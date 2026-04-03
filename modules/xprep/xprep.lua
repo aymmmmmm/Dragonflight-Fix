@@ -1,16 +1,16 @@
 DFUI:NewDefaults("Xprep", {
     enabled = { true },
-    xprepDarkMode = {0, "slider", {0, 1}, nil, "外观", 1, "调整深色模式强度", nil, nil},
+    xprepDarkMode = {0, "slider", {0, 1, 0.1}, nil, "外观", 1, "调整深色模式强度", nil, nil},
     xprepColor = {{1, 1, 1}, "colour", nil, nil, "外观", 2, "更改经验/声望颜色", nil, nil},
-    bgAlpha = {0.5, "slider", {0, 1}, nil, "外观", 3, "调整经验和声望条的背景透明度", nil, nil},
+    bgAlpha = {0.5, "slider", {0, 1, 0.1}, nil, "外观", 3, "调整经验和声望条的背景透明度", nil, nil},
     showXpBar = {true, "checkbox", nil, nil, "经验条", 4, "显示或隐藏经验条", nil, nil},
     showXpText = {true, "checkbox", nil, nil, "经验条", 5, "显示或隐藏经验条上的经验文字", nil, nil},
     hoverXP = {true, "checkbox", nil, "showXpText", "经验条", 6, "悬停经验条时显示经验文字", nil, nil},
     showXpOnGain = {true, "checkbox", nil, "showXpText", "经验条", 7, "获得经验时显示经验文字5秒", nil, nil},
-    xpBarTextSize = {12, "slider", {8, 20}, "showXpText", "经验条", 8, "调整经验条文字的字体大小", nil, nil},
-    xpBarHeight = {12, "slider", {5, 20}, "showXpBar", "经验条", 9, "调整经验条的高度", nil, nil},
-    xpBarWidth = {400, "slider", {200, 700}, "showXpBar", "经验条", 10, "调整经验条的宽度", nil, nil},
-    xpBarAlpha = {1, "slider", {0.1, 1}, "showXpBar", "经验条", 11, "调整经验条的透明度", nil, nil},
+    xpBarTextSize = {12, "slider", {8, 20, 1}, "showXpText", "经验条", 8, "调整经验条文字的字体大小", nil, nil},
+    xpBarHeight = {12, "slider", {5, 20, 1}, "showXpBar", "经验条", 9, "调整经验条的高度", nil, nil},
+    xpBarWidth = {400, "slider", {200, 700, 1}, "showXpBar", "经验条", 10, "调整经验条的宽度", nil, nil},
+    xpBarAlpha = {1, "slider", {0.1, 1, 0.1}, "showXpBar", "经验条", 11, "调整经验条的透明度", nil, nil},
     barFont = {"FRIZQT__.TTF", "dropdown", {
         "FRIZQT__.TTF",
         "Expressway",
@@ -29,10 +29,10 @@ DFUI:NewDefaults("Xprep", {
     autoTrack = {true, "checkbox", nil, nil, "声望条", 14, "自动追踪获得声望的阵营", nil, nil},
     hoverRep = {true, "checkbox", nil, nil, "声望条", 15, "悬停声望条时显示声望文字", nil, nil},
     showRepOnGain = {true, "checkbox", nil, nil, "声望条", 16, "获得声望时显示声望文字5秒", nil, nil},
-    repBarTextSize = {11, "slider", {8, 20}, nil, "声望条", 17, "调整声望条文字的字体大小", nil, nil},
-    repBarHeight = {10, "slider", {5, 20}, nil, "声望条", 18, "调整声望条的高度", nil, nil},
-    repBarWidth = {300, "slider", {200, 700}, nil, "声望条", 19, "调整声望条的宽度", nil, nil},
-    repBarAlpha = {1, "slider", {0.1, 1}, nil, "声望条", 20, "调整声望条的透明度", nil, nil},
+    repBarTextSize = {11, "slider", {8, 20, 1}, nil, "声望条", 17, "调整声望条文字的字体大小", nil, nil},
+    repBarHeight = {10, "slider", {5, 20, 1}, nil, "声望条", 18, "调整声望条的高度", nil, nil},
+    repBarWidth = {300, "slider", {200, 700, 1}, nil, "声望条", 19, "调整声望条的宽度", nil, nil},
+    repBarAlpha = {1, "slider", {0.1, 1, 0.1}, nil, "声望条", 20, "调整声望条的透明度", nil, nil},
 })
 
 DFUI:NewMod("Xprep", 1, function()

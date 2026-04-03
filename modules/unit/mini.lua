@@ -1,10 +1,10 @@
 DFUI:NewDefaults("Mini", {
     enabled = {true},
-    miniDarkMode = {0, "slider", {0, 1}, nil, "外观", 1, "调整深色模式强度", nil, nil},
+    miniDarkMode = {0, "slider", {0, 1, 0.1}, nil, "外观", 1, "调整深色模式强度", nil, nil},
     miniColor = {{1, 1, 1}, "colour", nil, nil, "外观", 2, "更改迷你框架颜色", nil, nil},
-    petFrameScale = {1, "slider", {0.7, 1.3}, nil, "外观", 3, "调整宠物框架大小", nil, nil},
-    totFrameScale = {1, "slider", {0.7, 1.3}, nil, "外观", 4, "调整目标的目标框架大小", nil, nil},
-    partyFrameScale = {1, "slider", {0.7, 1.3}, nil, "外观", 5, "调整队伍框架大小", nil, nil},
+    petFrameScale = {1, "slider", {0.7, 1.3, 0.1}, nil, "外观", 3, "调整宠物框架大小", nil, nil},
+    totFrameScale = {1, "slider", {0.7, 1.3, 0.1}, nil, "外观", 4, "调整目标的目标框架大小", nil, nil},
+    partyFrameScale = {1, "slider", {0.7, 1.3, 0.1}, nil, "外观", 5, "调整队伍框架大小", nil, nil},
     miniTextShow = {true, "checkbox", nil, nil, "文字", 6, "显示宠物/目标的目标/队伍生命值和法力值文字", nil, nil},
     frameFont = {"FRIZQT__.TTF", "dropdown", {
         "FRIZQT__.TTF",

@@ -1,11 +1,11 @@
 DFUI:NewDefaults("Micro", {
     enabled = {true},
-    microDarkMode = {0, "slider", {0, 1}, nil, "外观", 1, "调整深色模式强度", nil, nil},
+    microDarkMode = {0, "slider", {0, 1, 0.1}, nil, "外观", 1, "调整深色模式强度", nil, nil},
     microColor = {{1, 1, 1}, "colour", nil, nil, "外观", 2, "更改微型菜单颜色", nil, nil},
     switchColor = {true, "checkbox", nil, nil, "微型菜单基础", 3, "在灰色和彩色微型菜单之间切换", nil, nil},
-    microScale = {0.85, "slider", {0.5, 1.5}, nil, "微型菜单基础", 4, "调整微型菜单的缩放", nil, nil},
-    microAlpha = {1, "slider", {0.1, 1}, nil, "微型菜单基础", 5, "调整微型菜单的透明度", nil, nil},
-    microSpacing = {3, "slider", {0.5, 15}, nil, "微型菜单基础", 6, "调整微型菜单按钮间距", nil, nil},
+    microScale = {0.85, "slider", {0.5, 1.5, 0.1}, nil, "微型菜单基础", 4, "调整微型菜单的缩放", nil, nil},
+    microAlpha = {1, "slider", {0.1, 1, 0.1}, nil, "微型菜单基础", 5, "调整微型菜单的透明度", nil, nil},
+    microSpacing = {3, "slider", {0, 15, 1}, nil, "微型菜单基础", 6, "调整微型菜单按钮间距", nil, nil},
     smallFPS = {false, "checkbox", nil, nil, "功能调整", 7, "显示更小的帧率/延迟监控 (CTRL+R)", nil, nil},
 })
 

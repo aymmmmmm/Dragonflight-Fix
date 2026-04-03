@@ -1,11 +1,11 @@
 DFUI:NewDefaults("Cast", {
     enabled = {true},
-    castDarkMode = {0, "slider", {0, 1}, nil, "外观", 1, "调整深色模式强度", nil, nil},
+    castDarkMode = {0, "slider", {0, 1, 0.1}, nil, "外观", 1, "调整深色模式强度", nil, nil},
     castColor = {{0.9, 0.9, 0.9}, "colour", nil, nil, "外观", 2, "更改施法条颜色", nil, nil},
     setFillDirection = {"left", "dropdown", {"left", "right", "center"}, nil, "施法条基础", 3, "设置填充方向", nil, nil},
     showShadow = {true, "checkbox", nil, nil, "施法条基础", 4, "显示施法条下方的阴影", nil, nil},
-    barWidth = {200, "slider", {120, 350}, nil, "施法条基础", 5, "更改施法条宽度", nil, nil},
-    barHeight = {16, "slider", {10, 30}, nil, "施法条基础", 6, "更改施法条高度", nil, nil},
+    barWidth = {200, "slider", {120, 350, 1}, nil, "施法条基础", 5, "更改施法条宽度", nil, nil},
+    barHeight = {16, "slider", {10, 30, 1}, nil, "施法条基础", 6, "更改施法条高度", nil, nil},
     castFont = {"FRIZQT__.TTF", "dropdown", {
         "FRIZQT__.TTF",
         "Expressway",
@@ -23,11 +23,11 @@ DFUI:NewDefaults("Cast", {
     showTime = {true, "checkbox", nil, nil, "文字设置", 8, "显示施法时间", nil, nil},
     showSpell = {true, "checkbox", nil, nil, "文字设置", 9, "显示法术名称文字", nil, nil},
     showIcon = {true, "checkbox", nil, nil, "文字设置", 10, "显示施法法术图标", "需要ShaguTweaks", nil},
-    fontSize = {12, "slider", {5, 25}, nil, "文字设置", 11, "更改施法条字体大小", nil, nil},
+    fontSize = {12, "slider", {5, 25, 1}, nil, "文字设置", 11, "更改施法条字体大小", nil, nil},
     textAlign = {"LEFT", "dropdown", {"LEFT", "CENTER", "RIGHT"}, nil, "文字设置", 12, "更改法术文字对齐方式", nil, nil},
-    spellX = {5, "slider", {-100, 300}, nil, "文字设置", 13, "更改法术名称X偏移", nil, nil},
-    timeX = {-5, "slider", {-300, 100}, nil, "文字设置", 14, "更改施法时间X偏移", nil, nil},
-    fontY = {-16, "slider", {-40, 40}, nil, "文字设置", 15, "更改施法条字体Y偏移", nil, nil},
+    spellX = {5, "slider", {-100, 300, 1}, nil, "文字设置", 13, "更改法术名称X偏移", nil, nil},
+    timeX = {-5, "slider", {-300, 100, 1}, nil, "文字设置", 14, "更改施法时间X偏移", nil, nil},
+    fontY = {-16, "slider", {-40, 40, 1}, nil, "文字设置", 15, "更改施法条字体Y偏移", nil, nil},
 })
 
 DFUI:NewMod("Cast", 1, function()
