@@ -197,6 +197,9 @@ function DFUI:VersionCheckDB()
 end
 
 function DFUI:SetTempDB(mod, key, value)
+    if not self.tempDB[mod] then
+        self.tempDB[mod] = {}
+    end
     self.tempDB[mod][key] = value
     local cb = mod .. "_" .. key .. "_changed"
     self:TriggerCallback(cb, value)
@@ -218,6 +221,7 @@ function DFUI:GetTempValue(name, key)
 end
 
 function DFUI:GetTempDB(mod, key)
+    if not self.tempDB[mod] then return nil end
     return self.tempDB[mod][key]
 end
 
@@ -296,7 +300,7 @@ function DFUI:NewCallbacks(mod, callbacks)
         self.callbacks[cb] = {}
         tinsert(self.callbacks[cb], func)
 
-        self:TriggerCallback(cb, self.tempDB[mod][key])
+        self:TriggerCallback(cb, self.tempDB[mod] and self.tempDB[mod][key])
 
         count = count + 1
     end

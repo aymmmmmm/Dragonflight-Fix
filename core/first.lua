@@ -43,7 +43,9 @@ function Setup:TempDBForSwitching(isDarkMode)
     end
 
     DFUI:TriggerAllCallbacks()
-    DFUI.gui.Base:UpdateHandler()
+    if DFUI.gui.Base then
+        DFUI.gui.Base:UpdateHandler()
+    end
 end
 
 function Setup:WelcomePage()

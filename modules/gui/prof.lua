@@ -124,7 +124,7 @@ DFUI:NewMod("Gui-prof", 4, function()
                     local clickedName = this.profName
                     DFUI:SwitchProfile(clickedName)
                     Setup:Update()
-                    if DFUI.gui.Base.UpdateHandler then
+                    if DFUI.gui.Base and DFUI.gui.Base.UpdateHandler then
                         DFUI.gui.Base:UpdateHandler()
                     end
                     if not Setup.ui.warner then
@@ -144,7 +144,7 @@ DFUI:NewMod("Gui-prof", 4, function()
                     local clickedName = this.profName
                     DFUI:LoadProfile(clickedName)
                     Setup:Update()
-                    if DFUI.gui.Base.UpdateHandler then
+                    if DFUI.gui.Base and DFUI.gui.Base.UpdateHandler then
                         DFUI.gui.Base:UpdateHandler()
                     end
                     if not Setup.ui.warner then
@@ -164,7 +164,7 @@ DFUI:NewMod("Gui-prof", 4, function()
                     local clickedName = this.profName
                     DFUI:DeleteProfile(clickedName)
                     DFUI:SwitchProfile("Default")
-                    DFUI.gui.Base:UpdateHandler()
+                    if DFUI.gui.Base then DFUI.gui.Base:UpdateHandler() end
                     Setup:Update()
                     if not Setup.ui.warner then
                         Setup.ui.warner = DFUI.tools.CreateFontWarner(panel, 14, "", {1, 0, 0}, true, 3)
@@ -250,7 +250,7 @@ DFUI:NewMod("Gui-prof", 4, function()
                             DFUI:SwitchProfile(profileName)
                             DFUI:SetTempDBNoCallback("Generic", "firstRun", true)
                             Setup:Update()
-                            if DFUI.gui.Base.UpdateHandler then
+                            if DFUI.gui.Base and DFUI.gui.Base.UpdateHandler then
                                 DFUI.gui.Base:UpdateHandler()
                             end
 
@@ -280,7 +280,7 @@ DFUI:NewMod("Gui-prof", 4, function()
             self.ui.resetBtn:SetScript("OnClick", function()
                 local success, _ = pcall(function()
                     DFUI:CopyProfile(nil, Setup.default["Default"])
-                    DFUI.gui.Base:UpdateHandler()
+                    if DFUI.gui.Base then DFUI.gui.Base:UpdateHandler() end
                 end)
                 if success then
                     if not Setup.ui.warner then
