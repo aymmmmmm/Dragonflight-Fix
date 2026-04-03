@@ -236,27 +236,29 @@ libdebuff:SetScript('OnEvent', function()
             end
         end
 
-    elseif (event == 'UNIT_AURA' and arg1 == 'target') or event == 'PLAYER_TARGET_CHANGED' then
-        local _, targetGuid = UnitExists('target')
+    elseif event == 'PLAYER_TARGET_CHANGED'
+        or (event == 'UNIT_AURA' and (arg1 == 'target' or arg1 == 'pet' or (arg1 and string.find(arg1, 'party')))) then
+        -- Scan debuffs for the relevant unit (target, pet, or partyN)
+        local scanUnit = (event == 'PLAYER_TARGET_CHANGED') and 'target' or arg1
+        local _, scanGuid = UnitExists(scanUnit)
         for i = 1, 16 do
-            local texture, stacks, dtype = UnitDebuff('target', i)
+            local texture, stacks, dtype = UnitDebuff(scanUnit, i)
             if not texture then break end
 
-            scanner:SetUnitDebuff('target', i)
+            scanner:SetUnitDebuff(scanUnit, i)
             local effect = scanner:GetLine(1) or ''
 
             if effect ~= '' then
-                local level = UnitLevel('target') or 0
-                local unit = UnitName('target')
+                local level = UnitLevel(scanUnit) or 0
+                local unit = UnitName(scanUnit)
                 local dur = libdebuff:GetDuration(effect, nil)
 
-
                 if dur and dur > 0 then
-                    libdebuff:AddEffect(unit, level, effect, dur, nil, targetGuid)
+                    libdebuff:AddEffect(unit, level, effect, dur, nil, scanGuid)
                 else
                     local hasRecord = libdebuff.debuffs[unit] and libdebuff.debuffs[unit][level] and libdebuff.debuffs[unit][level][effect]
                     if not hasRecord then
-                        libdebuff:AddEffect(unit, level, effect, nil, nil, targetGuid)
+                        libdebuff:AddEffect(unit, level, effect, nil, nil, scanGuid)
                     end
                 end
             end

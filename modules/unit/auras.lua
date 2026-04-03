@@ -5,12 +5,12 @@ DFUI:NewDefaults("Auras", {
     buffBarShowBuffs = {true, "checkbox", nil, nil, "增益栏", 2, "显示增益", nil, nil},
     buffBarShowDebuffs = {true, "checkbox", nil, nil, "增益栏", 3, "显示减益", nil, nil},
     buffBarShowWeapons = {true, "checkbox", nil, nil, "增益栏", 4, "显示武器附魔", nil, nil},
-    buffBarSize = {25, "slider", {16, 50}, nil, "增益栏", 5, "图标大小", nil, nil},
-    buffBarPerRow = {8, "slider", {4, 16}, nil, "增益栏", 6, "每行图标数", nil, nil},
-    buffBarSpacing = {5, "slider", {0, 20}, nil, "增益栏", 7, "图标间距", nil, nil},
-    buffBarFrameSpacing = {15, "slider", {0, 50}, nil, "增益栏", 8, "分区间距", nil, nil},
+    buffBarSize = {25, "slider", {16, 50, 1}, nil, "增益栏", 5, "图标大小", nil, nil},
+    buffBarPerRow = {8, "slider", {4, 16, 1}, nil, "增益栏", 6, "每行图标数", nil, nil},
+    buffBarSpacing = {5, "slider", {0, 20, 1}, nil, "增益栏", 7, "图标间距", nil, nil},
+    buffBarFrameSpacing = {15, "slider", {0, 50, 1}, nil, "增益栏", 8, "分区间距", nil, nil},
     buffBarTimerInside = {false, "checkbox", nil, nil, "增益栏", 9, "计时器显示在图标内", nil, nil},
-    buffBarTimerFontSize = {10, "slider", {6, 20}, nil, "增益栏", 10, "计时器字号", nil, nil},
+    buffBarTimerFontSize = {10, "slider", {6, 20, 1}, nil, "增益栏", 10, "计时器字号", nil, nil},
     buffBarTimerStyle = {"White + Red", "dropdown", {"Gold", "White + Red"}, nil, "增益栏", 11, "计时器颜色风格", nil, nil},
     buffBarSortOrder = {"Default", "dropdown", {"Default", "Duration ascending", "Duration descending"}, nil, "增益栏", 12, "排序方式", nil, nil},
     buffBarShowSpiral = {true, "checkbox", nil, nil, "增益栏", 13, "显示减益旋转动画", nil, nil},
@@ -20,56 +20,56 @@ DFUI:NewDefaults("Auras", {
     playerShowBuffTimer = {true, "checkbox", nil, "playerBuffs", "玩家", 3, "显示增益计时器", nil, nil},
     playerShowDebuffTimer = {true, "checkbox", nil, "playerDebuffs", "玩家", 4, "显示减益计时器", nil, nil},
     playerShowSpiral = {true, "checkbox", nil, nil, "玩家", 5, "显示减益旋转动画", nil, nil},
-    playerAuraSize = {20, "slider", {10, 30}, nil, "玩家", 6, "图标大小", nil, nil},
-    playerAuraSpacing = {2, "slider", {0, 6}, nil, "玩家", 7, "图标间距", nil, nil},
-    playerAurasPerRow = {5, "slider", {3, 8}, nil, "玩家", 8, "每行图标数", nil, nil},
+    playerAuraSize = {20, "slider", {10, 30, 1}, nil, "玩家", 6, "图标大小", nil, nil},
+    playerAuraSpacing = {2, "slider", {0, 6, 1}, nil, "玩家", 7, "图标间距", nil, nil},
+    playerAurasPerRow = {5, "slider", {3, 8, 1}, nil, "玩家", 8, "每行图标数", nil, nil},
     playerGrowRight = {true, "checkbox", nil, nil, "玩家", 9, "图标向右增长", nil, nil},
-    playerTimerFontSize = {12, "slider", {6, 20}, nil, "玩家", 10, "计时器字号", nil, nil},
+    playerTimerFontSize = {12, "slider", {6, 20, 1}, nil, "玩家", 10, "计时器字号", nil, nil},
     playerTimerStyle = {"White + Red", "dropdown", {"Gold", "White + Red"}, nil, "玩家", 11, "计时器颜色风格", nil, nil},
-    playerAuraX = {100, "slider", {-200, 200, 5}, nil, "玩家", 12, "光环X偏移", nil, nil},
-    playerAuraY = {-68, "slider", {-200, 200, 5}, nil, "玩家", 13, "光环Y偏移", nil, nil},
+    playerAuraX = {100, "slider", {-200, 200, 1}, nil, "玩家", 12, "光环X偏移", nil, nil},
+    playerAuraY = {-68, "slider", {-200, 200, 1}, nil, "玩家", 13, "光环Y偏移", nil, nil},
     -- 目标
     targetBuffs = {true, "checkbox", nil, nil, "目标", 1, "显示增益", nil, nil},
     targetDebuffs = {true, "checkbox", nil, nil, "目标", 2, "显示减益", nil, nil},
     targetShowBuffTimer = {true, "checkbox", nil, "targetBuffs", "目标", 3, "显示增益计时器", nil, nil},
     targetShowDebuffTimer = {true, "checkbox", nil, "targetDebuffs", "目标", 4, "显示减益计时器", nil, nil},
     targetShowSpiral = {true, "checkbox", nil, nil, "目标", 5, "显示减益旋转动画", nil, nil},
-    targetAuraSize = {20, "slider", {10, 30}, nil, "目标", 6, "图标大小", nil, nil},
-    targetAuraSpacing = {2, "slider", {0, 6}, nil, "目标", 7, "图标间距", nil, nil},
-    targetAurasPerRow = {5, "slider", {3, 8}, nil, "目标", 8, "每行图标数", nil, nil},
+    targetAuraSize = {20, "slider", {10, 30, 1}, nil, "目标", 6, "图标大小", nil, nil},
+    targetAuraSpacing = {2, "slider", {0, 6, 1}, nil, "目标", 7, "图标间距", nil, nil},
+    targetAurasPerRow = {5, "slider", {3, 8, 1}, nil, "目标", 8, "每行图标数", nil, nil},
     targetGrowRight = {false, "checkbox", nil, nil, "目标", 9, "图标向右增长", nil, nil},
-    targetTimerFontSize = {12, "slider", {6, 20}, nil, "目标", 10, "计时器字号", nil, nil},
+    targetTimerFontSize = {12, "slider", {6, 20, 1}, nil, "目标", 10, "计时器字号", nil, nil},
     targetTimerStyle = {"White + Red", "dropdown", {"Gold", "White + Red"}, nil, "目标", 11, "计时器颜色风格", nil, nil},
-    targetAuraX = {-100, "slider", {-200, 200, 5}, nil, "目标", 12, "光环X偏移", nil, nil},
-    targetAuraY = {-68, "slider", {-200, 200, 5}, nil, "目标", 13, "光环Y偏移", nil, nil},
+    targetAuraX = {-100, "slider", {-200, 200, 1}, nil, "目标", 12, "光环X偏移", nil, nil},
+    targetAuraY = {-68, "slider", {-200, 200, 1}, nil, "目标", 13, "光环Y偏移", nil, nil},
     -- 宠物
     petBuffs = {true, "checkbox", nil, nil, "宠物", 1, "显示增益", nil, nil},
     petDebuffs = {true, "checkbox", nil, nil, "宠物", 2, "显示减益", nil, nil},
     petShowBuffTimer = {true, "checkbox", nil, "petBuffs", "宠物", 3, "显示增益计时器", nil, nil},
     petShowDebuffTimer = {true, "checkbox", nil, "petDebuffs", "宠物", 4, "显示减益计时器", nil, nil},
     petShowSpiral = {true, "checkbox", nil, nil, "宠物", 5, "显示减益旋转动画", nil, nil},
-    petAuraSize = {20, "slider", {10, 30}, nil, "宠物", 6, "图标大小", nil, nil},
-    petAuraSpacing = {2, "slider", {0, 6}, nil, "宠物", 7, "图标间距", nil, nil},
-    petAurasPerRow = {5, "slider", {3, 8}, nil, "宠物", 8, "每行图标数", nil, nil},
+    petAuraSize = {20, "slider", {10, 30, 1}, nil, "宠物", 6, "图标大小", nil, nil},
+    petAuraSpacing = {2, "slider", {0, 6, 1}, nil, "宠物", 7, "图标间距", nil, nil},
+    petAurasPerRow = {5, "slider", {3, 8, 1}, nil, "宠物", 8, "每行图标数", nil, nil},
     petGrowRight = {true, "checkbox", nil, nil, "宠物", 9, "图标向右增长", nil, nil},
-    petTimerFontSize = {12, "slider", {6, 20}, nil, "宠物", 10, "计时器字号", nil, nil},
+    petTimerFontSize = {12, "slider", {6, 20, 1}, nil, "宠物", 10, "计时器字号", nil, nil},
     petTimerStyle = {"White + Red", "dropdown", {"Gold", "White + Red"}, nil, "宠物", 11, "计时器颜色风格", nil, nil},
-    petAuraX = {30, "slider", {-200, 200, 5}, nil, "宠物", 12, "光环X偏移", nil, nil},
-    petAuraY = {-2, "slider", {-200, 200, 5}, nil, "宠物", 13, "光环Y偏移", nil, nil},
+    petAuraX = {30, "slider", {-200, 200, 1}, nil, "宠物", 12, "光环X偏移", nil, nil},
+    petAuraY = {-2, "slider", {-200, 200, 1}, nil, "宠物", 13, "光环Y偏移", nil, nil},
     -- 队伍
     partyBuffs = {true, "checkbox", nil, nil, "队伍", 1, "显示增益", nil, nil},
     partyDebuffs = {true, "checkbox", nil, nil, "队伍", 2, "显示减益", nil, nil},
     partyShowBuffTimer = {true, "checkbox", nil, "partyBuffs", "队伍", 3, "显示增益计时器", nil, nil},
     partyShowDebuffTimer = {true, "checkbox", nil, "partyDebuffs", "队伍", 4, "显示减益计时器", nil, nil},
     partyShowSpiral = {true, "checkbox", nil, nil, "队伍", 5, "显示减益旋转动画", nil, nil},
-    partyAuraSize = {20, "slider", {10, 30}, nil, "队伍", 6, "图标大小", nil, nil},
-    partyAuraSpacing = {2, "slider", {0, 6}, nil, "队伍", 7, "图标间距", nil, nil},
-    partyAurasPerRow = {5, "slider", {3, 8}, nil, "队伍", 8, "每行图标数", nil, nil},
+    partyAuraSize = {20, "slider", {10, 30, 1}, nil, "队伍", 6, "图标大小", nil, nil},
+    partyAuraSpacing = {2, "slider", {0, 6, 1}, nil, "队伍", 7, "图标间距", nil, nil},
+    partyAurasPerRow = {5, "slider", {3, 8, 1}, nil, "队伍", 8, "每行图标数", nil, nil},
     partyGrowRight = {true, "checkbox", nil, nil, "队伍", 9, "图标向右增长", nil, nil},
-    partyTimerFontSize = {12, "slider", {6, 20}, nil, "队伍", 10, "计时器字号", nil, nil},
+    partyTimerFontSize = {12, "slider", {6, 20, 1}, nil, "队伍", 10, "计时器字号", nil, nil},
     partyTimerStyle = {"White + Red", "dropdown", {"Gold", "White + Red"}, nil, "队伍", 11, "计时器颜色风格", nil, nil},
-    partyAuraX = {30, "slider", {-200, 200, 5}, nil, "队伍", 12, "光环X偏移", nil, nil},
-    partyAuraY = {-2, "slider", {-200, 200, 5}, nil, "队伍", 13, "光环Y偏移", nil, nil},
+    partyAuraX = {30, "slider", {-200, 200, 1}, nil, "队伍", 12, "光环X偏移", nil, nil},
+    partyAuraY = {-2, "slider", {-200, 200, 1}, nil, "队伍", 13, "光环Y偏移", nil, nil},
 })
 
 DFUI:NewMod("Auras", 2, function()
@@ -103,6 +103,22 @@ DFUI:NewMod("Auras", 2, function()
 
     -- Duration tracking: [targetGuid] = { [spellId] = { start, duration } }
     local auraDurations = {}
+
+    -- Max duration cache: [normalizedTexture] = maxSeenTimeLeft (pfUI-style)
+    -- Naturally converges to total buff duration over time
+    local maxdurations = {}
+
+    -- Learned durations from Nampower AURA_CAST events: [spellName] = durationSec
+    local learnedDurations = {}
+
+    -- Normalize texture path for reliable comparison
+    -- Strips "Interface\Icons\" prefix and lowercases
+    local function NormalizeTexture(tex)
+        if not tex then return nil end
+        tex = string.lower(tex)
+        tex = string.gsub(tex, "^interface[/\\]+icons[/\\]+", "")
+        return tex
+    end
 
     -- Spell icon cache
     local iconCache = {}
@@ -140,7 +156,9 @@ DFUI:NewMod("Auras", 2, function()
 
     -- Common buff durations (libdebuff only covers debuffs)
     local buffDurations = {
+        -- ═══════════════════════════════════════
         -- Priest
+        -- ═══════════════════════════════════════
         ["Power Word: Fortitude"] = 1800,
         ["Prayer of Fortitude"] = 3600,
         ["Power Word: Shield"] = 30,
@@ -151,13 +169,25 @@ DFUI:NewMod("Auras", 2, function()
         ["Inner Fire"] = 600,
         ["Renew"] = 15,
         ["Fear Ward"] = 600,
+        ["Inspiration"] = 15,
+        ["Lightwell Renew"] = 6,
+        ["Abolish Disease"] = 20,
+        ["Elune's Grace"] = 15,
+        -- ═══════════════════════════════════════
         -- Druid
+        -- ═══════════════════════════════════════
         ["Mark of the Wild"] = 1800,
         ["Gift of the Wild"] = 3600,
         ["Thorns"] = 600,
         ["Rejuvenation"] = 12,
         ["Regrowth"] = 21,
+        ["Innervate"] = 20,
+        ["Barkskin"] = 15,
+        ["Abolish Poison"] = 8,
+        ["Frenzied Regeneration"] = 10,
+        -- ═══════════════════════════════════════
         -- Mage
+        -- ═══════════════════════════════════════
         ["Arcane Intellect"] = 1800,
         ["Arcane Brilliance"] = 3600,
         ["Ice Armor"] = 1800,
@@ -166,33 +196,137 @@ DFUI:NewMod("Auras", 2, function()
         ["Ice Barrier"] = 60,
         ["Dampen Magic"] = 600,
         ["Amplify Magic"] = 600,
+        ["Arcane Power"] = 15,
+        ["Combustion"] = 0,
+        ["Fire Ward"] = 30,
+        ["Frost Ward"] = 30,
+        ["Mana Shield"] = 60,
+        ["Evocation"] = 8,
+        -- ═══════════════════════════════════════
         -- Paladin
+        -- ═══════════════════════════════════════
         ["Blessing of Might"] = 300,
         ["Blessing of Wisdom"] = 300,
         ["Blessing of Kings"] = 300,
         ["Blessing of Salvation"] = 300,
         ["Blessing of Light"] = 300,
         ["Blessing of Sanctuary"] = 300,
+        ["Blessing of Protection"] = 10,
+        ["Blessing of Freedom"] = 16,
+        ["Blessing of Sacrifice"] = 30,
         ["Greater Blessing of Might"] = 900,
         ["Greater Blessing of Wisdom"] = 900,
         ["Greater Blessing of Kings"] = 900,
         ["Greater Blessing of Salvation"] = 900,
         ["Greater Blessing of Light"] = 900,
         ["Greater Blessing of Sanctuary"] = 900,
+        ["Divine Shield"] = 12,
+        ["Divine Protection"] = 8,
+        ["Holy Shield"] = 10,
+        ["Avenging Wrath"] = 20,
+        ["Devotion Aura"] = 0,
+        ["Retribution Aura"] = 0,
+        ["Concentration Aura"] = 0,
+        ["Sanctity Aura"] = 0,
+        -- ═══════════════════════════════════════
         -- Warlock
+        -- ═══════════════════════════════════════
         ["Demon Armor"] = 1800,
         ["Demon Skin"] = 1800,
         ["Unending Breath"] = 600,
+        ["Shadow Ward"] = 30,
+        ["Sacrifice"] = 30,
+        ["Fel Domination"] = 15,
+        ["Soulstone Resurrection"] = 1800,
+        ["Soul Link"] = 0,
+        ["Life Tap"] = 0,
+        -- ═══════════════════════════════════════
         -- Warrior
+        -- ═══════════════════════════════════════
         ["Battle Shout"] = 120,
+        ["Shield Wall"] = 10,
+        ["Last Stand"] = 20,
+        ["Berserker Rage"] = 10,
+        ["Recklessness"] = 15,
+        ["Retaliation"] = 15,
+        ["Bloodrage"] = 10,
+        ["Death Wish"] = 30,
+        ["Enrage"] = 12,
+        ["Shield Block"] = 5,
+        ["Bloodthirst"] = 8,
+        -- ═══════════════════════════════════════
+        -- Hunter
+        -- ═══════════════════════════════════════
+        ["Rapid Fire"] = 15,
+        ["Bestial Wrath"] = 18,
+        ["Mend Pet"] = 15,
+        ["Quick Shots"] = 12,
+        ["Trueshot Aura"] = 0,
+        ["Aspect of the Hawk"] = 0,
+        ["Aspect of the Monkey"] = 0,
+        ["Aspect of the Cheetah"] = 0,
+        ["Aspect of the Pack"] = 0,
+        ["Aspect of the Wild"] = 0,
+        ["Deterrence"] = 10,
+        -- ═══════════════════════════════════════
+        -- Rogue
+        -- ═══════════════════════════════════════
+        ["Evasion"] = 15,
+        ["Sprint"] = 15,
+        ["Blade Flurry"] = 15,
+        ["Adrenaline Rush"] = 15,
+        ["Vanish"] = 10,
+        ["Slice and Dice"] = 21,
+        -- ═══════════════════════════════════════
         -- Shaman
+        -- ═══════════════════════════════════════
         ["Lightning Shield"] = 600,
         ["Water Shield"] = 600,
-        -- Consumables
+        ["Windfury Totem"] = 0,
+        ["Strength of Earth Totem"] = 0,
+        ["Grace of Air Totem"] = 0,
+        ["Mana Spring Totem"] = 0,
+        ["Mana Tide Totem"] = 12,
+        ["Nature's Swiftness"] = 0,
+        -- ═══════════════════════════════════════
+        -- Consumables / Elixirs
+        -- ═══════════════════════════════════════
         ["Flask of the Titans"] = 7200,
         ["Flask of Supreme Power"] = 7200,
         ["Flask of Distilled Wisdom"] = 7200,
         ["Flask of Chromatic Resistance"] = 7200,
+        ["Greater Arcane Elixir"] = 3600,
+        ["Elixir of the Mongoose"] = 3600,
+        ["Elixir of Greater Firepower"] = 3600,
+        ["Elixir of Brute Force"] = 3600,
+        ["Elixir of the Giants"] = 3600,
+        ["Elixir of Frost Power"] = 3600,
+        ["Elixir of Shadow Power"] = 3600,
+        ["Elixir of Greater Agility"] = 3600,
+        ["Elixir of the Sages"] = 3600,
+        ["Elixir of Greater Intellect"] = 3600,
+        ["Elixir of Superior Defense"] = 3600,
+        ["Elixir of Fortitude"] = 3600,
+        ["Winterfall Firewater"] = 1200,
+        ["Juju Power"] = 1800,
+        ["Juju Might"] = 600,
+        ["Juju Flurry"] = 20,
+        ["R.O.I.D.S."] = 3600,
+        ["Ground Scorpok Assay"] = 3600,
+        ["Lung Juice Cocktail"] = 3600,
+        ["Cerebral Cortex Compound"] = 3600,
+        ["Gizzard Gum"] = 3600,
+        ["Blessed Sunfruit"] = 3600,
+        ["Blessed Sunfruit Juice"] = 3600,
+        ["Dirge's Kickin' Chimaerok Chops"] = 3600,
+        ["Runn Tum Tuber Surprise"] = 600,
+        ["Mana Regeneration"] = 1800,
+        ["Well Fed"] = 900,
+        ["Food"] = 900,
+        ["Drink"] = 900,
+        -- ═══════════════════════════════════════
+        -- World Buffs
+        -- ═══════════════════════════════════════
         ["Spirit of Zanza"] = 7200,
         ["Rallying Cry of the Dragonslayer"] = 7200,
         ["Songflower Serenade"] = 3600,
@@ -200,11 +334,27 @@ DFUI:NewMod("Auras", 2, function()
         ["Mol'dar's Moxie"] = 7200,
         ["Slip'kik's Savvy"] = 7200,
         ["Warchief's Blessing"] = 3600,
+        ["Sayge's Dark Fortune of Damage"] = 7200,
+        ["Sayge's Dark Fortune of Intelligence"] = 7200,
+        ["Sayge's Dark Fortune of Spirit"] = 7200,
+        ["Sayge's Dark Fortune of Stamina"] = 7200,
+        ["Sayge's Dark Fortune of Strength"] = 7200,
+        ["Sayge's Dark Fortune of Agility"] = 7200,
+        ["Sayge's Dark Fortune of Armor"] = 7200,
+        ["Sayge's Dark Fortune of Resistance"] = 7200,
     }
 
     -- Look up duration by spell name (debuff table first, then buff table)
     local function LookupDuration(name)
         if not name then return nil end
+        -- 永久/光环类法术（buffDurations 明确标记为 0）：绝不显示计时器
+        if buffDurations[name] ~= nil and buffDurations[name] == 0 then
+            return nil
+        end
+        -- 优先使用 Nampower 学习到的精确持续时间
+        if learnedDurations[name] and learnedDurations[name] > 0 then
+            return learnedDurations[name]
+        end
         if libdebuff then
             local dur = libdebuff:GetDuration(name, nil)
             if dur and dur > 0 then return dur end
@@ -218,10 +368,16 @@ DFUI:NewMod("Auras", 2, function()
     local function TrackDuration(targetGuid, spellId, durationSec)
         if not targetGuid or not spellId or not durationSec or durationSec <= 0 then return end
         if not auraDurations[targetGuid] then auraDurations[targetGuid] = {} end
-        auraDurations[targetGuid][spellId] = {
+        local data = {
             start = GetTime(),
             duration = durationSec,
         }
+        auraDurations[targetGuid][spellId] = data
+        -- Also store by normalized texture as fallback key (in case BuildTexToSpellMap fails)
+        local tex = CachedGetSpellIcon(spellId)
+        if tex then
+            auraDurations[targetGuid]["tex:" .. NormalizeTexture(tex)] = data
+        end
     end
 
     -- Get tracked duration for a spell
@@ -251,7 +407,7 @@ DFUI:NewMod("Auras", 2, function()
             if spellId and spellId > 0 then
                 local tex = CachedGetSpellIcon(spellId)
                 if tex then
-                    map[string.lower(tex)] = spellId
+                    map[NormalizeTexture(tex)] = spellId
                 end
             end
         end
@@ -259,18 +415,13 @@ DFUI:NewMod("Auras", 2, function()
     end
 
     -- Time formatter: style = "Gold" (solid gold text) or "White + Red" (white number, red suffix)
+    -- Long durations (>= 1h) show only hours (ceil) to fit small icons
     local function FormatTime(remaining, style)
         if not style or style == "Gold" then
             if remaining >= 86400 then
                 return math.floor(remaining / 86400) .. "d"
             elseif remaining >= 3600 then
-                local h = math.floor(remaining / 3600)
-                local m = math.floor((remaining - h * 3600) / 60)
-                if m > 0 then
-                    return h .. "h" .. m .. "m"
-                else
-                    return h .. "h"
-                end
+                return math.ceil(remaining / 3600) .. "h"
             elseif remaining >= 60 then
                 return math.floor(remaining / 60) .. "m"
             else
@@ -281,13 +432,7 @@ DFUI:NewMod("Auras", 2, function()
             if remaining >= 86400 then
                 return math.floor(remaining / 86400) .. "|cffff0000d|r"
             elseif remaining >= 3600 then
-                local h = math.floor(remaining / 3600)
-                local m = math.floor((remaining - h * 3600) / 60)
-                if m > 0 then
-                    return h .. "|cffff0000h|r" .. m .. "|cffff0000m|r"
-                else
-                    return h .. "|cffff0000h|r"
-                end
+                return math.ceil(remaining / 3600) .. "|cffff0000h|r"
             elseif remaining >= 60 then
                 return math.floor(remaining / 60) .. "|cffff0000m|r"
             else
@@ -332,6 +477,16 @@ DFUI:NewMod("Auras", 2, function()
             if dur then
                 TrackDuration(targetGuid, spellId, dur)
             end
+            -- 桥接到 libdebuff（像 pfUI 一样，增强 debuff 计时覆盖）
+            if libdebuff and name and dur then
+                local libguid = DFUI_Libs and DFUI_Libs.libguid
+                if libguid and libguid.guidMap then
+                    local gdata = libguid.guidMap[targetGuid]
+                    if gdata and gdata.name then
+                        libdebuff:AddEffect(gdata.name, gdata.level or 0, name, dur, nil, targetGuid)
+                    end
+                end
+            end
         end
     end)
 
@@ -351,10 +506,31 @@ DFUI:NewMod("Auras", 2, function()
             end
 
             if targetGuid and spellId and durationMs and type(durationMs) == "number" and durationMs > 0 then
-                TrackDuration(targetGuid, spellId, durationMs / 1000)
+                local name = CachedGetSpellName(spellId)
+                -- 跳过永久/光环类法术（buffDurations 明确标记为 0）
+                local isPermanent = name and buffDurations[name] ~= nil and buffDurations[name] == 0
+                if not isPermanent then
+                    TrackDuration(targetGuid, spellId, durationMs / 1000)
+                    if name then
+                        learnedDurations[name] = durationMs / 1000
+                        -- 桥接到 libdebuff（精确 ms 数据，比 pfUI 更强）
+                        if libdebuff then
+                            local libguid = DFUI_Libs and DFUI_Libs.libguid
+                            if libguid and libguid.guidMap then
+                                local gdata = libguid.guidMap[targetGuid]
+                                if gdata and gdata.name then
+                                    libdebuff:AddEffect(gdata.name, gdata.level or 0, name, durationMs / 1000, nil, targetGuid)
+                                end
+                            end
+                        end
+                    end
+                end
             end
         end)
     end)
+
+    -- Aura snapshots table (declared early so cleanup can reference it)
+    local auraSnapshots = {}  -- [guid] = { [spellId] = true, ... }
 
     -- Periodic cleanup of expired durations (every 60s)
     local cleanupTick = 0
@@ -371,9 +547,139 @@ DFUI:NewMod("Auras", 2, function()
                     empty = false
                 end
             end
-            if empty then auraDurations[guid] = nil end
+            if empty then
+                auraDurations[guid] = nil
+                auraSnapshots[guid] = nil
+            end
         end
     end)
+
+    -------------------------------------------------------------------
+    -- Aura snapshot diffing (detect new auras on non-player units)
+    -------------------------------------------------------------------
+
+    -- Texture-based snapshots for units (fallback when GetUnitField unavailable)
+    local textureSnapshots = {}  -- [unit] = { [normalizedTex] = true, ... }
+
+    -- Seed snapshot for a unit (pure snapshot, no timer creation)
+    -- Only records current aura state for diff detection by SnapshotAndDetectNewAuras
+    local function SeedSnapshot(guid, unit)
+        -- SpellId-based snapshot (requires GetUnitField / SuperWoW)
+        if guid and GetUnitField then
+            local auras = GetUnitField(guid, "aura")
+            if auras then
+                local snap = {}
+                for slot = 1, 48 do
+                    local spellId = auras[slot]
+                    if spellId and spellId > 0 then
+                        snap[spellId] = true
+                    end
+                end
+                auraSnapshots[guid] = snap
+            end
+        end
+        -- Texture-based snapshot (always works, as fallback)
+        if unit then
+            local texSnap = {}
+            for i = 1, 16 do
+                local tex = UnitBuff(unit, i)
+                if tex then texSnap[NormalizeTexture(tex)] = true end
+            end
+            for i = 1, 16 do
+                local tex = UnitDebuff(unit, i)
+                if tex then texSnap[NormalizeTexture(tex)] = true end
+            end
+            textureSnapshots[unit] = texSnap
+        end
+    end
+
+    -- Detect newly appeared auras and start timers for them
+    local function SnapshotAndDetectNewAuras(guid, unit)
+        if not guid then return end
+
+        -- === SpellId-based detection (GetUnitField available) ===
+        if GetUnitField then
+            local auras = GetUnitField(guid, "aura")
+            if auras then
+                local oldSnap = auraSnapshots[guid] or {}
+                local newSnap = {}
+                for slot = 1, 48 do
+                    local spellId = auras[slot]
+                    if spellId and spellId > 0 then
+                        newSnap[spellId] = true
+                        if not oldSnap[spellId] then
+                            if not (auraDurations[guid] and auraDurations[guid][spellId]) then
+                                local name = CachedGetSpellName(spellId)
+                                local dur = LookupDuration(name)
+                                if dur and dur > 0 then
+                                    TrackDuration(guid, spellId, dur)
+                                end
+                            end
+                        end
+                    end
+                end
+                auraSnapshots[guid] = newSnap
+            end
+        end
+
+        -- === Texture-based detection (always works as fallback) ===
+        if unit then
+            local oldTexSnap = textureSnapshots[unit] or {}
+            local newTexSnap = {}
+            -- Scan buffs
+            for i = 1, 16 do
+                local tex = UnitBuff(unit, i)
+                if not tex then break end
+                local normTex = NormalizeTexture(tex)
+                newTexSnap[normTex] = true
+                if not oldTexSnap[normTex] then
+                    -- New buff appeared — try to find duration by tooltip name
+                    local texKey = "tex:" .. normTex
+                    if not (auraDurations[guid] and auraDurations[guid][texKey]) then
+                        local tipScanner = DFUI_Libs and DFUI_Libs.libtipscan and DFUI_Libs.libtipscan:GetScanner("aura_snap")
+                        if tipScanner then
+                            tipScanner:SetUnitBuff(unit, i)
+                            local name = tipScanner:GetLine(1)
+                            if name and name ~= "" then
+                                local dur = LookupDuration(name)
+                                if dur and dur > 0 then
+                                    if not auraDurations[guid] then auraDurations[guid] = {} end
+                                    local d = { start = GetTime(), duration = dur }
+                                    auraDurations[guid][texKey] = d
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            -- Scan debuffs
+            for i = 1, 16 do
+                local tex = UnitDebuff(unit, i)
+                if not tex then break end
+                local normTex = NormalizeTexture(tex)
+                newTexSnap[normTex] = true
+                if not oldTexSnap[normTex] then
+                    local texKey = "tex:" .. normTex
+                    if not (auraDurations[guid] and auraDurations[guid][texKey]) then
+                        local tipScanner = DFUI_Libs and DFUI_Libs.libtipscan and DFUI_Libs.libtipscan:GetScanner("aura_snap")
+                        if tipScanner then
+                            tipScanner:SetUnitDebuff(unit, i)
+                            local name = tipScanner:GetLine(1)
+                            if name and name ~= "" then
+                                local dur = LookupDuration(name)
+                                if dur and dur > 0 then
+                                    if not auraDurations[guid] then auraDurations[guid] = {} end
+                                    local d = { start = GetTime(), duration = dur }
+                                    auraDurations[guid][texKey] = d
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            textureSnapshots[unit] = newTexSnap
+        end
+    end
 
     -------------------------------------------------------------------
     -- Unit data
@@ -721,10 +1027,78 @@ DFUI:NewMod("Auras", 2, function()
                 data.buffs[i].timer:SetFont("Fonts\\FRIZQT__.TTF", timerFontSize, "OUTLINE")
                 ApplyTimerColor(data.buffs[i].timer, timerStyle)
 
-                -- Buff timer via auraDurations tracking
-                if showTimer and guid then
-                    local spellId = texToSpell[string.lower(texture)]
-                    local duration, timeleft = GetTrackedDuration(guid, spellId)
+                -- Buff timer resolution cascade
+                if showTimer then
+                    local duration, timeleft = nil, nil
+
+                    -- Check if this buff is a permanent aura (should never show timer)
+                    local isPermanentBuff = false
+                    local tipScanner = DFUI_Libs and DFUI_Libs.libtipscan and DFUI_Libs.libtipscan:GetScanner("aura_timer")
+                    if tipScanner then
+                        if data.unit == "player" then
+                            local bIdx = GetPlayerBuff and GetPlayerBuff(i - 1, "HELPFUL")
+                            if bIdx and bIdx >= 0 then
+                                tipScanner:SetPlayerBuff(bIdx)
+                            end
+                        else
+                            tipScanner:SetUnitBuff(data.unit, i)
+                        end
+                        local buffName = tipScanner:GetLine(1)
+                        if buffName and buffDurations[buffName] ~= nil and buffDurations[buffName] == 0 then
+                            isPermanentBuff = true
+                        end
+                    end
+
+                    if not isPermanentBuff then
+                    -- 1) Player PRIMARY: GetPlayerBuffTimeLeft via direct index
+                    --    UnitBuff("player",i) and GetPlayerBuff(i-1,"HELPFUL") enumerate in same order
+                    if data.unit == "player" and GetPlayerBuffTimeLeft then
+                        local bIdx = GetPlayerBuff(i - 1, "HELPFUL")
+                        if bIdx and bIdx >= 0 then
+                            local tl = GetPlayerBuffTimeLeft(bIdx)
+                            if tl and tl > 0 then
+                                timeleft = tl
+                                -- maxdurations 缓存：记录该纹理最大 timeleft，收敛到真实总持续时间
+                                local normTex = NormalizeTexture(texture)
+                                if normTex then
+                                    if not maxdurations[normTex] or maxdurations[normTex] < tl then
+                                        maxdurations[normTex] = tl
+                                    end
+                                    duration = maxdurations[normTex]
+                                else
+                                    duration = tl
+                                end
+                            end
+                        end
+                    end
+
+                    -- 2) GUID-based tracking (UNIT_CASTEVENT / Nampower)
+                    if not timeleft and guid then
+                        local spellId = texToSpell[NormalizeTexture(texture)]
+                        duration, timeleft = GetTrackedDuration(guid, spellId)
+                        if not timeleft then
+                            duration, timeleft = GetTrackedDuration(guid, "tex:" .. NormalizeTexture(texture))
+                        end
+                    end
+
+                    -- 3) Pet fallback: tooltip scan + LookupDuration
+                    --    宠物 buff 来源明确（玩家施放），start=GetTime() 基本准确
+                    if not timeleft and data.unit == "pet" and not data.buffs[i].timerStart then
+                        local scanner = DFUI_Libs and DFUI_Libs.libtipscan and DFUI_Libs.libtipscan:GetScanner("aura_timer")
+                        if scanner then
+                            scanner:SetUnitBuff(data.unit, i)
+                            local bname = scanner:GetLine(1)
+                            if bname and bname ~= "" then
+                                local dur = LookupDuration(bname)
+                                if dur and dur > 0 then
+                                    timeleft = dur
+                                    duration = dur
+                                end
+                            end
+                        end
+                    end
+                    end -- isPermanentBuff
+
                     if duration and timeleft and timeleft > 0 then
                         data.buffs[i].timer:SetText(FormatTime(timeleft, timerStyle))
                         data.buffs[i].timer:Show()
@@ -732,9 +1106,9 @@ DFUI:NewMod("Auras", 2, function()
                         data.buffs[i].timerDuration = duration
                         data.buffs[i].timerStyle = timerStyle
                     else
-                        data.buffs[i].timer:Hide()
-                        data.buffs[i].timerStart = nil
-                        data.buffs[i].timerDuration = nil
+                        if not data.buffs[i].timerStart then
+                            data.buffs[i].timer:Hide()
+                        end
                     end
                 else
                     data.buffs[i].timer:Hide()
@@ -747,6 +1121,9 @@ DFUI:NewMod("Auras", 2, function()
                 visible = visible + 1
             else
                 data.buffs[i]:Hide()
+                data.buffs[i].timer:Hide()
+                data.buffs[i].timerStart = nil
+                data.buffs[i].timerDuration = nil
             end
         end
         if visible > 0 then
@@ -807,13 +1184,37 @@ DFUI:NewMod("Auras", 2, function()
                 if showTimer then
                     local duration, timeleft = nil, nil
 
-                    -- Try GUID-based tracking first
-                    if guid then
-                        local spellId = texToSpell[string.lower(texture)]
-                        duration, timeleft = GetTrackedDuration(guid, spellId)
+                    -- 1) Player PRIMARY: GetPlayerBuffTimeLeft via direct index
+                    if data.unit == "player" and GetPlayerBuffTimeLeft then
+                        local bIdx = GetPlayerBuff(i - 1, "HARMFUL")
+                        if bIdx and bIdx >= 0 then
+                            local tl = GetPlayerBuffTimeLeft(bIdx)
+                            if tl and tl > 0 then
+                                timeleft = tl
+                                -- maxdurations 缓存：记录该纹理最大 timeleft，收敛到真实总持续时间
+                                local normTex = NormalizeTexture(texture)
+                                if normTex then
+                                    if not maxdurations[normTex] or maxdurations[normTex] < tl then
+                                        maxdurations[normTex] = tl
+                                    end
+                                    duration = maxdurations[normTex]
+                                else
+                                    duration = tl
+                                end
+                            end
+                        end
                     end
 
-                    -- Fall back to libdebuff name-based tracking
+                    -- 2) GUID-based tracking (UNIT_CASTEVENT / Nampower)
+                    if not timeleft and guid then
+                        local spellId = texToSpell[NormalizeTexture(texture)]
+                        duration, timeleft = GetTrackedDuration(guid, spellId)
+                        if not timeleft then
+                            duration, timeleft = GetTrackedDuration(guid, "tex:" .. NormalizeTexture(texture))
+                        end
+                    end
+
+                    -- 3) libdebuff name-based tracking
                     if not timeleft and libdebuff then
                         local _, _, _, _, _, dur, tl = libdebuff:UnitDebuff(data.unit, i)
                         if tl and tl > 0 then
@@ -822,16 +1223,33 @@ DFUI:NewMod("Auras", 2, function()
                         end
                     end
 
-                    if timeleft and timeleft > 0 then
-                        -- 有新数据：更新 timer
+                    -- 4) Pet fallback: tooltip scan + LookupDuration
+                    if not timeleft and data.unit == "pet" and not data.debuffs[i].timerStart then
+                        local scanner = DFUI_Libs and DFUI_Libs.libtipscan and DFUI_Libs.libtipscan:GetScanner("aura_timer")
+                        if scanner then
+                            scanner:SetUnitDebuff(data.unit, i)
+                            local dname = scanner:GetLine(1)
+                            if dname and dname ~= "" then
+                                local dur = LookupDuration(dname)
+                                if dur and dur > 0 then
+                                    timeleft = dur
+                                    duration = dur
+                                end
+                            end
+                        end
+                    end
+
+                    if duration and timeleft and timeleft > 0 then
                         data.debuffs[i].timer:SetText(FormatTime(timeleft, timerStyle))
                         data.debuffs[i].timer:Show()
                         data.debuffs[i].timerStart = GetTime() + timeleft - duration
                         data.debuffs[i].timerDuration = duration
                         data.debuffs[i].timerStyle = timerStyle
+                    else
+                        if not data.debuffs[i].timerStart then
+                            data.debuffs[i].timer:Hide()
+                        end
                     end
-                    -- 无新数据时不动 timer，由 RefreshTimers 的 OnUpdate 统一更新
-                    -- 避免多个 SetText 路径竞争导致闪烁
                     if data.debuffs[i].cooldown then
                         data.debuffs[i].cooldown:Hide()
                     end
@@ -844,6 +1262,9 @@ DFUI:NewMod("Auras", 2, function()
                 data.debuffs[i]:Show()
             else
                 data.debuffs[i]:Hide()
+                data.debuffs[i].timer:Hide()
+                data.debuffs[i].timerStart = nil
+                data.debuffs[i].timerDuration = nil
             end
         end
         LayoutDebuffs(data.debuffs, anchor, anchorPoint, relPoint, xOff, yOff, growRight, extraRowOffset, iconSize, iconSpacing, perRow)
@@ -1059,6 +1480,30 @@ DFUI:NewMod("Auras", 2, function()
                     end
                 end
 
+                -- Fallback for player buffs/debuffs: use GetPlayerBuffTimeLeft via direct index
+                if not btn.timerStart and unit == "player" and GetPlayerBuffTimeLeft then
+                    local filter = isDebuff and "HARMFUL" or "HELPFUL"
+                    local bIdx = GetPlayerBuff(i - 1, filter)
+                    if bIdx and bIdx >= 0 then
+                        local tl = GetPlayerBuffTimeLeft(bIdx)
+                        if tl and tl > 0 then
+                            -- maxdurations 缓存获取真实总持续时间
+                            local tex = btn.icon and btn.icon:GetTexture()
+                            local normTex = tex and NormalizeTexture(tex)
+                            local dur = tl
+                            if normTex then
+                                if not maxdurations[normTex] or maxdurations[normTex] < tl then
+                                    maxdurations[normTex] = tl
+                                end
+                                dur = maxdurations[normTex]
+                            end
+                            btn.timerStart = GetTime() + tl - dur
+                            btn.timerDuration = dur
+                            btn.timerStyle = btn.timerStyle or GetTimerStyle("player")
+                        end
+                    end
+                end
+
                 if btn.timerDuration and btn.timerStart then
                     local remaining = btn.timerDuration - (GetTime() - btn.timerStart)
                     if remaining > 0 then
@@ -1084,7 +1529,7 @@ DFUI:NewMod("Auras", 2, function()
 
         -- Player
         if DFUI:GetTempDB("Auras", "playerShowBuffTimer") and DFUI:GetTempDB("Auras", "playerBuffs") then
-            RefreshTimers(unitData.player.buffs)
+            RefreshTimers(unitData.player.buffs, 16, "player", false)
         end
         if DFUI:GetTempDB("Auras", "playerShowDebuffTimer") and DFUI:GetTempDB("Auras", "playerDebuffs") then
             RefreshTimers(unitData.player.debuffs, 16, "player", true)
@@ -1092,7 +1537,7 @@ DFUI:NewMod("Auras", 2, function()
         -- Target
         if UnitExists("target") then
             if DFUI:GetTempDB("Auras", "targetShowBuffTimer") and DFUI:GetTempDB("Auras", "targetBuffs") then
-                RefreshTimers(unitData.target.buffs)
+                RefreshTimers(unitData.target.buffs, 16, "target", false)
             end
             if DFUI:GetTempDB("Auras", "targetShowDebuffTimer") and DFUI:GetTempDB("Auras", "targetDebuffs") then
                 RefreshTimers(unitData.target.debuffs, 16, "target", true)
@@ -1101,7 +1546,7 @@ DFUI:NewMod("Auras", 2, function()
         -- Pet
         if UnitExists("pet") then
             if DFUI:GetTempDB("Auras", "petShowBuffTimer") and DFUI:GetTempDB("Auras", "petBuffs") then
-                RefreshTimers(unitData.pet.buffs)
+                RefreshTimers(unitData.pet.buffs, 16, "pet", false)
             end
             if DFUI:GetTempDB("Auras", "petShowDebuffTimer") and DFUI:GetTempDB("Auras", "petDebuffs") then
                 RefreshTimers(unitData.pet.debuffs, 16, "pet", true)
@@ -1111,7 +1556,7 @@ DFUI:NewMod("Auras", 2, function()
         for idx = 1, 4 do
             if UnitExists("party" .. idx) then
                 if DFUI:GetTempDB("Auras", "partyShowBuffTimer") and DFUI:GetTempDB("Auras", "partyBuffs") then
-                    RefreshTimers(partyData[idx].buffs)
+                    RefreshTimers(partyData[idx].buffs, 16, "party" .. idx, false)
                 end
                 if DFUI:GetTempDB("Auras", "partyShowDebuffTimer") and DFUI:GetTempDB("Auras", "partyDebuffs") then
                     RefreshTimers(partyData[idx].debuffs, 16, "party" .. idx, true)
@@ -1138,21 +1583,53 @@ DFUI:NewMod("Auras", 2, function()
             if arg1 == "player" then
                 UpdatePlayerAuras()
             elseif arg1 == "target" then
+                local _, g = UnitExists("target")
+                if g then SnapshotAndDetectNewAuras(g, "target") end
                 UpdateTargetAuras()
             elseif arg1 == "pet" then
+                local _, g = UnitExists("pet")
+                if g then SnapshotAndDetectNewAuras(g, "pet") end
                 UpdatePetAuras()
             elseif arg1 and string.find(arg1, "party") then
+                local _, g = UnitExists(arg1)
+                if g then SnapshotAndDetectNewAuras(g, arg1) end
                 UpdatePartyAuras()
             end
         elseif event == "PLAYER_AURAS_CHANGED" then
             UpdatePlayerAuras()
         elseif event == "PLAYER_TARGET_CHANGED" then
+            local _, g = UnitExists("target")
+            if g then SeedSnapshot(g, "target") end
             UpdateTargetAuras()
         elseif event == "PLAYER_ENTERING_WORLD" then
+            local _, pg = UnitExists("player")
+            if pg then SeedSnapshot(pg, "player") end
+            local _, tg = UnitExists("target")
+            if tg then SeedSnapshot(tg, "target") end
+            if UnitExists("pet") then
+                local _, petg = UnitExists("pet")
+                if petg then SeedSnapshot(petg, "pet") end
+            end
+            for i = 1, 4 do
+                if UnitExists("party" .. i) then
+                    local _, pag = UnitExists("party" .. i)
+                    if pag then SeedSnapshot(pag, "party" .. i) end
+                end
+            end
             UpdateAllAuras()
         elseif event == "UNIT_PET" then
+            if UnitExists("pet") then
+                local _, g = UnitExists("pet")
+                if g then SeedSnapshot(g, "pet") end
+            end
             UpdatePetAuras()
         elseif event == "PARTY_MEMBERS_CHANGED" then
+            for i = 1, 4 do
+                if UnitExists("party" .. i) then
+                    local _, g = UnitExists("party" .. i)
+                    if g then SeedSnapshot(g, "party" .. i) end
+                end
+            end
             UpdatePartyAuras()
         elseif event == "RAID_ROSTER_UPDATE" then
             UpdatePartyAuras()
