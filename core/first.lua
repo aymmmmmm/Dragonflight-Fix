@@ -100,7 +100,7 @@ function Setup:WelcomePage()
             if hideTimer >= self.welcomeConfig.fadeTime then
                 self.welcomeFrame:Hide()
                 self.welcomeFrame:SetScript("OnUpdate", nil)
-                _G.SlashCmdList["DFUI"]()
+                if _G.SlashCmdList["DFUI"] then _G.SlashCmdList["DFUI"]() end
             end
         end)
         local char = UnitName("player")

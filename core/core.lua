@@ -329,7 +329,7 @@ DFUI:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" then
         DFUI:CheckAddon(arg1)
     end
-    if event == "ADDON_LOADED" and arg1 == "Dragonflight-Fix" then
+    if event == "ADDON_LOADED" and string.lower(arg1) == "dragonflight-fix" then
         if boot then return end
         boot = true
 
