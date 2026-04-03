@@ -111,5 +111,3 @@ Dragonflight-Fix/
 - **原作者**: [Karl-Heinz-Schneider](https://github.com/Karl-Heinz-Schneider) — 原版 [DragonflightUI](https://github.com/Karl-Heinz-Schneider/WoW-DragonflightUI) 的开发者
 - **重铸版作者**: [Stormhand](https://github.com/Stormhand-dev) — [DragonflightUI-Reforged](https://github.com/Stormhand-dev/DragonflightUI-Reforged)
 - **修改者**: [anym](https://github.com/aymmmmmm) — 中文本地化、计时系统重构、模块扩展、Bug 修复
-- **参考**: [Shagu](https://github.com/shagu) — ShaguTweaks 框架 / pfUI 计时架构参考
-- **参考**: [Guzruul](https://github.com/Guzruul) — Dragonflight UI 2 Reloaded
