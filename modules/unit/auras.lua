@@ -267,6 +267,7 @@ DFUI:NewMod("Auras", 2, function()
         ["Aspect of the Cheetah"] = 0,
         ["Aspect of the Pack"] = 0,
         ["Aspect of the Wild"] = 0,
+        ["Spirit Bond"] = 0,
         ["Deterrence"] = 10,
         -- ═══════════════════════════════════════
         -- Rogue
@@ -343,6 +344,9 @@ DFUI:NewMod("Auras", 2, function()
         ["Sayge's Dark Fortune of Armor"] = 7200,
         ["Sayge's Dark Fortune of Resistance"] = 7200,
     }
+
+    -- Threshold: any timeleft >= 24h is treated as a permanent aura (no timer)
+    local PERMANENT_THRESHOLD = 86400
 
     -- Look up duration by spell name (debuff table first, then buff table)
     local function LookupDuration(name)
@@ -505,7 +509,7 @@ DFUI:NewMod("Auras", 2, function()
                 targetGuid = casterGuid
             end
 
-            if targetGuid and spellId and durationMs and type(durationMs) == "number" and durationMs > 0 then
+            if targetGuid and spellId and durationMs and type(durationMs) == "number" and durationMs > 0 and durationMs < PERMANENT_THRESHOLD * 1000 then
                 local name = CachedGetSpellName(spellId)
                 -- 跳过永久/光环类法术（buffDurations 明确标记为 0）
                 local isPermanent = name and buffDurations[name] ~= nil and buffDurations[name] == 0
@@ -1056,7 +1060,7 @@ DFUI:NewMod("Auras", 2, function()
                         local bIdx = GetPlayerBuff(i - 1, "HELPFUL")
                         if bIdx and bIdx >= 0 then
                             local tl = GetPlayerBuffTimeLeft(bIdx)
-                            if tl and tl > 0 then
+                            if tl and tl > 0 and tl < PERMANENT_THRESHOLD then
                                 timeleft = tl
                                 -- maxdurations 缓存：记录该纹理最大 timeleft，收敛到真实总持续时间
                                 local normTex = NormalizeTexture(texture)
@@ -1189,7 +1193,7 @@ DFUI:NewMod("Auras", 2, function()
                         local bIdx = GetPlayerBuff(i - 1, "HARMFUL")
                         if bIdx and bIdx >= 0 then
                             local tl = GetPlayerBuffTimeLeft(bIdx)
-                            if tl and tl > 0 then
+                            if tl and tl > 0 and tl < PERMANENT_THRESHOLD then
                                 timeleft = tl
                                 -- maxdurations 缓存：记录该纹理最大 timeleft，收敛到真实总持续时间
                                 local normTex = NormalizeTexture(texture)
@@ -1486,7 +1490,7 @@ DFUI:NewMod("Auras", 2, function()
                     local bIdx = GetPlayerBuff(i - 1, filter)
                     if bIdx and bIdx >= 0 then
                         local tl = GetPlayerBuffTimeLeft(bIdx)
-                        if tl and tl > 0 then
+                        if tl and tl > 0 and tl < PERMANENT_THRESHOLD then
                             -- maxdurations 缓存获取真实总持续时间
                             local tex = btn.icon and btn.icon:GetTexture()
                             local normTex = tex and NormalizeTexture(tex)
@@ -1762,7 +1766,7 @@ DFUI:NewMod("Auras", 2, function()
     local function BB_UpdateDuration(btn)
         if btn.buffIndex and btn.buffIndex >= 0 then
             local timeLeft = GetPlayerBuffTimeLeft(btn.buffIndex)
-            if timeLeft and timeLeft > 0 then
+            if timeLeft and timeLeft > 0 and timeLeft < PERMANENT_THRESHOLD then
                 local style = BB_GetSetting("buffBarTimerStyle") or "White + Red"
                 local fontSize = BB_GetSetting("buffBarTimerFontSize") or 10
                 btn.duration:SetFont("Fonts\\FRIZQT__.TTF", fontSize, "OUTLINE")
