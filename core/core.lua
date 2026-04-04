@@ -148,7 +148,13 @@ function DFUI:InitTempDB()
 
     -- copy existing module settings from current profile
     for mod, tbl in pairs(DFUI_PROFILES[cur]) do
-        if type(tbl) == "table" then
+        if mod == "_FramePos" then
+            -- 恢复框架位置到 DFUI_FRAMEPOS
+            DFUI_FRAMEPOS = {}
+            for fname, pos in pairs(tbl) do
+                DFUI_FRAMEPOS[fname] = {x = pos.x, y = pos.y}
+            end
+        elseif type(tbl) == "table" then
             self.tempDB[mod] = self.tempDB[mod] or {}
             for key, value in pairs(tbl) do
                 self.tempDB[mod][key] = value
@@ -230,6 +236,15 @@ function DFUI:SaveTempDB()
     local cur = DFUI_CUR_PROFILE[char] or "Default"
 
     DFUI_PROFILES[cur] = self.tempDB
+
+    -- 将框架位置嵌入档案
+    if DFUI_FRAMEPOS and next(DFUI_FRAMEPOS) then
+        DFUI_PROFILES[cur]["_FramePos"] = {}
+        for name, pos in pairs(DFUI_FRAMEPOS) do
+            DFUI_PROFILES[cur]["_FramePos"][name] = {x = pos.x, y = pos.y}
+        end
+    end
+
     DFUI_DB_SETUP.version = self.DBversion
 end
 
@@ -259,6 +274,10 @@ function DFUI:SwitchProfile(name)
     DFUI_PROFILES[old] = self.tempDB
     DFUI_CUR_PROFILE[char] = name
     self:LoadProfile(name)
+    -- 恢复框架位置
+    if self.RestoreFramePositions then
+        self:RestoreFramePositions()
+    end
 end
 
 function DFUI:CopyProfile(from, tbl)
@@ -270,9 +289,16 @@ function DFUI:CopyProfile(from, tbl)
     end
     self.tempDB = {}
     for mod, data in pairs(src) do
-        self.tempDB[mod] = {}
-        for key, value in pairs(data) do
-            self.tempDB[mod][key] = value
+        if mod == "_FramePos" then
+            DFUI_FRAMEPOS = {}
+            for fname, pos in pairs(data) do
+                DFUI_FRAMEPOS[fname] = {x = pos.x, y = pos.y}
+            end
+        else
+            self.tempDB[mod] = {}
+            for key, value in pairs(data) do
+                self.tempDB[mod][key] = value
+            end
         end
     end
 end
@@ -280,9 +306,17 @@ end
 function DFUI:LoadProfile(name)
     self.tempDB = {}
     for mod, data in pairs(DFUI_PROFILES[name]) do
-        self.tempDB[mod] = {}
-        for key, value in pairs(data) do
-            self.tempDB[mod][key] = value
+        if mod == "_FramePos" then
+            -- 恢复框架位置
+            DFUI_FRAMEPOS = {}
+            for fname, pos in pairs(data) do
+                DFUI_FRAMEPOS[fname] = {x = pos.x, y = pos.y}
+            end
+        else
+            self.tempDB[mod] = {}
+            for key, value in pairs(data) do
+                self.tempDB[mod][key] = value
+            end
         end
     end
 end
@@ -323,6 +357,243 @@ function DFUI:TriggerAllCallbacks()
         for _, func in ipairs(callbacks) do
             func(value)
         end
+    end
+end
+
+-- 档案序列化/反序列化（用于跨账号导入/导出配置）
+do
+    local function SerializeValue(val)
+        local t = type(val)
+        if t == "boolean" then
+            return val and "T" or "F"
+        elseif t == "number" then
+            local s = string.format("%.4f", val)
+            s = string.gsub(s, "%.?0+$", "")
+            return s
+        elseif t == "string" then
+            local escaped = string.gsub(val, "([\"\\~,;{}=])", "\\%1")
+            return "\"" .. escaped .. "\""
+        elseif t == "table" then
+            local isArray = true
+            local maxn = 0
+            for k, _ in pairs(val) do
+                if type(k) == "number" and k == math.floor(k) and k > 0 then
+                    if k > maxn then maxn = k end
+                else
+                    isArray = false
+                    break
+                end
+            end
+            if isArray and maxn > 0 then
+                local parts = {}
+                for i = 1, maxn do
+                    table.insert(parts, SerializeValue(val[i]))
+                end
+                return "{" .. table.concat(parts, ";") .. "}"
+            else
+                local parts = {}
+                for k, v in pairs(val) do
+                    table.insert(parts, tostring(k) .. "=" .. SerializeValue(v))
+                end
+                table.sort(parts)
+                return "{" .. table.concat(parts, ";") .. "}"
+            end
+        end
+        return "nil"
+    end
+
+    local function Checksum(str)
+        local sum = 0
+        for i = 1, string.len(str) do
+            sum = sum + string.byte(str, i)
+        end
+        return math.mod(sum, 65536)
+    end
+
+    local function SplitTopLevel(str, sep)
+        local parts = {}
+        local depth = 0
+        local inQuote = false
+        local current = ""
+        local len = string.len(str)
+        local i = 1
+        while i <= len do
+            local c = string.sub(str, i, i)
+            if c == "\\" and inQuote then
+                current = current .. c
+                if i < len then
+                    i = i + 1
+                    current = current .. string.sub(str, i, i)
+                end
+            elseif c == "\"" then
+                inQuote = not inQuote
+                current = current .. c
+            elseif not inQuote then
+                if c == "{" then
+                    depth = depth + 1
+                    current = current .. c
+                elseif c == "}" then
+                    depth = depth - 1
+                    current = current .. c
+                elseif c == sep and depth == 0 then
+                    table.insert(parts, current)
+                    current = ""
+                else
+                    current = current .. c
+                end
+            else
+                current = current .. c
+            end
+            i = i + 1
+        end
+        if current ~= "" then
+            table.insert(parts, current)
+        end
+        return parts
+    end
+
+    local function DeserializeValue(str)
+        if not str or str == "" or str == "nil" then return nil end
+        if str == "T" then return true end
+        if str == "F" then return false end
+        if string.sub(str, 1, 1) == "\"" and string.sub(str, -1) == "\"" then
+            local inner = string.sub(str, 2, -2)
+            inner = string.gsub(inner, "\\(.)", "%1")
+            return inner
+        end
+        local num = tonumber(str)
+        if num then return num end
+        if string.sub(str, 1, 1) == "{" and string.sub(str, -1) == "}" then
+            local inner = string.sub(str, 2, -2)
+            if inner == "" then return {} end
+            local result = {}
+            local parts = {}
+            local depth = 0
+            local current = ""
+            for ci = 1, string.len(inner) do
+                local c = string.sub(inner, ci, ci)
+                if c == "{" then
+                    depth = depth + 1
+                    current = current .. c
+                elseif c == "}" then
+                    depth = depth - 1
+                    current = current .. c
+                elseif c == ";" and depth == 0 then
+                    table.insert(parts, current)
+                    current = ""
+                else
+                    current = current .. c
+                end
+            end
+            if current ~= "" then
+                table.insert(parts, current)
+            end
+            local isDict = string.find(parts[1], "=")
+            if isDict then
+                for _, part in ipairs(parts) do
+                    local eqPos = string.find(part, "=")
+                    if eqPos then
+                        local k = string.sub(part, 1, eqPos - 1)
+                        local v = string.sub(part, eqPos + 1)
+                        result[k] = DeserializeValue(v)
+                    end
+                end
+            else
+                for idx, part in ipairs(parts) do
+                    result[idx] = DeserializeValue(part)
+                end
+            end
+            return result
+        end
+        return str
+    end
+
+    function DFUI:SerializeProfile(profileName)
+        local profile = DFUI_PROFILES[profileName]
+        if not profile then return nil end
+        local modules = {}
+        local modNames = {}
+        for mod in pairs(profile) do
+            table.insert(modNames, mod)
+        end
+        table.sort(modNames)
+        for _, mod in ipairs(modNames) do
+            local data = profile[mod]
+            if type(data) == "table" then
+                local kvPairs = {}
+                local keys = {}
+                for k in pairs(data) do
+                    table.insert(keys, k)
+                end
+                table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+                for _, key in ipairs(keys) do
+                    table.insert(kvPairs, tostring(key) .. "=" .. SerializeValue(data[key]))
+                end
+                table.insert(modules, mod .. ":" .. table.concat(kvPairs, ","))
+            end
+        end
+        local body = table.concat(modules, "~")
+        local checksum = Checksum(body)
+        return "DFUI1#" .. checksum .. "~" .. body
+    end
+
+    function DFUI:DeserializeProfile(str)
+        if not str or str == "" then
+            return nil, "空字符串"
+        end
+        str = string.gsub(str, "^%s+", "")
+        str = string.gsub(str, "%s+$", "")
+        str = string.gsub(str, "\n", "")
+        str = string.gsub(str, "\r", "")
+        -- 兼容旧 | 格式
+        local isLegacy = false
+        if string.find(str, "|") and not string.find(str, "~") then
+            str = string.gsub(str, "|", "~")
+            str = string.gsub(str, "angeIndicator:", "~RangeIndicator:")
+            isLegacy = true
+        end
+        if string.sub(str, 1, 5) ~= "DFUI1" then
+            return nil, "无效格式：缺少 DFUI1 头部"
+        end
+        local hashPos = string.find(str, "#")
+        if not hashPos then
+            return nil, "无效格式：缺少校验和"
+        end
+        local afterHash = string.sub(str, hashPos + 1)
+        local firstTilde = string.find(afterHash, "~")
+        if not firstTilde then
+            return nil, "无效格式：缺少数据"
+        end
+        local checksumStr = string.sub(afterHash, 1, firstTilde - 1)
+        local body = string.sub(afterHash, firstTilde + 1)
+        local expectedChecksum = tonumber(checksumStr)
+        if not expectedChecksum then
+            return nil, "无效校验和"
+        end
+        local actualChecksum = Checksum(body)
+        if not isLegacy and actualChecksum ~= expectedChecksum then
+            return nil, "校验和不匹配（数据可能被截断或损坏）"
+        end
+        local result = {}
+        local moduleParts = SplitTopLevel(body, "~")
+        for _, modStr in ipairs(moduleParts) do
+            local colonPos = string.find(modStr, ":")
+            if colonPos then
+                local modName = string.sub(modStr, 1, colonPos - 1)
+                local kvStr = string.sub(modStr, colonPos + 1)
+                result[modName] = {}
+                local kvParts = SplitTopLevel(kvStr, ",")
+                for _, kv in ipairs(kvParts) do
+                    local eqPos = string.find(kv, "=")
+                    if eqPos then
+                        local key = string.sub(kv, 1, eqPos - 1)
+                        local valStr = string.sub(kv, eqPos + 1)
+                        result[modName][key] = DeserializeValue(valStr)
+                    end
+                end
+            end
+        end
+        return result
     end
 end
 

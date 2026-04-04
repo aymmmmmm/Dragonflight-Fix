@@ -69,6 +69,11 @@ DFUI:NewMod("Frames", 2, function()
             end
         end
 
+        -- 暴露给外部调用（档案切换时恢复位置）
+        function DFUI:RestoreFramePositions()
+            RestoreFramePositions()
+        end
+
         -- grid
         local grid = CreateFrame("Frame", nil, UIParent)
         grid:SetAllPoints(UIParent)

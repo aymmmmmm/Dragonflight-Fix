@@ -76,12 +76,12 @@ DFUI:NewMod("Auras", 2, function()
     -- requires SuperWoW for UNIT_AURA event and GUID-based debuff tracking
 
     local DEBUFF_COLORS = {
+        none    = {0.8, 0.0, 0.0},
         Magic   = {0.2, 0.6, 1.0},
         Disease = {0.6, 0.4, 0.0},
         Poison  = {0.0, 0.6, 0.0},
         Curse   = {0.6, 0.0, 1.0},
     }
-    local DEFAULT_DEBUFF_COLOR = {0.8, 0.0, 0.0}
 
     -- Per-unit appearance getters
     local function GetAuraSize(prefix)
@@ -345,8 +345,159 @@ DFUI:NewMod("Auras", 2, function()
         ["Sayge's Dark Fortune of Resistance"] = 7200,
     }
 
+    -- 中文客户端：添加中文 buff 名称及持续时间（来源：Babble-Spell-2.2 + ShaguPlates locales_zhCN）
+    if GetLocale() == "zhCN" then
+        -- ═══ 永久光环（duration = 0）═══
+        -- 圣骑士
+        buffDurations["虔诚光环"] = 0
+        buffDurations["惩罚光环"] = 0
+        buffDurations["专注光环"] = 0
+        buffDurations["圣洁光环"] = 0
+        -- 术士
+        buffDurations["灵魂联结"] = 0       -- Soul Link / Spirit Bond
+        buffDurations["生命分流"] = 0
+        -- 猎人
+        buffDurations["强击光环"] = 0
+        buffDurations["雄鹰守护"] = 0
+        buffDurations["灵猴守护"] = 0
+        buffDurations["猎豹守护"] = 0
+        buffDurations["豹群守护"] = 0
+        buffDurations["野性守护"] = 0
+        -- 萨满
+        buffDurations["风怒图腾"] = 0
+        buffDurations["大地之力图腾"] = 0
+        buffDurations["风之优雅图腾"] = 0
+        buffDurations["法力之泉图腾"] = 0
+        buffDurations["自然迅捷"] = 0
+        -- 法师
+        buffDurations["燃烧"] = 0
+        -- ═══ 有持续时间的 buff ═══
+        -- 牧师
+        buffDurations["真言术：韧"] = 1800
+        buffDurations["坚韧祷言"] = 3600
+        buffDurations["真言术：盾"] = 30
+        buffDurations["神圣之灵"] = 1800
+        buffDurations["精神祷言"] = 3600
+        buffDurations["防护暗影"] = 600
+        buffDurations["暗影防护祷言"] = 1200
+        buffDurations["心灵之火"] = 600
+        buffDurations["恢复"] = 15
+        buffDurations["防护恐惧结界"] = 600
+        buffDurations["灵感"] = 15
+        buffDurations["驱除疾病"] = 20
+        buffDurations["艾露恩的赐福"] = 15
+        -- 德鲁伊
+        buffDurations["野性印记"] = 1800
+        buffDurations["野性赐福"] = 3600
+        buffDurations["荆棘"] = 600
+        buffDurations["回春术"] = 12
+        buffDurations["愈合"] = 21
+        buffDurations["激活"] = 20
+        buffDurations["树皮术"] = 15
+        buffDurations["驱毒术"] = 8
+        buffDurations["狂暴回复"] = 10
+        -- 法师
+        buffDurations["奥术智慧"] = 1800
+        buffDurations["奥术光辉"] = 3600
+        buffDurations["冰甲术"] = 1800
+        buffDurations["霜甲术"] = 1800
+        buffDurations["魔甲术"] = 1800
+        buffDurations["寒冰护体"] = 60
+        buffDurations["魔法抑制"] = 600
+        buffDurations["魔法增效"] = 600
+        buffDurations["奥术强化"] = 15
+        buffDurations["防护火焰结界"] = 30
+        buffDurations["防护冰霜结界"] = 30
+        buffDurations["法力护盾"] = 60
+        buffDurations["唤醒"] = 8
+        -- 圣骑士
+        buffDurations["力量祝福"] = 300
+        buffDurations["智慧祝福"] = 300
+        buffDurations["王者祝福"] = 300
+        buffDurations["拯救祝福"] = 300
+        buffDurations["光明祝福"] = 300
+        buffDurations["庇护祝福"] = 300
+        buffDurations["保护祝福"] = 10
+        buffDurations["自由祝福"] = 16
+        buffDurations["牺牲祝福"] = 30
+        buffDurations["强效力量祝福"] = 900
+        buffDurations["强效智慧祝福"] = 900
+        buffDurations["强效王者祝福"] = 900
+        buffDurations["强效拯救祝福"] = 900
+        buffDurations["强效光明祝福"] = 900
+        buffDurations["强效庇护祝福"] = 900
+        buffDurations["圣盾术"] = 12
+        buffDurations["圣佑术"] = 8
+        buffDurations["神圣之盾"] = 10
+        buffDurations["复仇之怒"] = 20
+        -- 术士
+        buffDurations["恶魔护甲"] = 1800
+        buffDurations["恶魔皮肤"] = 1800
+        buffDurations["魔息术"] = 600
+        buffDurations["防护暗影结界"] = 30
+        buffDurations["牺牲"] = 30
+        buffDurations["恶魔支配"] = 15
+        buffDurations["灵魂石复活"] = 1800
+        -- 战士
+        buffDurations["战斗怒吼"] = 120
+        buffDurations["盾墙"] = 10
+        buffDurations["破釜沉舟"] = 20
+        buffDurations["狂暴之怒"] = 10
+        buffDurations["鲁莽"] = 15
+        buffDurations["反击风暴"] = 15
+        buffDurations["血性狂暴"] = 10
+        buffDurations["死亡之愿"] = 30
+        buffDurations["激怒"] = 12
+        buffDurations["盾牌格挡"] = 5
+        buffDurations["嗜血"] = 8
+        -- 猎人
+        buffDurations["急速射击"] = 15
+        buffDurations["狂野怒火"] = 18
+        buffDurations["治疗宠物"] = 15
+        buffDurations["快速射击"] = 12
+        buffDurations["威慑"] = 10
+        -- 盗贼
+        buffDurations["闪避"] = 15
+        buffDurations["疾跑"] = 15
+        buffDurations["剑刃乱舞"] = 15
+        buffDurations["冲动"] = 15
+        buffDurations["消失"] = 10
+        buffDurations["切割"] = 21
+        -- 萨满
+        buffDurations["闪电之盾"] = 600
+        buffDurations["水盾"] = 600
+        buffDurations["法力之潮图腾"] = 12
+    end
+
     -- Threshold: any timeleft >= 24h is treated as a permanent aura (no timer)
     local PERMANENT_THRESHOLD = 86400
+
+    -- Find the GetPlayerBuff index that matches a given texture from UnitBuff
+    -- UnitBuff and GetPlayerBuff may NOT enumerate in the same order on Turtle WoW
+    local function FindPlayerBuffIndex(texture, filter)
+        if not texture then return nil end
+        for idx = 0, 31 do
+            local bIdx = GetPlayerBuff(idx, filter)
+            if bIdx < 0 then return nil end
+            if GetPlayerBuffTexture(bIdx) == texture then
+                return bIdx
+            end
+        end
+        return nil
+    end
+
+    -- Check if a player buff index corresponds to a permanent aura (buffDurations == 0)
+    local function IsPermanentPlayerBuff(buffIndex)
+        local scanner = DFUI_Libs and DFUI_Libs.libtipscan and DFUI_Libs.libtipscan:GetScanner("aura_timer")
+        if scanner then
+            scanner:SetPlayerBuff(buffIndex)
+            local name = scanner:GetLine(1)
+            if name and buffDurations[name] ~= nil and buffDurations[name] == 0 then
+                return true
+            end
+        end
+        return false
+    end
 
     -- Look up duration by spell name (debuff table first, then buff table)
     local function LookupDuration(name)
@@ -873,84 +1024,57 @@ DFUI:NewMod("Auras", 2, function()
         end
     end
 
-    local function CreateBuffButton(parent, unit, index)
+    local function CreateAuraButton(parent, unit, index, isDebuff)
         local btn = CreateFrame("Button", nil, parent)
         btn:SetWidth(20)
         btn:SetHeight(20)
         btn.icon = btn:CreateTexture(nil, "ARTWORK")
         btn.icon:SetAllPoints(btn)
-        btn.cooldown = CreateFrame("Model", nil, btn, "CooldownFrameTemplate")
-        btn.cooldown:SetAllPoints(btn)
-        btn.cooldown.noCooldownCount = true
-        btn.cooldown:Hide()
-        btn.timer = btn:CreateFontString(nil, "OVERLAY")
-        btn.timer:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
-        btn.timer:SetTextColor(1, 1, 1)
-        btn.timer:SetPoint("BOTTOM", btn, "BOTTOM", 0, -2)
-        btn.timer:SetJustifyH("CENTER")
-        btn.timer:Hide()
-        btn.buffIndex = index
-        btn.parentUnit = unit
-        btn:SetScript("OnEnter", function()
-            GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-            GameTooltip:SetUnitBuff(this.parentUnit, this.buffIndex)
-        end)
-        btn:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
-        btn:Hide()
-        return btn
-    end
-
-    local function CreateDebuffButton(parent, unit, index)
-        local btn = CreateFrame("Button", nil, parent)
-        btn:SetWidth(20)
-        btn:SetHeight(20)
-        btn.icon = btn:CreateTexture(nil, "ARTWORK")
-        btn.icon:SetAllPoints(btn)
-        btn.border = btn:CreateTexture(nil, "OVERLAY")
-        btn.border:SetTexture("Interface\\Buttons\\UI-Debuff-Overlays")
-        btn.border:SetAllPoints(btn)
-        btn.border:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
-        btn.cooldown = CreateFrame("Model", nil, btn, "CooldownFrameTemplate")
-        btn.cooldown:SetAllPoints(btn)
-        btn.cooldown.noCooldownCount = true
-        btn.cooldown:Hide()
-        btn.timer = btn:CreateFontString(nil, "OVERLAY")
-        btn.timer:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
-        btn.timer:SetTextColor(1, 1, 1)
-        btn.timer:SetPoint("BOTTOM", btn, "BOTTOM", 0, -2)
-        btn.timer:SetJustifyH("CENTER")
-        btn.timer:Hide()
-        btn.count = btn:CreateFontString(nil, "OVERLAY")
-        btn.count:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
-        btn.count:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
-        btn.count:Hide()
-        btn.debuffIndex = index
-        btn.parentUnit = unit
-        btn:SetScript("OnEnter", function()
-            GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-            GameTooltip:SetUnitDebuff(this.parentUnit, this.debuffIndex)
-        end)
-        btn:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
-        btn:Hide()
-        return btn
-    end
-
-    local function CreateBuffRow(parent, unit)
-        local btns = {}
-        for i = 1, 16 do
-            btns[i] = CreateBuffButton(parent, unit, i)
+        if isDebuff then
+            btn.border = btn:CreateTexture(nil, "OVERLAY")
+            btn.border:SetTexture("Interface\\Buttons\\UI-Debuff-Overlays")
+            btn.border:SetAllPoints(btn)
+            btn.border:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
         end
-        return btns
+        btn.cooldown = CreateFrame("Model", nil, btn, "CooldownFrameTemplate")
+        btn.cooldown:SetAllPoints(btn)
+        btn.cooldown.noCooldownCount = true
+        btn.cooldown:Hide()
+        btn.timer = btn:CreateFontString(nil, "OVERLAY")
+        btn.timer:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
+        btn.timer:SetTextColor(1, 1, 1)
+        btn.timer:SetPoint("BOTTOM", btn, "BOTTOM", 0, -2)
+        btn.timer:SetJustifyH("CENTER")
+        btn.timer:Hide()
+        if isDebuff then
+            btn.count = btn:CreateFontString(nil, "OVERLAY")
+            btn.count:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
+            btn.count:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
+            btn.count:Hide()
+            btn.debuffIndex = index
+        else
+            btn.buffIndex = index
+        end
+        btn.parentUnit = unit
+        btn:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+            if isDebuff then
+                GameTooltip:SetUnitDebuff(this.parentUnit, this.debuffIndex)
+            else
+                GameTooltip:SetUnitBuff(this.parentUnit, this.buffIndex)
+            end
+        end)
+        btn:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        btn:Hide()
+        return btn
     end
 
-    local function CreateDebuffRow(parent, unit)
+    local function CreateAuraRow(parent, unit, isDebuff)
         local btns = {}
         for i = 1, 16 do
-            btns[i] = CreateDebuffButton(parent, unit, i)
+            btns[i] = CreateAuraButton(parent, unit, i, isDebuff)
         end
         return btns
     end
@@ -959,23 +1083,7 @@ DFUI:NewMod("Auras", 2, function()
     -- Layout helpers (compact - no gaps between visible icons)
     -------------------------------------------------------------------
 
-    local function LayoutBuffs(buttons, anchor, anchorPoint, relPoint, xOff, yOff, growRight, iconSize, iconSpacing, perRow)
-        local step = iconSize + iconSpacing
-        local visCount = 0
-        for i = 1, 16 do
-            if buttons[i]:IsShown() then
-                local row = math.floor(visCount / perRow)
-                local col = math.mod(visCount, perRow)
-                local colOff = growRight and (col * step) or (-col * step)
-                buttons[i]:ClearAllPoints()
-                buttons[i]:SetPoint(anchorPoint, anchor, relPoint, colOff + xOff, -row * step + yOff)
-                visCount = visCount + 1
-            end
-        end
-        return visCount
-    end
-
-    local function LayoutDebuffs(buttons, anchor, anchorPoint, relPoint, xOff, yOff, growRight, extraRowOffset, iconSize, iconSpacing, perRow)
+    local function LayoutAuras(buttons, anchor, anchorPoint, relPoint, xOff, yOff, growRight, iconSize, iconSpacing, perRow, extraRowOffset)
         local step = iconSize + iconSpacing
         local visCount = 0
         for i = 1, 16 do
@@ -1025,6 +1133,12 @@ DFUI:NewMod("Auras", 2, function()
         for i = 1, 16 do
             local texture = UnitBuff(data.unit, i)
             if texture then
+                -- 检测 buff 变化，清除残留计时器
+                local oldTex = data.buffs[i].icon:GetTexture()
+                if oldTex and oldTex ~= texture then
+                    data.buffs[i].timerStart = nil
+                    data.buffs[i].timerDuration = nil
+                end
                 data.buffs[i].icon:SetTexture(texture)
                 data.buffs[i]:SetWidth(iconSize)
                 data.buffs[i]:SetHeight(iconSize)
@@ -1037,12 +1151,14 @@ DFUI:NewMod("Auras", 2, function()
 
                     -- Check if this buff is a permanent aura (should never show timer)
                     local isPermanentBuff = false
+                    local playerBIdx = nil
                     local tipScanner = DFUI_Libs and DFUI_Libs.libtipscan and DFUI_Libs.libtipscan:GetScanner("aura_timer")
                     if tipScanner then
                         if data.unit == "player" then
-                            local bIdx = GetPlayerBuff and GetPlayerBuff(i - 1, "HELPFUL")
-                            if bIdx and bIdx >= 0 then
-                                tipScanner:SetPlayerBuff(bIdx)
+                            -- Match by texture instead of assuming i-1 index alignment
+                            playerBIdx = FindPlayerBuffIndex(texture, "HELPFUL")
+                            if playerBIdx and playerBIdx >= 0 then
+                                tipScanner:SetPlayerBuff(playerBIdx)
                             end
                         else
                             tipScanner:SetUnitBuff(data.unit, i)
@@ -1054,10 +1170,9 @@ DFUI:NewMod("Auras", 2, function()
                     end
 
                     if not isPermanentBuff then
-                    -- 1) Player PRIMARY: GetPlayerBuffTimeLeft via direct index
-                    --    UnitBuff("player",i) and GetPlayerBuff(i-1,"HELPFUL") enumerate in same order
+                    -- 1) Player PRIMARY: GetPlayerBuffTimeLeft via texture-matched index
                     if data.unit == "player" and GetPlayerBuffTimeLeft then
-                        local bIdx = GetPlayerBuff(i - 1, "HELPFUL")
+                        local bIdx = playerBIdx or FindPlayerBuffIndex(texture, "HELPFUL")
                         if bIdx and bIdx >= 0 then
                             local tl = GetPlayerBuffTimeLeft(bIdx)
                             if tl and tl > 0 and tl < PERMANENT_THRESHOLD then
@@ -1131,7 +1246,7 @@ DFUI:NewMod("Auras", 2, function()
             end
         end
         if visible > 0 then
-            LayoutBuffs(data.buffs, anchor, anchorPoint, relPoint, xOff, yOff, growRight, iconSize, iconSpacing, perRow)
+            LayoutAuras(data.buffs, anchor, anchorPoint, relPoint, xOff, yOff, growRight, iconSize, iconSpacing, perRow)
         end
         return visible
     end
@@ -1168,11 +1283,17 @@ DFUI:NewMod("Auras", 2, function()
         for i = 1, 16 do
             local texture, stacks, debuffType = UnitDebuff(data.unit, i)
             if texture then
+                -- 检测 debuff 变化，清除残留计时器
+                local oldTex = data.debuffs[i].icon:GetTexture()
+                if oldTex and oldTex ~= texture then
+                    data.debuffs[i].timerStart = nil
+                    data.debuffs[i].timerDuration = nil
+                end
                 data.debuffs[i].icon:SetTexture(texture)
                 data.debuffs[i]:SetWidth(iconSize)
                 data.debuffs[i]:SetHeight(iconSize)
                 -- debuff type border color
-                local color = DEBUFF_COLORS[debuffType] or DEFAULT_DEBUFF_COLOR
+                local color = DEBUFF_COLORS[debuffType] or DEBUFF_COLORS.none
                 data.debuffs[i].border:SetVertexColor(color[1], color[2], color[3])
                 -- stack count
                 if stacks and stacks > 1 then
@@ -1188,9 +1309,9 @@ DFUI:NewMod("Auras", 2, function()
                 if showTimer then
                     local duration, timeleft = nil, nil
 
-                    -- 1) Player PRIMARY: GetPlayerBuffTimeLeft via direct index
+                    -- 1) Player PRIMARY: GetPlayerBuffTimeLeft via texture-matched index
                     if data.unit == "player" and GetPlayerBuffTimeLeft then
-                        local bIdx = GetPlayerBuff(i - 1, "HARMFUL")
+                        local bIdx = FindPlayerBuffIndex(texture, "HARMFUL")
                         if bIdx and bIdx >= 0 then
                             local tl = GetPlayerBuffTimeLeft(bIdx)
                             if tl and tl > 0 and tl < PERMANENT_THRESHOLD then
@@ -1218,8 +1339,8 @@ DFUI:NewMod("Auras", 2, function()
                         end
                     end
 
-                    -- 3) libdebuff name-based tracking
-                    if not timeleft and libdebuff then
+                    -- 3) libdebuff name-based tracking (player/pet only)
+                    if not timeleft and libdebuff and (data.unit == "player" or data.unit == "pet") then
                         local _, _, _, _, _, dur, tl = libdebuff:UnitDebuff(data.unit, i)
                         if tl and tl > 0 then
                             duration = dur
@@ -1255,7 +1376,12 @@ DFUI:NewMod("Auras", 2, function()
                         end
                     end
                     if data.debuffs[i].cooldown then
-                        data.debuffs[i].cooldown:Hide()
+                        if showSpiral and duration and timeleft and timeleft > 0 then
+                            local start = GetTime() + timeleft - duration
+                            CooldownFrame_SetTimer(data.debuffs[i].cooldown, start, duration, 1)
+                        else
+                            data.debuffs[i].cooldown:Hide()
+                        end
                     end
                 else
                     data.debuffs[i].timer:Hide()
@@ -1271,7 +1397,7 @@ DFUI:NewMod("Auras", 2, function()
                 data.debuffs[i].timerDuration = nil
             end
         end
-        LayoutDebuffs(data.debuffs, anchor, anchorPoint, relPoint, xOff, yOff, growRight, extraRowOffset, iconSize, iconSpacing, perRow)
+        LayoutAuras(data.debuffs, anchor, anchorPoint, relPoint, xOff, yOff, growRight, iconSize, iconSpacing, perRow, extraRowOffset)
     end
 
     local function CountVisibleBuffRows(data, perRow)
@@ -1290,19 +1416,19 @@ DFUI:NewMod("Auras", 2, function()
     -- Create aura buttons (parented to high-level containers)
     -------------------------------------------------------------------
 
-    unitData.player.buffs = CreateBuffRow(playerAuraContainer, "player")
-    unitData.player.debuffs = CreateDebuffRow(playerAuraContainer, "player")
+    unitData.player.buffs = CreateAuraRow(playerAuraContainer, "player", false)
+    unitData.player.debuffs = CreateAuraRow(playerAuraContainer, "player", true)
 
-    unitData.target.buffs = CreateBuffRow(targetAuraContainer, "target")
-    unitData.target.debuffs = CreateDebuffRow(targetAuraContainer, "target")
+    unitData.target.buffs = CreateAuraRow(targetAuraContainer, "target", false)
+    unitData.target.debuffs = CreateAuraRow(targetAuraContainer, "target", true)
 
-    unitData.pet.buffs = CreateBuffRow(petAuraContainer, "pet")
-    unitData.pet.debuffs = CreateDebuffRow(petAuraContainer, "pet")
+    unitData.pet.buffs = CreateAuraRow(petAuraContainer, "pet", false)
+    unitData.pet.debuffs = CreateAuraRow(petAuraContainer, "pet", true)
 
     for i = 1, 4 do
         if partyAuraContainers[i] then
-            partyData[i].buffs = CreateBuffRow(partyAuraContainers[i], "party" .. i)
-            partyData[i].debuffs = CreateDebuffRow(partyAuraContainers[i], "party" .. i)
+            partyData[i].buffs = CreateAuraRow(partyAuraContainers[i], "party" .. i, false)
+            partyData[i].debuffs = CreateAuraRow(partyAuraContainers[i], "party" .. i, true)
         end
     end
 
@@ -1474,8 +1600,8 @@ DFUI:NewMod("Auras", 2, function()
         for i = 1, (count or 16) do
             local btn = buttons[i]
             if btn and btn:IsShown() then
-                -- 如果还没有 timerStart，尝试从 libdebuff 补充（解决事件时序问题）
-                if not btn.timerStart and isDebuff and libdebuff and unit then
+                -- 如果还没有 timerStart，尝试从 libdebuff 补充（仅 player/pet）
+                if not btn.timerStart and isDebuff and libdebuff and (unit == "player" or unit == "pet") then
                     local _, _, _, _, _, dur, tl = libdebuff:UnitDebuff(unit, i)
                     if tl and tl > 0 then
                         btn.timerStart = GetTime() + tl - dur
@@ -1484,15 +1610,15 @@ DFUI:NewMod("Auras", 2, function()
                     end
                 end
 
-                -- Fallback for player buffs/debuffs: use GetPlayerBuffTimeLeft via direct index
+                -- Fallback for player buffs/debuffs: use GetPlayerBuffTimeLeft via texture-matched index
                 if not btn.timerStart and unit == "player" and GetPlayerBuffTimeLeft then
                     local filter = isDebuff and "HARMFUL" or "HELPFUL"
-                    local bIdx = GetPlayerBuff(i - 1, filter)
-                    if bIdx and bIdx >= 0 then
+                    local tex = btn.icon and btn.icon:GetTexture()
+                    local bIdx = FindPlayerBuffIndex(tex, filter)
+                    if bIdx and bIdx >= 0 and not IsPermanentPlayerBuff(bIdx) then
                         local tl = GetPlayerBuffTimeLeft(bIdx)
                         if tl and tl > 0 and tl < PERMANENT_THRESHOLD then
                             -- maxdurations 缓存获取真实总持续时间
-                            local tex = btn.icon and btn.icon:GetTexture()
                             local normTex = tex and NormalizeTexture(tex)
                             local dur = tl
                             if normTex then
@@ -1650,31 +1776,13 @@ DFUI:NewMod("Auras", 2, function()
     buffBar.weaponFrame = nil
     buffBar.active = false
 
-    local DEBUFF_COLORS_BB = {
-        ["none"]    = {0.80, 0, 0},
-        ["Magic"]   = {0.20, 0.60, 1.00},
-        ["Curse"]   = {0.60, 0.00, 1.00},
-        ["Disease"] = {0.60, 0.40, 0},
-        ["Poison"]  = {0.00, 0.60, 0},
-    }
+    -- DEBUFF_COLORS_BB removed (merged into DEBUFF_COLORS)
 
     local function BB_GetSetting(key)
         return DFUI:GetTempDB("Auras", key)
     end
 
-    local function BB_FormatTime(timeLeft, style)
-        return FormatTime(timeLeft, style)
-    end
-
-    local function BB_FormatTimeHHMM(seconds)
-        local hours = math.floor(seconds / 3600)
-        local mins = math.floor(math.mod(seconds, 3600) / 60)
-        if hours > 0 then
-            return string.format("%d:%02dh", hours, mins)
-        else
-            return string.format("0:%02dm", mins)
-        end
-    end
+    -- BB_FormatTime / BB_FormatTimeHHMM removed (redundant wrappers)
 
     local function BB_CreateButton(parent, name, id, buffFilter)
         local size = BB_GetSetting("buffBarSize") or 25
@@ -1729,9 +1837,15 @@ DFUI:NewMod("Auras", 2, function()
         btn.buffIndex = buffIndex
         if buffIndex >= 0 then
             local texture = GetPlayerBuffTexture(buffIndex)
+            -- 图标变化时更新永久 buff 缓存
+            local oldTex = btn.icon:GetTexture()
+            if oldTex ~= texture then
+                btn.isPermanent = IsPermanentPlayerBuff(buffIndex)
+            end
             btn.icon:SetTexture(texture)
             btn:Show()
         else
+            btn.isPermanent = nil
             btn:Hide()
         end
     end
@@ -1740,7 +1854,7 @@ DFUI:NewMod("Auras", 2, function()
         if btn.buffFilter == "HARMFUL" then
             if btn.buffIndex and btn.buffIndex >= 0 then
                 local debuffType = GetPlayerBuffDispelType(btn.buffIndex)
-                local color = DEBUFF_COLORS_BB[debuffType] or DEBUFF_COLORS_BB["none"]
+                local color = DEBUFF_COLORS[debuffType] or DEBUFF_COLORS.none
                 btn.border:SetVertexColor(color[1], color[2], color[3])
                 btn.border:Show()
             else
@@ -1765,22 +1879,35 @@ DFUI:NewMod("Auras", 2, function()
 
     local function BB_UpdateDuration(btn)
         if btn.buffIndex and btn.buffIndex >= 0 then
+            if btn.isPermanent then
+                btn.duration:Hide()
+                if btn.cooldown then btn.cooldown:Hide() end
+                btn.cdTotalDur = nil
+                return
+            end
             local timeLeft = GetPlayerBuffTimeLeft(btn.buffIndex)
             if timeLeft and timeLeft > 0 and timeLeft < PERMANENT_THRESHOLD then
                 local style = BB_GetSetting("buffBarTimerStyle") or "White + Red"
                 local fontSize = BB_GetSetting("buffBarTimerFontSize") or 10
                 btn.duration:SetFont("Fonts\\FRIZQT__.TTF", fontSize, "OUTLINE")
                 ApplyTimerColor(btn.duration, style)
-                btn.duration:SetText(BB_FormatTime(timeLeft, style))
+                btn.duration:SetText(FormatTime(timeLeft, style))
                 btn.duration:Show()
                 -- Spiral only for debuffs (HARMFUL), not buffs
                 if btn.buffFilter == "HARMFUL" then
                     local showSpiral = BB_GetSetting("buffBarShowSpiral")
                     if showSpiral == nil then showSpiral = true end
-                    -- 不调用 CooldownFrame_SetTimer，避免触发多个插件 hook 产生重复倒计时
                     if btn.cooldown then
-                        btn.cooldown:Hide()
-                        btn.cdTotalDur = nil
+                        if showSpiral then
+                            if not btn.cdTotalDur or btn.cdTotalDur < timeLeft then
+                                btn.cdTotalDur = timeLeft
+                            end
+                            local start = GetTime() + timeLeft - btn.cdTotalDur
+                            CooldownFrame_SetTimer(btn.cooldown, start, btn.cdTotalDur, 1)
+                        else
+                            btn.cooldown:Hide()
+                            btn.cdTotalDur = nil
+                        end
                     end
                 elseif btn.cooldown then
                     btn.cooldown:Hide()
@@ -1797,52 +1924,6 @@ DFUI:NewMod("Auras", 2, function()
         end
     end
 
-    local function BB_UpdateWeaponIcon(btn)
-        local mh, mhtime, mhcharge, oh, ohtime, ohcharge = GetWeaponEnchantInfo()
-        local hasEnchant = (btn:GetID() == 1 and mh) or (btn:GetID() == 2 and oh)
-        if hasEnchant then
-            local slot = btn:GetID() == 1 and 16 or 17
-            local texture = GetInventoryItemTexture("player", slot)
-            btn.icon:SetTexture(texture)
-            btn:Show()
-        else
-            btn:Hide()
-        end
-    end
-
-    local function BB_UpdateWeaponDuration(btn)
-        local mh, mhtime, mhcharge, oh, ohtime, ohcharge = GetWeaponEnchantInfo()
-        local timeLeft = 0
-        if btn:GetID() == 1 and mh and mhtime then
-            timeLeft = mhtime / 1000
-        elseif btn:GetID() == 2 and oh and ohtime then
-            timeLeft = ohtime / 1000
-        end
-        if timeLeft > 0 then
-            local style = BB_GetSetting("buffBarTimerStyle") or "White + Red"
-            local fontSize = BB_GetSetting("buffBarTimerFontSize") or 10
-            btn.duration:SetFont("Fonts\\FRIZQT__.TTF", fontSize, "OUTLINE")
-            ApplyTimerColor(btn.duration, style)
-            btn.duration:SetText(BB_FormatTime(timeLeft, style))
-            btn.duration:Show()
-        else
-            btn.duration:Hide()
-        end
-    end
-
-    local function BB_UpdateWeaponCount(btn)
-        local mh, mhtime, mhcharge, oh, ohtime, ohcharge = GetWeaponEnchantInfo()
-        local count = 0
-        if btn:GetID() == 1 and mhcharge then count = mhcharge end
-        if btn:GetID() == 2 and ohcharge then count = ohcharge end
-        if count > 1 then
-            btn.count:SetText(count)
-            btn.count:Show()
-        else
-            btn.count:Hide()
-        end
-    end
-
     local function BB_UpdateButton(btn)
         BB_UpdateIcon(btn)
         BB_UpdateBorder(btn)
@@ -1852,9 +1933,42 @@ DFUI:NewMod("Auras", 2, function()
     end
 
     local function BB_UpdateWeaponButton(btn)
-        BB_UpdateWeaponIcon(btn)
-        BB_UpdateWeaponCount(btn)
-        BB_UpdateWeaponDuration(btn)
+        local mh, mhtime, mhcharge, oh, ohtime, ohcharge = GetWeaponEnchantInfo()
+        local id = btn:GetID()
+        -- Icon
+        local hasEnchant = (id == 1 and mh) or (id == 2 and oh)
+        if hasEnchant then
+            local slot = id == 1 and 16 or 17
+            btn.icon:SetTexture(GetInventoryItemTexture("player", slot))
+            btn:Show()
+        else
+            btn:Hide()
+            btn.duration:Hide()
+            btn.count:Hide()
+            return
+        end
+        -- Count
+        local count = (id == 1 and mhcharge) or (id == 2 and ohcharge) or 0
+        if count > 1 then
+            btn.count:SetText(count)
+            btn.count:Show()
+        else
+            btn.count:Hide()
+        end
+        -- Duration
+        local timeLeft = 0
+        if id == 1 and mhtime then timeLeft = mhtime / 1000
+        elseif id == 2 and ohtime then timeLeft = ohtime / 1000 end
+        if timeLeft > 0 then
+            local style = BB_GetSetting("buffBarTimerStyle") or "White + Red"
+            local fontSize = BB_GetSetting("buffBarTimerFontSize") or 10
+            btn.duration:SetFont("Fonts\\FRIZQT__.TTF", fontSize, "OUTLINE")
+            ApplyTimerColor(btn.duration, style)
+            btn.duration:SetText(FormatTime(timeLeft, style))
+            btn.duration:Show()
+        else
+            btn.duration:Hide()
+        end
         BB_UpdateTimerPosition(btn)
     end
 
@@ -1921,10 +2035,6 @@ DFUI:NewMod("Auras", 2, function()
 
         for i = 1, count do
             local btn = BB_CreateButton(frame, name .. i, i - 1, buffFilter)
-            -- OnUpdate for duration ticking
-            btn:SetScript("OnUpdate", function()
-                BB_UpdateDuration(this)
-            end)
             btn:RegisterForClicks("RightButtonUp")
             btn:SetScript("OnClick", function()
                 if this.buffIndex and this.buffIndex >= 0 then
@@ -1948,7 +2058,7 @@ DFUI:NewMod("Auras", 2, function()
         frame.tick = 0
         frame:SetScript("OnUpdate", function()
             if not frame:IsShown() then return end
-            if frame.tick > GetTime() then return else frame.tick = GetTime() + 0.4 end
+            if frame.tick > GetTime() then return else frame.tick = GetTime() + 0.1 end
             BB_SortButtons(frame)
             for _, btn in pairs(frame.buttons) do
                 BB_UpdateButton(btn)
@@ -1968,9 +2078,6 @@ DFUI:NewMod("Auras", 2, function()
 
         for i = 1, 2 do
             local btn = BB_CreateButton(frame, name .. i, i, nil)
-            btn:SetScript("OnUpdate", function()
-                BB_UpdateWeaponDuration(this)
-            end)
             btn:RegisterForClicks("RightButtonUp")
             btn:SetScript("OnClick", function()
                 if CancelItemTempEnchantment then
@@ -1992,7 +2099,7 @@ DFUI:NewMod("Auras", 2, function()
         frame.tick = 0
         frame:SetScript("OnUpdate", function()
             if not frame:IsShown() then return end
-            if frame.tick > GetTime() then return else frame.tick = GetTime() + 0.4 end
+            if frame.tick > GetTime() then return else frame.tick = GetTime() + 0.1 end
             for _, btn in pairs(frame.buttons) do
                 BB_UpdateWeaponButton(btn)
             end
