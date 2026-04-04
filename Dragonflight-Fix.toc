@@ -3,7 +3,7 @@
 ## Title-zhCN: 巨龙时代 |cFFFF0000Fix|r
 ## Notes: Dragonflight UI for Turtle WoW (Chinese localized & 1.18.1 fixed)
 ## Notes-zhCN: 巨龙时代UI - 汉化修复版 (Turtle WoW 1.18.1)
-## Version: 1.3.3-fix
+## Version: 2.0.0
 ## Author: Guzruul - Reforged by Stormhand - Fix by Claude
 ## SavedVariables: DFUI_PROFILES, DFUI_DB_SETUP
 ## SavedVariablesPerCharacter: DFUI_CUR_PROFILE, DFUI_FRAMEPOS

@@ -19,7 +19,7 @@ local Setup = {
         title = "|cFFFF0000Important Patch Warning|r",
         text = "Patch 2.0.11 implemented the pvp icon natively.\n\nDo not place the 'TargetingFrame' folder into\nyour WoW/Interface/ dir anymore.\nDeactivate module for Blizzard default.",
         additionalText = "",
-        version = "2.0.11",
+        version = "2.0.0",
     },
 
     welcomeFrame = nil,

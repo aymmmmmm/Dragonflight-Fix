@@ -261,8 +261,8 @@ DFUI:NewMod("Gui-elem", 3, function()
             if not self.moduleHeaders[moduleKey] then
                 self.moduleHeaders[moduleKey] = true
 
-                -- show module header for tabs with multiple modules
-                if tabIndex == 6 or tabIndex == 14 then
+                -- show module header for tabs with multiple modules (skip first module, panel title already shows it)
+                if (tabIndex == 6 or tabIndex == 14) and moduleInfo.order > 1 then
                     local displayName = moduleDisplayNames[moduleName] or moduleName
                     local yOffset = self.tabPositions[tabIndex]
 
