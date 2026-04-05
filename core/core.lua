@@ -129,8 +129,76 @@ function DFUI:RunMods()
 end
 
 -- database
+
+-- 同步所有档案的配置结构：合并新增项、清理废弃项、修正类型不匹配
+-- 每次登录自动运行，幂等操作，无需手动改版本号
+function DFUI:SyncProfiles()
+    if not next(DFUI_PROFILES) then return 0, 0, 0 end
+
+    local added, removed, fixed = 0, 0, 0
+
+    for profileName, profileData in pairs(DFUI_PROFILES) do
+        -- 1) 合并新增模块和新增配置项
+        for mod, def in pairs(self.defaults) do
+            if not profileData[mod] then
+                profileData[mod] = {}
+                added = added + 1
+            end
+            for key, val in pairs(def) do
+                local defaultVal = val[1]
+                local savedVal = profileData[mod][key]
+                if savedVal == nil then
+                    profileData[mod][key] = defaultVal
+                    added = added + 1
+                elseif defaultVal ~= nil and type(savedVal) ~= type(defaultVal) then
+                    profileData[mod][key] = defaultVal
+                    fixed = fixed + 1
+                end
+            end
+        end
+
+        -- 2) 清理已删除模块的残留数据
+        local staleMods = {}
+        for mod, _ in pairs(profileData) do
+            if mod ~= "_FramePos" and not self.defaults[mod] then
+                table.insert(staleMods, mod)
+            end
+        end
+        for _, mod in ipairs(staleMods) do
+            profileData[mod] = nil
+            removed = removed + 1
+        end
+
+        -- 3) 清理已删除配置项的残留数据
+        for mod, def in pairs(self.defaults) do
+            if profileData[mod] then
+                local staleKeys = {}
+                for key, _ in pairs(profileData[mod]) do
+                    if def[key] == nil then
+                        table.insert(staleKeys, key)
+                    end
+                end
+                for _, key in ipairs(staleKeys) do
+                    profileData[mod][key] = nil
+                    removed = removed + 1
+                end
+            end
+        end
+    end
+
+    return added, removed, fixed
+end
+
 function DFUI:InitTempDB()
-    self:VersionCheckDB()
+    -- 同步配置结构（自动检测变更，无需版本号）
+    local added, removed, fixed = self:SyncProfiles()
+    if added + removed + fixed > 0 then
+        local msg = "|cff00ccff[DFUI]|r 配置已同步"
+        if added > 0 then msg = msg .. "  |cff00ff00+" .. added .. " 新增|r" end
+        if removed > 0 then msg = msg .. "  |cffff6600-" .. removed .. " 清理|r" end
+        if fixed > 0 then msg = msg .. "  |cffffff00~" .. fixed .. " 修正|r" end
+        DEFAULT_CHAT_FRAME:AddMessage(msg)
+    end
 
     -- set default profile if none exists
     local char = UnitName("player")
@@ -162,7 +230,7 @@ function DFUI:InitTempDB()
         end
     end
 
-    -- add missing defaults
+    -- add missing defaults to tempDB
     for mod, def in pairs(self.defaults) do
         self.tempDB[mod] = self.tempDB[mod] or {}
         for key, val in pairs(def) do
@@ -171,35 +239,6 @@ function DFUI:InitTempDB()
             end
         end
     end
-end
-
-function DFUI:VersionCheckDB()
-    local oldVer = DFUI_DB_SETUP.version
-    if oldVer == self.DBversion then return end
-
-    -- 版本不匹配：合并新增默认值到现有数据，而非清空
-    if oldVer and next(DFUI_PROFILES) then
-        for profileName, profileData in pairs(DFUI_PROFILES) do
-            for mod, def in pairs(self.defaults) do
-                if not profileData[mod] then
-                    profileData[mod] = {}
-                end
-                for key, val in pairs(def) do
-                    if profileData[mod][key] == nil then
-                        profileData[mod][key] = val[1]
-                    end
-                end
-            end
-        end
-        print("配置已迁移至 v" .. self.DBversion)
-    else
-        -- 首次安装或无有效数据，清空重建
-        DFUI_PROFILES = {}
-        DFUI_CUR_PROFILE = {}
-    end
-
-    DFUI_DB_SETUP = {}
-    DFUI_DB_SETUP.version = self.DBversion
 end
 
 function DFUI:SetTempDB(mod, key, value)
@@ -245,7 +284,6 @@ function DFUI:SaveTempDB()
         end
     end
 
-    DFUI_DB_SETUP.version = self.DBversion
 end
 
 function DFUI:ResetDB()
@@ -253,7 +291,6 @@ function DFUI:ResetDB()
     DFUI_PROFILES = {}
     DFUI_DB_SETUP = {}
     DFUI_CUR_PROFILE = {}
-    DFUI_DB_SETUP.version = self.DBversion
     ReloadUI()
 end
 

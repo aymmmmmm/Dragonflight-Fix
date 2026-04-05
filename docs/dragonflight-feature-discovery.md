@@ -110,7 +110,7 @@
 
 ## 二、DragonflightReloaded 完整模块清单
 
-> Reloaded 与 fix 使用完全相同的 DFRL 框架，可直接复制。
+> Reloaded 使用 DFRL 框架，fix v2.0.0 已迁移至 DFUI。从 Reloaded 复制需做命名空间替换。
 
 ### 2.1 核心差异（Reloaded有而fix没有的）
 
@@ -211,17 +211,19 @@
 
 ---
 
-## 五、API 翻译速查（DF3 → DFRL）
+## 五、API 翻译速查（DF3 → DFUI）
+
+> v2.0.0 已将命名空间从 DFRL 重命名为 DFUI
 
 ```lua
 -- 配置系统
-DF.profile[mod][opt]           → DFRL:GetTempDB(mod, opt)
-DF:NewDefaults(mod, defs)      → DFRL:NewDefaults(mod, defs)
-DF:NewModule(mod, pri, evt, fn)→ DFRL:NewMod(mod, pri, fn)
+DF.profile[mod][opt]           → DFUI:GetTempDB(mod, opt)
+DF:NewDefaults(mod, defs)      → DFUI:NewDefaults(mod, defs)
+DF:NewModule(mod, pri, evt, fn)→ DFUI:NewMod(mod, pri, fn)
 
 -- Hook系统
 DF.hooks.HookScript(f, s, fn)  → HookScript(f, s, fn)
-DF.hooks.HookSecureFunc(n, fn) → DFRL.env.hooksecurefunc(n, fn)
+DF.hooks.HookSecureFunc(n, fn) → DFUI.env.hooksecurefunc(n, fn)
 
 -- UI工具
 DF.common.KillFrame(f)         → f:Hide(); f:SetScript('OnUpdate', nil)
@@ -232,8 +234,8 @@ DF.ui.Frame(parent, ...)       → CreateFrame('Frame', nil, parent)
 DF.L('English text')           → "中文文字"
 
 -- 媒体资源
-media['tex:path']              → DFRL:GetInfoOrCons('tex')..'path'
-media['font:name']             → DFRL:GetInfoOrCons('font')..'name.ttf'
+media['tex:path']              → DFUI:GetInfoOrCons('tex')..'path'
+media['font:name']             → DFUI:GetInfoOrCons('font')..'name.ttf'
 
 -- 服务器检测
 DF.others.server               → (GetRealmName() or ''):find('Turtle')

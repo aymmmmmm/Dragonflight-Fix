@@ -2,7 +2,9 @@
 
 ## Context
 
-dragonflight-fix 是面向中文 Turtle WoW 玩家的 Dragonflight 风格 UI 插件（DFRL 命名空间，38 个 Lua 文件，~20K 行）。目标是从 Dragonflight3（DF 命名空间，79 模块，47K 行）和 DragonflightReloaded（同 DFRL，43 文件）中借鉴优秀功能，分阶段增强 dragonflight-fix。
+dragonflight-fix 是面向中文 Turtle WoW 玩家的 Dragonflight 风格 UI 插件（**DFUI** 命名空间，51 个 Lua 文件，~25K 行，v2.0.0）。目标是从 Dragonflight3（DF 命名空间，79 模块，47K 行）和 DragonflightReloaded（DFRL，43 文件）中借鉴优秀功能，分阶段增强 dragonflight-fix。
+
+> **注意**：v2.0.0 已将命名空间从 DFRL 重命名为 DFUI，SavedVariables 也相应更名。下文 API 示例已更新。
 
 参考文档：`dragonflight-comparison.md`（三仓库对比）、`dragonflight-feature-discovery.md`（功能清单）、`dragonflight-fix-optimization-guide.md`（优化路线图）、`dragonflight-fix-execution-plan.md`（执行方案）、`dragonflight-fix-talent-planning.md`（天赋规划设计）
 
@@ -12,92 +14,46 @@ dragonflight-fix 是面向中文 Turtle WoW 玩家的 Dragonflight 风格 UI 插
 
 | # | 工作项 | 状态 | 说明 |
 |---|--------|------|------|
-| 1 | **天赋规划/模拟功能** | ✅ 已完成 | `modules/ui/talents.lua` 591→983 行，含 9 个新函数、双模式 UI、20 方案切换、Shift 重置、滚轮操作、talentCache 优化 |
-| 2 | **Buff/Debuff 库文件复制** | ⚠️ 半完成 | `libs/libtipscan.lua`(127行) `libspell.lua`(119行) `libdebuff.lua`(366行) 已在磁盘，**但未加入 .toc** |
-| 3 | **减益数据库复制** | ⚠️ 半完成 | `data/debuffs.lua`(959行,933条) 已在磁盘，**但未加入 .toc** |
-| 4 | **光环系统复制** | ⚠️ 半完成 | `modules/unit/auras.lua`(1648行) 已在磁盘，使用 DFRL 命名空间，**但未加入 .toc** |
-| 5 | **sounds.lua** | ⚠️ 半完成 | `modules/menu/sounds.lua`(1010行) 存在于磁盘，**未加入 .toc** |
-| 6 | **三仓库对比分析** | ✅ 已完成 | 5 份分析文档 |
+| 1 | **天赋规划/模拟功能** | ✅ 已完成 | `modules/ui/talents.lua` 591→1077 行，含 8 个核心函数、双模式 UI、20 方案切换、Shift 重置、滚轮操作 |
+| 2 | **Buff/Debuff 系统** | ✅ 已完成 | libs 3 个库 + debuffs.lua + auras.lua 全部加入 .toc，多精度计时（玩家精确/宠物回退/目标仅GUID） |
+| 3 | **冷却时间数字** | ✅ 已完成 | `modules/ui/cooldowns.lua`，从 DF3 移植 |
+| 4 | **物品比较** | ✅ 已完成 | `modules/ui/itemcompare.lua`，从 DF3 移植 |
+| 5 | **职业配色管理** | ✅ 已完成 | `modules/ui/colors.lua`，Vanilla/TBC/Dragonflight 三套预设 |
+| 6 | **Tooltip 增强** | ✅ 已完成 | 鼠标跟随 + 目标的目标 + 距离显示 |
+| 7 | **GUID 追踪库** | ✅ 已完成 | `libs/libguid.lua`，从 DF3 移植 |
+| 8 | **自定义事件库** | ✅ 已完成 | `libs/libevents.lua`，从 DF3 移植 |
+| 9 | **命名空间重构** | ✅ 已完成（计划外） | DFRL → DFUI，SavedVariables 全面更名 |
+| 10 | **天赋描述数据库** | ✅ 已完成（计划外） | `data/talents_desc.lua`，天赋各级效果文字 |
+| 11 | **暗黑血球系统** | ✅ 已完成（计划外） | `modules/bars/orbs.lua`，Diablo 风格 HP/MP 球体 |
+| 12 | **配置导入导出** | ✅ 已完成（计划外） | 序列化+校验和+跨角色同步 |
+| 13 | **三仓库对比分析** | ✅ 已完成 | 9 份文档（已更新至 v2.0.0） |
+| 14 | **sounds.lua** | ⚠️ 半完成 | 存在于磁盘，**未加入 .toc** |
 
 ---
 
 ## 二、未完成工作清单
 
-### Phase 0：激活磁盘上已有文件（即时可做）
+### Phase 0：激活磁盘上已有文件 — ✅ 已完成
 
-**任务 0.1** — 更新 .toc 加载顺序
+~~任务 0.1~~ — .toc 已更新，libs/debuffs/auras 全部加载
+~~任务 0.2~~ — auras.lua 已中文化，命名空间已迁移至 DFUI
 
-修改 `Dragonflight-Fix.toc`，在对应位置插入已存在但未加载的文件：
-
-```
-# DATA 区域追加
-data\debuffs.lua
-
-# LIBS 区域新增（在 DATA 和 MODULES 之间）
-libs\libtipscan.lua
-libs\libspell.lua
-libs\libdebuff.lua
-
-# MODULES 区域追加
-modules\unit\auras.lua      （在 modules\unit\pvp.lua 之后）
-modules\menu\sounds.lua     （在 modules\menu\addons.lua 之后）
-```
-
-**任务 0.2** — 验证 auras.lua 兼容性与中文化
-
-- 确认 auras.lua 的 `DFRL:NewDefaults` 配置标签已中文化
-- 确认 libdebuff 对 debuffs.lua 数据表的引用路径正确
-- 确认 sounds.lua 是否需要依赖调整
-
-**预期效果**：插件加载后立即获得完整的 Buff/Debuff 显示系统（图标 + 计时器 + 4 色减益类型 + 冷却螺旋）
+**遗留**：`modules/menu/sounds.lua` 存在磁盘但未加入 .toc
 
 ---
 
-### Phase 1：高价值低成本功能
+### Phase 1：高价值低成本功能 — ✅ 7/8 已完成
 
-**任务 1.1** — 冷却时间数字显示
-- 来源：`-Dragonflight3/mods/general/cooldowns.lua` (~200行)
-- 创建：`modules/ui/cooldowns.lua` (~150行)
-- 技术：Hook `ActionButton_OnUpdate`，按冷却时段着色（<10s红/10-59s黄/1-5m白/5m+灰）
-- 效果：动作按钮直接显示 CD 秒数，替代 OmniCC 等独立插件
-
-**任务 1.2** — 物品比较（装备对比）
-- 来源：`-Dragonflight3/mods/general/itemcompare.lua` (~150行)
-- 创建：`modules/ui/itemcompare.lua` (~100行)
-- 技术：Hook `GameTooltip:SetBagItem` 等，Shift 悬停时创建第二 Tooltip
-- 效果：Shift 悬停装备时并排显示已穿戴对比
-
-**任务 1.3** — 职业配色方案统一管理
-- 来源：`-Dragonflight3/mods/general/colors.lua` (~250行)
-- 创建：`modules/ui/colors.lua` (~200行)
-- 修改：player.lua / target.lua / mini.lua 各改 10-20 行引用 `DFRL.classColors`
-- 效果：Vanilla/TBC/Dragonflight 三套预设可切换，资源条统一着色
-
-**任务 1.4** — Tooltip 增强
-- 来源：`-Dragonflight3/mods/tooltip/tooltip.lua` (304行)
-- 修改：`modules/ui/tooltip.lua` 54→~200行
-- 新增：鼠标跟随、目标的目标、健康值条、距离显示（UnitXP 条件降级）
-
-**任务 1.5** — 聊天系统增强
-- 来源：`-Dragonflight3/mods/chat/chat.lua` (775行)
-- 修改：`modules/chat/chat.lua` 306→~500行
-- 新增：URL 检测高亮、时间戳 `[HH:MM]`、频道缩写、聊天淡出
-
-**任务 1.6** — 配置版本迁移系统
-- 来源：`-Dragonflight3/core/init.lua` (行19-85)
-- 修改：`core/core.lua` 的 `VersionCheckDB()` 函数
-- 技术：版本不匹配时合并新增配置到现有数据，而非清空重置
-- 效果：升级版本后用户配置不丢失
-
-**任务 1.7** — GUID 追踪库
-- 来源：`-Dragonflight3/libs/libguid.lua` (244行)
-- 创建：`libs/libguid.lua` (~100行修改，DF→DFRL 翻译)
-- 技术：优先 `UnitGUID`(SuperWoW)，无则伪 GUID；120 秒过期清理
-
-**任务 1.8** — 自定义事件库
-- 来源：`-Dragonflight3/libs/libevents.lua` (~120行)
-- 创建：`libs/libevents.lua` (~80行修改)
-- 提供：`PLAYER_AFTER_ENTERING_WORLD`(延迟50ms)、`SYNC_READY`(延迟2s)
+| 任务 | 状态 | 说明 |
+|------|------|------|
+| ~~1.1 冷却时间数字~~ | ✅ 已完成 | `modules/ui/cooldowns.lua` |
+| ~~1.2 物品比较~~ | ✅ 已完成 | `modules/ui/itemcompare.lua` |
+| ~~1.3 职业配色~~ | ✅ 已完成 | `modules/ui/colors.lua` |
+| ~~1.4 Tooltip 增强~~ | ✅ 已完成 | `modules/ui/tooltip.lua` |
+| 1.5 聊天系统增强 | ⚠️ 需确认 | chat.lua 已有暗色模式等，URL/时间戳需确认 |
+| **1.6 配置版本迁移** | ❌ 未实现 | Phase 1 唯一未完成项 |
+| ~~1.7 GUID 追踪库~~ | ✅ 已完成 | `libs/libguid.lua` |
+| ~~1.8 自定义事件库~~ | ✅ 已完成 | `libs/libevents.lua` |
 
 ---
 
@@ -158,7 +114,7 @@ modules\menu\sounds.lua     （在 modules\menu\addons.lua 之后）
 | 4.2 错误处理改进 | core/error.lua | 分层报告替代 2 次后静默 |
 | 4.3 施法条增强 | modules/cast/cast.lua | Channel 中断动画 + tick 指示 |
 | 4.4 单位框架增强 | player.lua / target.lua | 战斗状态/断线检测/威胁指示 |
-| 4.5 字体路径去重 | core/tools.lua + 5 个模块 | 提取 `DFRL.tools.GetFont(name)` |
+| 4.5 字体路径去重 | core/tools.lua + 5 个模块 | 提取 `DFUI.tools.GetFont(name)` |
 
 ---
 
@@ -166,13 +122,13 @@ modules\menu\sounds.lua     （在 modules\menu\addons.lua 之后）
 
 ### 移植模式
 
-所有新模块统一使用 DFRL 注册模式：
+所有新模块统一使用 DFUI 注册模式：
 ```lua
-DFRL:NewDefaults("ModuleName", {
+DFUI:NewDefaults("ModuleName", {
     enabled = {true, "启用"},
 })
-DFRL:NewMod("ModuleName", priority, function()
-    local setup = DFRL.tempDB.ModuleName
+DFUI:NewMod("ModuleName", priority, function()
+    local setup = DFUI.tempDB.ModuleName
     if not setup.enabled then return end
     -- 条件检测示例
     local hasSuperWoW = (UnitGUID ~= nil)
@@ -180,11 +136,11 @@ DFRL:NewMod("ModuleName", priority, function()
 end)
 ```
 
-### DF3→DFRL API 翻译
+### DF3→DFUI API 翻译
 
 ```lua
-DF:NewModule(m,p,e,fn) → DFRL:NewMod(m,p,fn)
-DF.profile[m][k]       → DFRL.tempDB[m][k]
+DF:NewModule(m,p,e,fn) → DFUI:NewMod(m,p,fn)
+DF.profile[m][k]       → DFUI.tempDB[m][k]
 DF.L('text')           → "中文文字"
 media['tex:path']      → 'Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\path'
 DF.others.superWoW     → (UnitGUID ~= nil)
@@ -209,22 +165,25 @@ modules\gui\(tools/base/elem/home/homeb/info/prof/mods/shag)
 
 ## 四、最终效果
 
-完成全部 Phase 后，dragonflight-fix 将从 **38 文件 / ~20K 行** 增长到 **~55 文件 / ~30K 行**，功能覆盖从"基础 UI 替换"提升至"全面战斗辅助 + 视觉增强"：
+v2.0.0 已从 **38 文件 / ~20K 行** 增长到 **51 文件 / ~25K 行**。完成全部 Phase 后预计 ~60 文件 / ~32K 行。
 
-| 维度 | 当前 | 目标 |
-|------|------|------|
-| Buff/Debuff 显示 | 完全缺失 | 完整系统（图标+计时+4色+冷却螺旋） |
-| 冷却时间 | 无 | 按钮直接显示 CD 秒数 |
-| 装备对比 | 无 | Shift 悬停并排对比 |
-| 职业颜色 | 硬编码散落 | 统一管理，3 套预设 |
-| Tooltip | 仅锚点调整 | 目标的目标+距离+健康条 |
-| 聊天 | 基础 | URL+时间戳+频道缩写 |
-| 天赋 | 仅学习 | 规划/模拟/20 方案（已完成） |
-| 挥击计时 | 无 | 主手/副手/远程倒计时 |
-| CC 监视 | 无 | 屏幕提示+可用中断 |
-| 距离显示 | 无 | 实时目标距离 |
-| 治疗预测 | 无 | HealComm 队伍预测条 |
-| 配置升级 | 重置丢失 | 自动迁移保留 |
+| 维度 | v1.3.3 | v2.0.0 现状 | 全部完成目标 |
+|------|--------|------------|-------------|
+| Buff/Debuff | 完全缺失 | ✅ 多精度分层计时 | — |
+| 冷却时间 | 无 | ✅ 按钮 CD 秒数 | — |
+| 装备对比 | 无 | ✅ Shift 悬停对比 | — |
+| 职业颜色 | 硬编码 | ✅ 3 套预设 | — |
+| Tooltip | 仅锚点 | ✅ 目标+距离 | — |
+| 天赋 | 仅学习 | ✅ 规划/20 方案 | — |
+| 血球系统 | 无 | ✅ Diablo 风格 | — |
+| 配置同步 | 无 | ✅ 导入导出 | — |
+| 聊天 | 基础 | ⚠️ 需确认增强 | URL+时间戳 |
+| 配置版本迁移 | 重置丢失 | ❌ | 自动迁移保留 |
+| 挥击计时 | 无 | ❌ | 主手/副手倒计时 |
+| CC 监视 | 无 | ❌ | 屏幕提示+中断 |
+| 距离显示 | 无 | ❌ | 实时目标距离 |
+| 治疗预测 | 无 | ❌ | HealComm 预测条 |
+| 姓名板 | 无 | ❌ | 职业着色+Debuff |
 
 ---
 
@@ -233,6 +192,6 @@ modules\gui\(tools/base/elem/home/homeb/info/prof/mods/shag)
 每个 Phase 完成后：
 1. `luacheck` 静态检查无新增错误
 2. 游戏内加载无 Lua 报错
-3. `/dfrl` 设置界面有对应配置页
+3. `/dfui` 设置界面有对应配置页
 4. 逐功能验证对应效果
 5. 主城 40 人场景帧率 ≥ 30 FPS

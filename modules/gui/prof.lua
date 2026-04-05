@@ -412,7 +412,6 @@ DFUI:NewMod("Gui-prof", 4, function()
                 end
             end
 
-            DFUI_DB_SETUP.version = DFUI.DBversion
             ReloadUI()
         end)
         dialog.importBtn = importBtn

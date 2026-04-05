@@ -1,5 +1,8 @@
 # Frame Position Export Design
 
+> **状态：未实现的设计方案**
+> 当前代码仍使用绝对像素坐标，AbsToRel/RelToAbs 转换尚未实现。本文档保留作为未来实现参考。
+
 ## Problem
 
 DFUI_FRAMEPOS stores absolute screen coordinates (`GetLeft()`/`GetTop()`). These coordinates depend on screen resolution and UI scale, so exporting a profile from one setup and importing on another results in incorrect frame positions.

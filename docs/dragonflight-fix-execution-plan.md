@@ -44,19 +44,19 @@ modules\unit\auras.lua
 ### 0.2 验证 auras.lua 兼容性
 
 **检查项**:
-1. auras.lua 是否使用 `DFRL:NewMod` / `DFRL:NewDefaults` 注册（应该是，来自 Reloaded）
+1. auras.lua 是否使用 `DFUI:NewMod` / `DFUI:NewDefaults` 注册（应该是，来自 Reloaded）
 2. auras.lua 的配置标签是否已中文化
-3. libdebuff.lua 中的命名空间是否为 `DFRL`（而非 DF）
+3. libdebuff.lua 中的命名空间是否为 `DFUI`（而非 DF）
 
 ```bash
 # 验证命名空间
-grep -n "DFRL\|DF\." dragonflight-fix/modules/unit/auras.lua | head -5
-grep -n "DFRL\|DF\." dragonflight-fix/libs/libdebuff.lua | head -5
+grep -n "DFUI\|DF\." dragonflight-fix/modules/unit/auras.lua | head -5
+grep -n "DFUI\|DF\." dragonflight-fix/libs/libdebuff.lua | head -5
 ```
 
 如果是 DF 命名空间（来自 Dragonflight3），需要做 API 翻译：
-- `DF:NewModule` → `DFRL:NewMod`
-- `DF.profile[mod]` → `DFRL:GetTempDB(mod, key)`
+- `DF:NewModule` → `DFUI:NewMod`
+- `DF.profile[mod]` → `DFUI:GetTempDB(mod, key)`
 - `DF.L('text')` → 中文字符串
 
 ### 0.3 中文化 auras.lua 配置标签
@@ -93,14 +93,14 @@ luacheck libs/libdebuff.lua --no-color --codes --config "../-Dragonflight3/.luac
 
 **实现步骤**:
 1. 读取 DF3 源码，理解 Hook 逻辑（Hook `ActionButton_OnUpdate`）
-2. 新建 `modules/ui/cooldowns.lua`，使用 DFRL 模式：
+2. 新建 `modules/ui/cooldowns.lua`，使用 DFUI 模式：
    ```lua
-   DFRL:NewDefaults("Cooldowns", {
+   DFUI:NewDefaults("Cooldowns", {
        enabled = {true, "启用"},
        showSeconds = {true, "显示秒数"},
        minDuration = {2, "最小显示时长(秒)"},
    })
-   DFRL:NewMod("Cooldowns", 5, function()
+   DFUI:NewMod("Cooldowns", 5, function()
        -- Hook ActionButton1~ActionButton120 的 OnUpdate
        -- 按冷却剩余时间着色：<10s红 / 10-59s黄 / 1-5m白 / 5m+灰
        -- 在按钮中央创建 FontString 显示秒数/分钟数
@@ -133,7 +133,7 @@ luacheck libs/libdebuff.lua --no-color --codes --config "../-Dragonflight3/.luac
 
 **实现步骤**:
 1. 新建 `modules/ui/colors.lua`，定义三套预设（Vanilla/TBC/Dragonflight）
-2. 通过 `DFRL.classColors` 全局暴露当前配色
+2. 通过 `DFUI.classColors` 全局暴露当前配色
 3. 修改 player.lua / target.lua / mini.lua 中的硬编码 `RAID_CLASS_COLORS` 引用
 4. 资源条着色：法力蓝/怒气红/焦点棕/能量黄
 
@@ -198,10 +198,10 @@ local migrations = {
 
 **来源**: `-Dragonflight3/libs/libguid.lua` (244 行)
 **创建**: `dragonflight-fix/libs/libguid.lua`
-**改动**: ~100 行修改（API 翻译 DF→DFRL）+ .toc 追加
+**改动**: ~100 行修改（API 翻译 DF→DFUI）+ .toc 追加
 
 **实现步骤**:
-1. 复制 libguid.lua，将 `DF.` 引用改为 `DFRL.`
+1. 复制 libguid.lua，将 `DF.` 引用改为 `DFUI.`
 2. 伪 GUID 格式：`pGUID-name-level-class-subzone-counter`
 3. 条件检测：优先 `UnitGUID`（SuperWoW），无则用伪 GUID
 4. .toc 中 `libs\libdebuff.lua` 后追加 `libs\libguid.lua`
@@ -368,9 +368,9 @@ local migrations = {
 
 **修改**: `core/tools.lua` + player.lua / target.lua / mini.lua / cast.lua / bars.lua
 
-提取字体路径映射到 `DFRL.tools.GetFont(name)`:
+提取字体路径映射到 `DFUI.tools.GetFont(name)`:
 ```lua
-function DFRL.tools.GetFont(name)
+function DFUI.tools.GetFont(name)
     return 'Interface\\AddOns\\Dragonflight-Fix\\media\\fonts\\' .. name
 end
 ```
@@ -461,14 +461,14 @@ modules\gui\shag.lua
 
 ```lua
 -- 注册默认配置（中文描述）
-DFRL:NewDefaults("ModuleName", {
+DFUI:NewDefaults("ModuleName", {
     enabled = {true, "启用"},
     -- 其他配置项...
 })
 
 -- 注册模块
-DFRL:NewMod("ModuleName", priority, function()
-    local setup = DFRL.tempDB.ModuleName
+DFUI:NewMod("ModuleName", priority, function()
+    local setup = DFUI.tempDB.ModuleName
     if not setup.enabled then return end
 
     -- 条件检测（示例：SuperWoW 依赖）
@@ -479,7 +479,7 @@ DFRL:NewMod("ModuleName", priority, function()
 end)
 
 -- 可选：注册配置变化回调
-DFRL:NewCallbacks("ModuleName", {
+DFUI:NewCallbacks("ModuleName", {
     enabled_changed = function(value)
         -- 响应开关切换
     end,
@@ -488,23 +488,23 @@ DFRL:NewCallbacks("ModuleName", {
 
 ---
 
-## API 翻译速查（DF3 → DFRL）
+## API 翻译速查（DF3 → DFUI）
 
 从 Dragonflight3 移植代码时的对照表：
 
 ```lua
 -- 模块系统
-DF:NewModule(mod, pri, evt, fn)  → DFRL:NewMod(mod, pri, fn)
-DF:NewDefaults(mod, defs)        → DFRL:NewDefaults(mod, defs)  -- 注意值格式 {default, "描述"}
-DF:NewCallbacks(mod, cbs)        → DFRL:NewCallbacks(mod, cbs)
+DF:NewModule(mod, pri, evt, fn)  → DFUI:NewMod(mod, pri, fn)
+DF:NewDefaults(mod, defs)        → DFUI:NewDefaults(mod, defs)  -- 注意值格式 {default, "描述"}
+DF:NewCallbacks(mod, cbs)        → DFUI:NewCallbacks(mod, cbs)
 
 -- 配置读写
-DF.profile[mod][opt]             → DFRL.tempDB[mod][opt]  或  DFRL:GetTempDB(mod, opt)
+DF.profile[mod][opt]             → DFUI.tempDB[mod][opt]  或  DFUI:GetTempDB(mod, opt)
 DF.setups.mod                    → 直接用局部变量
 
 -- Hook 系统
 DF.hooks.HookScript(f, s, fn)   → HookScript(f, s, fn)  -- WoW 原生
-DF.hooks.HookSecureFunc(n, fn)  → DFRL.env.hooksecurefunc(n, fn)
+DF.hooks.HookSecureFunc(n, fn)  → DFUI.env.hooksecurefunc(n, fn)
 DF.common.KillFrame(f)          → f:Hide(); f:SetScript('OnShow', function() this:Hide() end)
 
 -- UI 工具

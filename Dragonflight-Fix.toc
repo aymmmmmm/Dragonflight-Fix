@@ -37,6 +37,7 @@ modules\chat\chat.lua
 modules\bags\bags.lua
 modules\map\map.lua
 modules\map\collect.lua
+modules\map\pfquest.lua
 modules\menu\menu.lua
 modules\menu\addons.lua
 modules\micro\micro.lua
@@ -48,6 +49,7 @@ modules\ui\errorHandler.lua
 modules\ui\cooldowns.lua
 modules\ui\itemcompare.lua
 modules\ui\colors.lua
+modules\ui\combopoints.lua
 modules\unit\player.lua
 modules\unit\target.lua
 modules\unit\mini.lua
@@ -55,7 +57,10 @@ modules\unit\pvp.lua
 modules\unit\auras.lua
 modules\xprep\xprep.lua
 modules\track\track.lua
+modules\loot\loot.lua
+modules\loot\roll.lua
 # modules\test.lua
+
 
 # GUI
 modules\gui\tools.lua
