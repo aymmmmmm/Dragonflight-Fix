@@ -571,28 +571,46 @@ DFUI:NewMod("Auras", 2, function()
 
     -- Time formatter: style = "Gold" (solid gold text) or "White + Red" (white number, red suffix)
     -- Long durations (>= 1h) show only hours (ceil) to fit small icons
-    local function FormatTime(remaining, style)
-        if not style or style == "Gold" then
+    local function FormatTime(remaining, style, compact)
+        local d = "d"
+        local h = "h"
+        local m = "m"
+        local s = "s"
+        if style and style ~= "Gold" then
+            d = "|cffff0000d|r"
+            h = "|cffff0000h|r"
+            m = "|cffff0000m|r"
+            s = "|cffff0000s|r"
+        end
+
+        if compact then
+            -- 框体小图标：单单位紧凑显示
             if remaining >= 86400 then
-                return math.floor(remaining / 86400) .. "d"
+                return math.floor(remaining / 86400) .. d
             elseif remaining >= 3600 then
-                return math.ceil(remaining / 3600) .. "h"
+                return math.ceil(remaining / 3600) .. h
             elseif remaining >= 60 then
-                return math.floor(remaining / 60) .. "m"
-            else
-                return math.floor(remaining) .. ""
-            end
-        else
-            -- DF3 style: white number + red suffix letter
-            if remaining >= 86400 then
-                return math.floor(remaining / 86400) .. "|cffff0000d|r"
-            elseif remaining >= 3600 then
-                return math.ceil(remaining / 3600) .. "|cffff0000h|r"
-            elseif remaining >= 60 then
-                return math.floor(remaining / 60) .. "|cffff0000m|r"
+                return math.ceil(remaining / 60) .. m
             else
                 return tostring(math.floor(remaining))
             end
+        end
+
+        -- Buff Bar 大图标：双单位完整精度
+        if remaining >= 86400 then
+            local days = math.floor(remaining / 86400)
+            local hours = math.floor((remaining - days * 86400) / 3600)
+            return days .. d .. " " .. hours .. h
+        elseif remaining >= 3600 then
+            local hours = math.floor(remaining / 3600)
+            local mins = math.floor((remaining - hours * 3600) / 60)
+            return hours .. h .. " " .. mins .. m
+        elseif remaining >= 60 then
+            local mins = math.floor(remaining / 60)
+            local secs = math.floor(remaining - mins * 60)
+            return mins .. m .. " " .. secs .. s
+        else
+            return tostring(math.floor(remaining))
         end
     end
 
@@ -1219,7 +1237,7 @@ DFUI:NewMod("Auras", 2, function()
                     end -- isPermanentBuff
 
                     if duration and timeleft and timeleft > 0 then
-                        data.buffs[i].timer:SetText(FormatTime(timeleft, timerStyle))
+                        data.buffs[i].timer:SetText(FormatTime(timeleft, timerStyle, true))
                         data.buffs[i].timer:Show()
                         data.buffs[i].timerStart = GetTime() + timeleft - duration
                         data.buffs[i].timerDuration = duration
@@ -1365,7 +1383,7 @@ DFUI:NewMod("Auras", 2, function()
                     end
 
                     if duration and timeleft and timeleft > 0 then
-                        data.debuffs[i].timer:SetText(FormatTime(timeleft, timerStyle))
+                        data.debuffs[i].timer:SetText(FormatTime(timeleft, timerStyle, true))
                         data.debuffs[i].timer:Show()
                         data.debuffs[i].timerStart = GetTime() + timeleft - duration
                         data.debuffs[i].timerDuration = duration
@@ -1637,7 +1655,7 @@ DFUI:NewMod("Auras", 2, function()
                 if btn.timerDuration and btn.timerStart then
                     local remaining = btn.timerDuration - (GetTime() - btn.timerStart)
                     if remaining > 0 then
-                        btn.timer:SetText(FormatTime(remaining, btn.timerStyle))
+                        btn.timer:SetText(FormatTime(remaining, btn.timerStyle, true))
                         btn.timer:Show()
                     else
                         btn.timer:SetText("")
