@@ -390,9 +390,9 @@ DFUI:NewMod("Gui-prof", 4, function()
             DFUI.tempDB = {}
             for mod, data in pairs(profileData) do
                 if mod == "_FramePos" then
-                    DFUI_FRAMEPOS = {}
+                    _G.DFUI_FRAMEPOS = {}
                     for fname, pos in pairs(data) do
-                        DFUI_FRAMEPOS[fname] = {x = pos.x, y = pos.y}
+                        _G.DFUI_FRAMEPOS[fname] = {x = pos.x, y = pos.y}
                     end
                 else
                     DFUI.tempDB[mod] = {}
