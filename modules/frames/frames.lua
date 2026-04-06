@@ -42,6 +42,10 @@ DFUI:NewMod("Frames", 2, function()
 
             -- 3rd party
             DFUI.PWB_Panel,
+
+            -- loot module
+            DFUI.lootFrame,
+            DFUI.rollAnchor,
         }
 
 
