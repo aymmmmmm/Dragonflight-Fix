@@ -28,9 +28,9 @@
 
 | 文件 | 行数 | 函数数 | 说明 |
 |------|------|--------|------|
-| `loot.lua` | 651 | 14 + 2回调 | 主拾取框体 + 自动拾取渐隐 |
-| `roll.lua` | 319 | 8 | 投骰框体（由 loot.lua 调用初始化） |
-| **合计** | **970** | **24** | |
+| `loot.lua` | 649 | 14 + 2回调 | 主拾取框体 + 自动拾取渐隐 |
+| `roll.lua` | 476 | 12 | 投骰框体 + 追踪系统（由 loot.lua 调用初始化） |
+| **合计** | **1125** | **28** | |
 
 ### 配置项（10个）
 
@@ -85,34 +85,45 @@
 | Need/Greed/Pass 按钮 | ✅ 原生纹理 + pfUI 式独立 Y 偏移对齐 |
 | 倒计时状态条 | ✅ `GetLootRollTimeLeft()` + OnUpdate |
 | 品质色计时条 | ✅ `roll_rarity_timer` 配置控制 |
-| BoP/BoE 标识 | ✅ 红色 BoP / 绿色 BoE |
+| BoP/BoE 标识 | ✅ 中文"拾取绑定"红色 / "装备绑定"绿色，位于物品名下方 |
 | 最多4个并发投骰 | ✅ 垂直堆叠，间距 8px |
 | CANCEL_LOOT_ROLL 处理 | ✅ 按 rollID 查找并隐藏 |
+| CHAT_MSG_LOOT 投骰追踪 | ✅ 解析聊天消息，实时追踪队友 Need/Greed/Pass 选择 |
+| 按钮计数显示 | ✅ Need/Greed/Pass 按钮中央叠加选择人数 |
+| 悬停按钮显示玩家名单 | ✅ Tooltip 列出具体玩家名 |
+| 60秒过期缓存系统 | ✅ 按物品名关联，自动清理 |
+| 黑名单过滤 | ✅ 过滤 YOU/everyone 等非真实玩家名 |
+| 关闭按钮 | ✅ DFUI 红色按钮，点击=放弃并隐藏框体 |
+| BoP 确认取消后可重选 | ✅ 不禁用按钮，取消确认后仍可点击 |
 
-### 3.3 UI 风格重构 ✅ 完成
+### 3.3 UI 风格重构 ✅ 完成（含 2026-04-06 第二轮重构）
 
 | 改进 | 说明 |
 |------|------|
-| 图标放大 | loot 28→36px, roll 32→36px |
+| 图标放大 | loot 28→36px, roll 36→40px |
 | 间距增加 | PADDING 8→12, SPACING 2→6 |
-| 框体宽度 | 180-320 → 220-350 |
-| Roll 布局分层 | 三行分离：名称/计时条/按钮 |
-| Roll 框体高度 | 40→82px，呼吸感大幅提升 |
-| 按钮对齐 | pfUI 式独立 BOTTOMLEFT + Y 偏移 |
+| 框体宽度 | 180-320 → 220-350 (loot), 320→330 (roll) |
+| Roll 框体高度 | 40→82→104px，充足呼吸感 |
+| Roll 布局分层 | 四层分离：名称/绑定/计时条/按钮，各层间距 4-10px |
+| 图标 DF 边框 | border.blp 覆盖层（与动作条一致），品质色染色 |
+| 绑定文字 | 从右上角移至物品名下方，中文"拾取绑定"/"装备绑定" |
+| 关闭按钮 | DFUI.CreateRedButton 统一风格，右上角 |
+| 按钮对齐 | pfUI 式独立 BOTTOMLEFT + Y 偏移 (Need=10, Greed=9, Pass=12) |
 
 ### 3.4 已删除的功能
 - 汇总浮窗（DFUILootSummary）→ 改为拾取窗口自身渐隐
-- CHAT_MSG_LOOT 收集系统
 - START_LOOT_ROLL 重复事件监听（导致双框体）
+- DisableAllButtons → BoP 确认取消后需可重选，按钮不再禁用
 
 ### 3.5 未实现的可选功能（design.md 中"可以有"级别）
 - `show_quality_text` — 品质描述文字（精良/稀有/史诗）
 - `roll_scale` — 投骰窗口独立缩放
 - 草药采集/容器打开自动拾取（SPELLCAST_START 检测）
 - 链接拾取物品到聊天频道
-- Master Loot 增强菜单（按职业分组）
+- Master Loot 增强菜单（按职业分组、特殊接收者、随机Roll、平局重Roll）
 
 ### 3.6 待验证的健壮性项目
+- [ ] **投骰追踪实测** — 需组队测试 CHAT_MSG_LOOT 解析是否正确匹配中文消息格式
 - [ ] **Ctrl+Alt+Shift 拖拽移动** — 时序分析确认注册正确，但需游戏内实际测试拖拽和位置保存/恢复
 - [ ] **配置面板 GUI** — 确认所有10个选项在 DFUI 设置界面中正常显示和切换，效果实时生效
 - [ ] **兼容性：禁用模块** — 禁用 Loot 模块后是否正确恢复默认 Blizzard 拾取窗口
@@ -151,13 +162,19 @@ DLL/客户端/Lua 三层。方案：统一流程，先渲染再判断。
 `GroupLootFrame_OpenNewFrame` + `START_LOOT_ROLL` 双重触发。方案：移除 `START_LOOT_ROLL` 监听。
 
 ### 坑 10：投骰按钮不对齐 ✅
-WoW 原生 `UI-GroupLoot-Dice/Coin/Pass` 纹理内置 padding 不一致。方案：pfUI 式独立 `BOTTOMLEFT` 绝对定位 + 逐个 Y 偏移补偿（Need=9, Greed=8, Pass=10）。
+WoW 原生 `UI-GroupLoot-Dice/Coin/Pass` 纹理内置 padding 不一致。方案：pfUI 式独立 `BOTTOMLEFT` 绝对定位 + 逐个 Y 偏移补偿（Need=10, Greed=9, Pass=12）。
+
+### 坑 11：SimplifyPattern 转义层级错误 ✅
+`string.gsub(ret, "%%%%s", "(.+)")` 中 `"%%%%s"` 在 Lua pattern 中匹配 `%%s`（三字符），但目标是 `%s`（两字符）。应用 `"%%s"` 匹配。同理 `"%%%%d"` → `"%%d"`。此 bug 导致投骰追踪的 CHAT_MSG_LOOT 解析完全不工作。
+
+### 坑 12：BoP 确认后按钮被禁用 ✅
+点击 Need/Greed 后立刻调用 `DisableAllButtons()`，但 BoP 物品的 `RollOnLoot()` 会弹确认框而非立即提交。用户取消确认后无法重选。方案：移除 `DisableAllButtons` 调用（pfUI 也不禁用），投骰完成由 `CANCEL_LOOT_ROLL` 自动隐藏框体。
 
 ---
 
 ## 五、关键代码位置（最终版本）
 
-### loot.lua (651行)
+### loot.lua (649行)
 
 | 功能 | 位置 | 说明 |
 |------|------|------|
@@ -176,18 +193,22 @@ WoW 原生 `UI-GroupLoot-Dice/Coin/Pass` 纹理内置 padding 不一致。方案
 | Init | ~564-614 | 初始化 |
 | Callbacks | ~636-649 | scale/mousecursor 回调 |
 
-### roll.lua (319行)
+### roll.lua (476行)
 
 | 功能 | 位置 | 说明 |
 |------|------|------|
 | DFUI.InitLootRoll | 5 | 入口函数 |
-| DisableAllButtons | ~54 | 禁用三按钮 |
-| CreateRollButton | ~63 | 按钮工厂 |
-| CreateRollFrame | ~83-242 | 投骰框体创建 |
-| UpdateRollFrame | ~223-260 | 数据填充 |
-| OnCancelRoll | ~264 | 取消投骰 |
-| OnStartRoll | ~277 | 开始投骰 |
-| GroupLootFrame_OpenNewFrame | ~305 | 全局函数替换 |
+| 常量 | 9-15 | ROLL_WIDTH=330, ROLL_HEIGHT=104, ICON_SIZE=40 |
+| 聊天模式匹配 | 44-71 | SimplifyPattern + 黑名单 |
+| RefreshCounts | ~85-101 | 刷新按钮计数 |
+| AddCache | ~103-135 | 缓存写入 + 去重 + 60秒过期 |
+| CreateRollButton | ~138-176 | 按钮工厂 + 计数叠加 + 玩家名单 Tooltip |
+| CreateRollFrame | ~182-332 | 投骰框体 + DF边框 + 关闭按钮 |
+| UpdateRollFrame | ~337-384 | 数据填充 + 品质色边框 + 中文绑定文字 + 计数初始化 |
+| OnCancelRoll | ~389-398 | 取消投骰 + 清理 itemname |
+| OnStartRoll | ~403-411 | 开始投骰 |
+| GroupLootFrame_OpenNewFrame | ~431-443 | 全局函数替换 + 缓存清空 |
+| rollScanner | ~454-477 | CHAT_MSG_LOOT 监听 + 三模式匹配 |
 
 ---
 
@@ -199,5 +220,8 @@ WoW 原生 `UI-GroupLoot-Dice/Coin/Pass` 纹理内置 padding 不一致。方案
 4. **LootButton 帧类型**：Vanilla `LootSlot()` 需要 `LootButton` + `SetSlot()` 安全上下文
 5. **SetBackdrop 隐式启用鼠标**：子 Frame 的 `SetBackdrop()` 会拦截父 Button 点击
 6. **三层拾取竞争**：DLL/客户端/Lua 需统一流程
-7. **UI 呼吸感**：图标 36px + PADDING 12 + SPACING 6 比 28/8/2 舒适得多
-8. **Roll 框体分层**：82px 高度三行分离（名称/计时条/按钮）比 40px 单行塞满好得多
+7. **UI 呼吸感**：图标 40px + 内边距 14 + 框体 104px，四层分离（名称/绑定/计时条/按钮）
+8. **Roll 框体分层**：104px 高度四行分离比 40px 单行塞满好得多
+9. **Lua pattern 转义层级**：`"%%%%s"` 匹配 `%%s` 而非 `%s`；WoW 格式字符串中 `%s` 用 `"%%s"` 匹配
+10. **BoP 确认与按钮禁用冲突**：`RollOnLoot()` 对 BoP 物品弹确认框而非立即提交，不能在 OnClick 中禁用按钮
+11. **复用 DFUI 视觉组件**：`border.blp` + `CreateRedButton` 保证投骰框与动作条/面板风格一致
