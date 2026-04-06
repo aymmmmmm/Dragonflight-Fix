@@ -596,19 +596,17 @@ DFUI:NewMod("Auras", 2, function()
             end
         end
 
-        -- Buff Bar 大图标：双单位完整精度
+        -- Buff Bar 大图标：时钟格式
         if remaining >= 86400 then
-            local days = math.floor(remaining / 86400)
-            local hours = math.floor((remaining - days * 86400) / 3600)
-            return days .. d .. " " .. hours .. h
+            return math.floor(remaining / 86400) .. d
         elseif remaining >= 3600 then
             local hours = math.floor(remaining / 3600)
             local mins = math.floor((remaining - hours * 3600) / 60)
-            return hours .. h .. " " .. mins .. m
+            return string.format("%02d:%02d", hours, mins)
         elseif remaining >= 60 then
             local mins = math.floor(remaining / 60)
             local secs = math.floor(remaining - mins * 60)
-            return mins .. m .. " " .. secs .. s
+            return string.format("%02d:%02d", mins, secs)
         else
             return tostring(math.floor(remaining))
         end
