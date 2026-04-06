@@ -58,97 +58,107 @@ DFUI:NewMod("Character", 5, function()
         end
     end
 
-    -- 缓存系统：首次扫描记录需隐藏的 Region 引用，后续直接遍历缓存
-    local hiddenRegionCache = {}
-    local cacheBuilt = false
+    -- 荣誉/竞技场：隐藏暴雪纹理
+    local function StripHonorAndArena()
+        HideBlizzardTextures(HonorFrame)
+        if ArenaFrame then
+            HideBlizzardTextures(ArenaFrame)
+            -- 美化团队按钮
+            for i = 1, 3 do
+                local team = getglobal("ArenaFrameTeam" .. i)
+                if team and not team._dfSkinned then
+                    team:SetBackdrop({
+                        bgFile = "Interface\\Buttons\\WHITE8X8",
+                        edgeFile = "Interface\\Buttons\\WHITE8X8",
+                        edgeSize = 1,
+                    })
+                    team:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+                    team:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
+                    team._dfSkinned = true
+                end
+            end
+        end
+    end
 
-    local function BuildRegionCache(frame, depth)
-        if not frame then return end
-        depth = depth or 0
-        local regions = {frame:GetRegions()}
+    -- 技能 Tab："全部"区域 — 金属 Tab 风格
+    -- SkillFrameExpandButtonFrame 是容器（含"全部"文字背景），CollapseAllButton 是里面的 +/- 箭头
+    if SkillFrameExpandButtonFrame then
+        SkillFrameExpandButtonFrame:DisableDrawLayer("BACKGROUND")
+
+        local skillTabsPath = TEX .. "interface\\uiframetabs.blp"
+        local anchor = SkillFrameExpandButtonFrame
+        local sw = anchor:GetWidth() / 2
+        local sh = 28
+
+        local sLeft = anchor:CreateTexture(nil, "BACKGROUND")
+        sLeft:SetTexture(skillTabsPath)
+        sLeft:SetWidth(sw)
+        sLeft:SetHeight(sh)
+        sLeft:SetPoint("TOPLEFT", anchor, "TOPLEFT", -3, 4)
+        sLeft:SetTexCoord(0.015625, 0.5625, 0.816406, 0.957031)
+
+        local sRight = anchor:CreateTexture(nil, "BACKGROUND")
+        sRight:SetTexture(skillTabsPath)
+        sRight:SetWidth(sw)
+        sRight:SetHeight(sh)
+        sRight:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", 5, 4)
+        sRight:SetTexCoord(0.015625, 0.59375, 0.667969, 0.808594)
+
+        local sMiddle = anchor:CreateTexture(nil, "BACKGROUND")
+        sMiddle:SetTexture(skillTabsPath)
+        sMiddle:SetHeight(sh)
+        sMiddle:SetPoint("TOPLEFT", sLeft, "TOPRIGHT", 0, 0)
+        sMiddle:SetPoint("TOPRIGHT", sRight, "TOPLEFT", 0, 0)
+        sMiddle:SetTexCoord(0, 0.015625, 0.175781, 0.316406)
+    end
+
+    -- 称号下拉框（Turtle WoW 自定义：PaperDollFrameTitlesDropdown）
+    local titlesDropdown = PaperDollFrameTitlesDropdown
+    if titlesDropdown then
+        -- 只隐藏暴雪背景纹理，不动位置、不动文字
+        local regions = {titlesDropdown:GetRegions()}
         for i = 1, table.getn(regions) do
             local region = regions[i]
             if region:GetObjectType() == "Texture" then
                 local name = region:GetName()
-                local texture = region:GetTexture()
-                local skip = false
-                if name then
-                    if string.find(name, "Icon") or string.find(name, "Portrait") or string.find(name, "Check") or string.find(name, "Highlight") then
-                        skip = true
-                    end
-                end
-                if texture and (string.find(texture, "Icon") or string.find(texture, "Portrait") or string.find(texture, "StatusBar")) then
-                    skip = true
-                end
-                if not skip then
-                    table.insert(hiddenRegionCache, region)
+                -- 保留文字（FontString不会进这里）和箭头按钮纹理
+                if not name or not string.find(name, "Button") then
+                    region:SetTexture(nil)
                 end
             end
         end
-        if depth < 2 then
-            local children = {frame:GetChildren()}
-            for i = 1, table.getn(children) do
-                BuildRegionCache(children[i], depth + 1)
-            end
-        end
-    end
 
-    local function HideAllCachedRegions()
-        for i = 1, table.getn(hiddenRegionCache) do
-            hiddenRegionCache[i]:Hide()
-        end
-    end
+        -- 缩短宽度
+        titlesDropdown:SetWidth(180)
 
-    -- ArenaFrame 团队框架美化（只执行一次）
-    local function SkinArenaTeams()
-        if not ArenaFrame then return end
-        for i = 1, 3 do
-            local team = getglobal("ArenaFrameTeam" .. i)
-            if team and not team._dfSkinned then
-                HideBlizzardTextures(team)
-                team:SetBackdrop({
-                    bgFile = "Interface\\Buttons\\WHITE8X8",
-                    edgeFile = "Interface\\Buttons\\WHITE8X8",
-                    edgeSize = 1,
-                })
-                team:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-                team:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
-                team._dfSkinned = true
-            end
+        -- 重新定位箭头按钮到框体内
+        local titleBtn = PaperDollFrameTitlesDropdownButton
+        if titleBtn then
+            titleBtn:ClearAllPoints()
+            titleBtn:SetPoint("RIGHT", titlesDropdown, "RIGHT", -18, 2)
         end
-    end
 
-    -- 统一入口：构建缓存 + 隐藏所有暴雪纹理 + DisableDrawLayer
-    local function StripHonorSystem()
-        if not cacheBuilt then
-            BuildRegionCache(HonorFrame)
-            if ArenaFrame then
-                BuildRegionCache(ArenaFrame, 1) -- depth=1: 只缓存自身+子框架，不递归孙框架（保护团队内容）
-            end
-            -- Tab 按钮的纹理也缓存
-            BuildRegionCache(HonorFrameTab1, 2)
-            BuildRegionCache(HonorFrameTab2, 2)
-            cacheBuilt = true
+        -- 重新定位称号文字到框体内
+        local titleText = PaperDollFrameTitlesDropdownText
+        if titleText then
+            titleText:ClearAllPoints()
+            titleText:SetPoint("LEFT", titlesDropdown, "LEFT", 24, 2)
+            titleText:SetPoint("RIGHT", titleBtn or titlesDropdown, "LEFT", -4, 0)
         end
-        HideAllCachedRegions()
-        if HonorFrame then HonorFrame:DisableDrawLayer("BACKGROUND") end
-        if ArenaFrame then ArenaFrame:DisableDrawLayer("BACKGROUND") end
-        SkinArenaTeams()
-    end
 
-    -- 技能 Tab："全部"按钮
-    if SkillFrameExpandButtonFrame then
-        SkillFrameExpandButtonFrame:DisableDrawLayer("BACKGROUND")
-    end
-    HideBlizzardTextures(SkillFrameCollapseAllButton)
-
-    -- 称号下拉框（Turtle WoW 自定义）
-    if CharacterTitleDropDown then
-        HideBlizzardTextures(CharacterTitleDropDown)
-        for _, suffix in ipairs({"Left", "Middle", "Right"}) do
-            local tex = getglobal("CharacterTitleDropDown" .. suffix)
-            if tex then tex:Hide() end
-        end
+        -- 暗色背景框，和面板岩石背景融合
+        local titleBg = CreateFrame("Frame", nil, titlesDropdown)
+        titleBg:SetPoint("TOPLEFT", titlesDropdown, "TOPLEFT", 16, 0)
+        titleBg:SetPoint("BOTTOMRIGHT", titlesDropdown, "BOTTOMRIGHT", -16, 4)
+        titleBg:SetFrameLevel(titlesDropdown:GetFrameLevel())
+        titleBg:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 10,
+            insets = {left = 2, right = 2, top = 2, bottom = 2},
+        })
+        titleBg:SetBackdropColor(0.06, 0.06, 0.06, 0.85)
+        titleBg:SetBackdropBorderColor(0.35, 0.32, 0.28, 0.7)
     end
 
     _G.PetTab_Update = function() end
@@ -175,20 +185,35 @@ DFUI:NewMod("Character", 5, function()
     closeButton:SetHeight(20)
     closeButton:SetFrameLevel(customBg:GetFrameLevel() + 3)
 
+    -- 荣誉 Tab 状态 + 子 Tab 前向声明
+    local honorTabActive = false
+    local honorSubTab1, honorSubTab2
+
+    -- 离开荣誉 Tab 时的清理
+    local function LeaveHonorTab()
+        honorTabActive = false
+        if honorSubTab1 then honorSubTab1:Hide() end
+        if honorSubTab2 then honorSubTab2:Hide() end
+        if ArenaFrame then ArenaFrame:Hide() end
+    end
+
     -- Tabs
     customBg:AddTab("角色", function()
+        LeaveHonorTab()
         characterBg:Show()
         CharacterFrame_ShowSubFrame("PaperDollFrame")
         PanelTemplates_SetTab(CharacterFrame, 1)
     end, 70)
 
     local petTab = customBg:AddTab("宠物", function()
+        LeaveHonorTab()
         characterBg:Hide()
         CharacterFrame_ShowSubFrame("PetPaperDollFrame")
         PanelTemplates_SetTab(CharacterFrame, 2)
     end, 55)
 
     customBg:AddTab("声望", function()
+        LeaveHonorTab()
         characterBg:Hide()
         CharacterFrame_ShowSubFrame("ReputationFrame")
         PanelTemplates_SetTab(CharacterFrame, 3)
@@ -211,76 +236,210 @@ DFUI:NewMod("Character", 5, function()
     end
 
     customBg:AddTab("技能", function()
+        LeaveHonorTab()
         characterBg:Hide()
         CharacterFrame_ShowSubFrame("SkillFrame")
         PanelTemplates_SetTab(CharacterFrame, 4)
     end, 55)
 
+    -- 荣誉 Tab：进入时默认显示荣誉子页
     customBg:AddTab("荣誉", function()
         characterBg:Hide()
+        honorTabActive = true
         CharacterFrame_ShowSubFrame("HonorFrame")
         PanelTemplates_SetTab(CharacterFrame, 5)
+        -- 默认显示荣誉子页
+        if ArenaFrame then ArenaFrame:Hide() end
+        HonorFrame:Show()
+        if honorSubTab1 then
+            honorSubTab1:SetSelected(true)
+            honorSubTab1:Show()
+        end
+        if honorSubTab2 then
+            honorSubTab2:SetSelected(false)
+            honorSubTab2:Show()
+        end
     end, 55)
 
-    -- 荣誉/竞技场子 Tab：原地美化 HonorFrameTab1/Tab2
-    local function SkinHonorSubTab(tab)
-        if not tab then return end
-        HideBlizzardTextures(tab)
-        tab:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = 1,
-        })
-        tab:SetBackdropColor(0.15, 0.15, 0.15, 0.8)
-        tab:SetBackdropBorderColor(0.5, 0.5, 0.5, 0.6)
-        tab:SetHeight(22)
-        -- 冻结尺寸+位置，阻止暴雪 PanelTemplates 修改任何布局属性
-        tab.SetHeight = function() end
-        tab.SetWidth = function() end
-        tab.ClearAllPoints = function() end
-        tab.SetPoint = function() end
-    end
-
-    local function UpdateHonorSubTabs()
-        -- 用 ArenaFrame 可见性作为唯一判据（最可靠）
-        local arenaShown = ArenaFrame and ArenaFrame:IsShown()
-        for i = 1, 2 do
-            local tab = getglobal("HonorFrameTab" .. i)
-            if tab then
-                local selected = (i == 1 and not arenaShown) or (i == 2 and arenaShown)
-                if selected then
-                    tab:SetBackdropColor(0.25, 0.25, 0.25, 0.9)
-                    tab:SetBackdropBorderColor(0.6, 0.6, 0.6, 0.8)
-                else
-                    tab:SetBackdropColor(0.12, 0.12, 0.12, 0.7)
-                    tab:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.5)
-                end
-            end
+    -- 隐藏暴雪原生子 Tab（HonorFrame + ArenaFrame 各有一组）
+    local blizzTabs = {HonorFrameTab1, HonorFrameTab2, ArenaFrameTab1, ArenaFrameTab2}
+    for _, tab in ipairs(blizzTabs) do
+        if tab then
+            tab:Hide()
+            tab:SetScript("OnShow", function() this:Hide() end)
         end
     end
 
-    -- 统一刷新：缓存隐藏 + Tab 样式更新（所有 hook 共用）
-    local function RefreshHonorSkin()
-        StripHonorSystem()
-        UpdateHonorSubTabs()
+    -- 自定义荣誉/竞技场子 Tab（缩小版金属 Tab，与主 Tab 同风格）
+    local tabsPath = TEX .. "interface\\uiframetabs.blp"
+    local function CreateSubTab(parent, text, tabWidth)
+        tabWidth = tabWidth or 55
+        local tab = CreateFrame("Button", nil, parent)
+        tab:SetWidth(tabWidth)
+        tab:SetHeight(24)
+
+        local edgeW = tabWidth / 2
+        local h = 28
+
+        -- 未选中态
+        local left = tab:CreateTexture(nil, "BACKGROUND")
+        left:SetTexture(tabsPath)
+        left:SetWidth(edgeW)
+        left:SetHeight(h)
+        left:SetPoint("TOPLEFT", tab, "TOPLEFT", -3, 0)
+        left:SetTexCoord(0.015625, 0.5625, 0.816406, 0.957031)
+
+        local right = tab:CreateTexture(nil, "BACKGROUND")
+        right:SetTexture(tabsPath)
+        right:SetWidth(edgeW)
+        right:SetHeight(h)
+        right:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 5, 0)
+        right:SetTexCoord(0.015625, 0.59375, 0.667969, 0.808594)
+
+        local middle = tab:CreateTexture(nil, "BACKGROUND")
+        middle:SetTexture(tabsPath)
+        middle:SetHeight(h)
+        middle:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
+        middle:SetPoint("TOPRIGHT", right, "TOPLEFT", 0, 0)
+        middle:SetTexCoord(0, 0.015625, 0.175781, 0.316406)
+
+        -- 选中态
+        local selH = 30
+        local leftSel = tab:CreateTexture(nil, "BACKGROUND")
+        leftSel:SetTexture(tabsPath)
+        leftSel:SetWidth(edgeW)
+        leftSel:SetHeight(selH)
+        leftSel:SetPoint("TOPLEFT", tab, "TOPLEFT", -1, 0)
+        leftSel:SetTexCoord(0.015625, 0.5625, 0.496094, 0.660156)
+        leftSel:Hide()
+
+        local rightSel = tab:CreateTexture(nil, "BACKGROUND")
+        rightSel:SetTexture(tabsPath)
+        rightSel:SetWidth(edgeW)
+        rightSel:SetHeight(selH)
+        rightSel:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 6, 0)
+        rightSel:SetTexCoord(0.015625, 0.59375, 0.324219, 0.488281)
+        rightSel:Hide()
+
+        local middleSel = tab:CreateTexture(nil, "BACKGROUND")
+        middleSel:SetTexture(tabsPath)
+        middleSel:SetHeight(selH)
+        middleSel:SetPoint("TOPLEFT", leftSel, "TOPRIGHT", 0, 0)
+        middleSel:SetPoint("TOPRIGHT", rightSel, "TOPLEFT", 0, 0)
+        middleSel:SetTexCoord(0, 0.015625, 0.00390625, 0.167969)
+        middleSel:Hide()
+
+        -- 高亮（鼠标悬停）
+        local hlLeft = tab:CreateTexture(nil, "HIGHLIGHT")
+        hlLeft:SetTexture(tabsPath)
+        hlLeft:SetWidth(edgeW)
+        hlLeft:SetHeight(h)
+        hlLeft:SetPoint("TOPLEFT", tab, "TOPLEFT", -3, 0)
+        hlLeft:SetTexCoord(0.015625, 0.5625, 0.816406, 0.957031)
+        hlLeft:SetBlendMode("ADD")
+        hlLeft:SetAlpha(0.4)
+
+        local hlRight = tab:CreateTexture(nil, "HIGHLIGHT")
+        hlRight:SetTexture(tabsPath)
+        hlRight:SetWidth(edgeW)
+        hlRight:SetHeight(h)
+        hlRight:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 5, 0)
+        hlRight:SetTexCoord(0.015625, 0.59375, 0.667969, 0.808594)
+        hlRight:SetBlendMode("ADD")
+        hlRight:SetAlpha(0.4)
+
+        local hlMiddle = tab:CreateTexture(nil, "HIGHLIGHT")
+        hlMiddle:SetTexture(tabsPath)
+        hlMiddle:SetHeight(h)
+        hlMiddle:SetPoint("TOPLEFT", hlLeft, "TOPRIGHT", 0, 0)
+        hlMiddle:SetPoint("TOPRIGHT", hlRight, "TOPLEFT", 0, 0)
+        hlMiddle:SetTexCoord(0, 0.015625, 0.175781, 0.316406)
+        hlMiddle:SetBlendMode("ADD")
+        hlMiddle:SetAlpha(0.4)
+
+        -- 文字
+        local label = tab:CreateFontString(nil, "BORDER", "GameFontNormalSmall")
+        label:SetPoint("CENTER", tab, "CENTER", 0, 2)
+        label:SetText(text)
+        tab._label = label
+
+        function tab:SetSelected(selected)
+            if selected then
+                left:Hide(); right:Hide(); middle:Hide()
+                leftSel:Show(); rightSel:Show(); middleSel:Show()
+                hlLeft:SetHeight(selH); hlRight:SetHeight(selH); hlMiddle:SetHeight(selH)
+                label:SetTextColor(1, 1, 1)
+            else
+                left:Show(); right:Show(); middle:Show()
+                leftSel:Hide(); rightSel:Hide(); middleSel:Hide()
+                hlLeft:SetHeight(h); hlRight:SetHeight(h); hlMiddle:SetHeight(h)
+                label:SetTextColor(1, 0.82, 0)
+            end
+        end
+
+        return tab
     end
 
-    SkinHonorSubTab(HonorFrameTab1)
-    SkinHonorSubTab(HonorFrameTab2)
+    honorSubTab1 = CreateSubTab(customBg, "荣誉", 50)
+    honorSubTab1:SetPoint("TOPLEFT", customBg, "TOPLEFT", 55, -28)
+    honorSubTab1:SetFrameLevel(customBg:GetFrameLevel() + 2)
+    honorSubTab1:SetSelected(true)
 
-    -- Hook：Tab 点击 + HonorFrame/ArenaFrame 显示，统一调用 RefreshHonorSkin
-    if HonorFrameTab1 then
-        HookScript(HonorFrameTab1, "OnClick", RefreshHonorSkin)
+    honorSubTab2 = CreateSubTab(customBg, "竞技场", 55)
+    honorSubTab2:SetPoint("LEFT", honorSubTab1, "RIGHT", 2, 0)
+    honorSubTab2:SetFrameLevel(customBg:GetFrameLevel() + 2)
+
+    -- 子 Tab 只在荣誉主 Tab 选中时显示
+    honorSubTab1:Hide()
+    honorSubTab2:Hide()
+
+    local function ShowHonorSubTabs()
+        honorSubTab1:Show()
+        honorSubTab2:Show()
     end
-    if HonorFrameTab2 then
-        HookScript(HonorFrameTab2, "OnClick", RefreshHonorSkin)
-    end
-    HookScript(HonorFrame, "OnShow", RefreshHonorSkin)
+
+    honorSubTab1:SetScript("OnClick", function()
+        PlaySound("igCharacterInfoTab")
+        if ArenaFrame then ArenaFrame:Hide() end
+        HonorFrame:Show()
+        honorSubTab1:SetSelected(true)
+        honorSubTab2:SetSelected(false)
+        ShowHonorSubTabs()
+    end)
+
+    honorSubTab2:SetScript("OnClick", function()
+        PlaySound("igCharacterInfoTab")
+        HonorFrame:Hide()
+        if ArenaFrame then ArenaFrame:Show() end
+        honorSubTab1:SetSelected(false)
+        honorSubTab2:SetSelected(true)
+        ShowHonorSubTabs()
+    end)
+
+    -- 荣誉纹理清理：首次显示时执行
+    local honorSkinned = false
+    HookScript(HonorFrame, "OnShow", function()
+        if not honorSkinned then
+            StripHonorAndArena()
+            honorSkinned = true
+        end
+        if honorTabActive then
+            ShowHonorSubTabs()
+        end
+    end)
+
+    -- 竞技场首次显示时也清理纹理
     if ArenaFrame then
-        HookScript(ArenaFrame, "OnShow", RefreshHonorSkin)
-        HookScript(ArenaFrame, "OnHide", RefreshHonorSkin)
+        HookScript(ArenaFrame, "OnShow", function()
+            if not honorSkinned then
+                StripHonorAndArena()
+                honorSkinned = true
+            end
+            if honorTabActive then
+                ShowHonorSubTabs()
+            end
+        end)
     end
-    RefreshHonorSkin()
 
     -- 宠物 Tab 动态
     customBg:RegisterEvent("PET_UI_UPDATE")

@@ -1,6 +1,6 @@
 # 面板美化实施进度
 
-> 最后更新：2026-04-06（竞技场修复进行中）
+> 最后更新：2026-04-06（角色面板细节美化完成）
 
 ## 一、已完成的面板（12 个）
 
@@ -42,81 +42,62 @@
 - **原因**：选中态用 45px 纹理替代 36px 普通纹理
 - **修复**：改为 39px，保留微妙的选中效果但不过分凸出（可通过 `selHeight` 变量调整）
 
-## 三、角色面板细节优化（进行中）
+## 三、角色面板细节优化（已完成）
 
 ### 已完成
 
 | 元素 | 状态 | 说明 |
 |------|------|------|
-| **技能 Tab "全部"按钮** | ✅ 完成 | `SkillFrameExpandButtonFrame` DisableDrawLayer + `SkillFrameCollapseAllButton` 隐藏纹理 |
-| **称号下拉框** | ✅ 完成 | `CharacterTitleDropDown` + Left/Middle/Right 隐藏纹理（Turtle WoW 自定义框架） |
-| **荣誉 Tab 按钮** | ✅ 完成 | `HonorFrameTab1`/`Tab2` 暴雪纹理已隐藏 + HookScript 防止 Tab 切换后纹理恢复 |
-| **荣誉系统性能优化** | ✅ 完成 | Region 缓存系统：首次扫描记录引用，后续直接 Hide()；统一 RefreshHonorSkin 入口消除冗余调用 |
-| **ArenaFrame OnShow/OnHide Hook** | ✅ 完成 | 直接 Hook ArenaFrame 显隐事件触发美化，Tab 选中态用 ArenaFrame:IsShown() 作唯一判据 |
+| **荣誉/竞技场子 Tab** | ✅ v2 重写 | 自定义子Tab替代暴雪原生Tab，金属纹理（uiframetabs.blp）缩小版，彻底避免 PanelTemplates 冲突 |
+| **竞技场页面美化** | ✅ 完成 | ArenaFrameTeam1-3 SetBackdrop 美化 |
+| **暴雪残留 Tab 隐藏** | ✅ 完成 | HonorFrameTab1/2 + ArenaFrameTab1/2 四个全部隐藏+阻止重显 |
+| **技能 Tab "全部"按钮** | ✅ 完成 | `SkillFrameExpandButtonFrame` 金属Tab纹理背景（uiframetabs.blp） |
+| **称号下拉框** | ✅ 完成 | `PaperDollFrameTitlesDropdown` 暗色圆角背景框（180px）+ 箭头/文字重定位 |
 
-### 待解决
+#### 最终实现方案
 
-| 问题 | 状态 | 说明 |
+```
+荣誉/竞技场子Tab系统：
+  - 隐藏暴雪4个原生Tab（HonorFrameTab1/2 + ArenaFrameTab1/2）
+  - CreateSubTab() 工厂函数：缩小版金属Tab（uiframetabs.blp，24px高）
+  - honorSubTab1（荣誉）: ArenaFrame:Hide() + HonorFrame:Show()
+  - honorSubTab2（竞技场）: HonorFrame:Hide() + ArenaFrame:Show()
+  - honorTabActive 标记控制子Tab只在荣誉主Tab选中时显示
+  - LeaveHonorTab() 在切到其他主Tab时统一清理
+
+纹理清理（StripHonorAndArena）：
+  - 一次性执行（honorSkinned 标记）
+  - HideBlizzardTextures(HonorFrame) + HideBlizzardTextures(ArenaFrame)
+  - ArenaFrameTeam1-3 用 SetBackdrop 美化（_dfSkinned 标记）
+
+称号下拉框（PaperDollFrameTitlesDropdown）：
+  - 注意：Turtle WoW 用的是 PaperDollFrameTitlesDropdown，不是 CharacterTitleDropDown
+  - SetTexture(nil) 清除背景纹理，保留文字和箭头
+  - SetWidth(180) 缩短宽度
+  - 箭头按钮和文字需 ClearAllPoints 重新锚定到新宽度内
+  - 暗色圆角背景框（UI-Tooltip-Border, 深灰底+暖棕边框）
+
+经验教训：
+  - 不要盲猜暴雪控件名，用 pfUI-SkinDiag dump 数据确认实际名称
+  - 缩小控件宽度后必须重定位子元素（按钮/文字），否则会溢出
+  - 下拉框不适合用金属Tab纹理，简洁的暗色圆角边框更搭配
+  - 不要随意 ClearAllPoints + SetPoint 移动整个控件位置，容易破坏布局
+```
+
+## 四、已尝试但撤回的方案
+
+| 方案 | 原因 | 教训 |
 |------|------|------|
-| **竞技场页面美化** | 🔧 待验证 | ArenaFrame 已定位，子 Tab + 团队框架美化方案已实现 + 缓存优化已完成，待游戏内验证 |
+| **滚动条箭头统一** | page_up/down_*.tga 纹理直接替换暴雪滚动条箭头，效果极差 | 动作条翻页箭头纹理不适合用于滚动条小按钮，尺寸和风格完全不同。需要专门为滚动条设计的箭头纹理或方案 |
 
-#### 竞技场页面排查记录
+### 待解决：滚动条/箭头统一
 
-1. HonorFrame 有 17 个子框架，包括 `HonorFrameTab1`（荣誉）和 `HonorFrameTab2`（竞技场）
-2. Tab2 是 Button 类型，有 OnClick；Tab1 无 OnClick（默认选中）
-3. 点击 Tab2 后所有 17 个子框架仍然 `show=1`
-4. HonorFrame 可见纹理只有 1 个（`UI-PVP-Alliance` 阵营图标）
+面板内的滚动条箭头（技能、声望、任务日志、社交等）仍为暴雪默认风格，与 DF 金属面板不搭配。需要重新设计方案：
+- 不能直接复用 page_up/down 纹理（太大、风格不对）
+- 可能需要参考 pfUI 的 SkinScrollbar/SkinArrowButton 做法（创建小方块+简洁箭头）
+- 或者寻找/制作专用的滚动条箭头纹理
 
-#### Dump 结果（已完成）
-
-通过 `/script` dump `CharacterFrame:GetChildren()` 得到 15 个子框架：
-
-| # | 框架名 | 状态 |
-|---|--------|------|
-| 1 | CharacterNameFrame | show |
-| 2 | CharacterFrameCloseButton | hide |
-| 3-7 | CharacterFrameTab1-5 | hide |
-| 8 | PaperDollFrame | show |
-| 9 | PetPaperDollFrame | hide |
-| 10 | SkillFrame | hide |
-| 11 | ReputationFrame | hide |
-| 12 | HonorFrame | hide |
-| **13** | **ArenaFrame** | **hide** |
-| 14 | DFUI_CharacterBg | show |
-| 15 | unnamed | hide |
-
-**关键发现**：竞技场内容框架是 `ArenaFrame`，是 CharacterFrame 的直接子框架（不是 HonorFrame 的子框架）。之前全局搜索 "Arena" 未匹配是因为搜索范围限制。
-
-#### 已修复的问题
-
-| 问题 | 原因 | 修复方案 |
-|------|------|---------|
-| **暴雪原生背景残留** | 初始纹理隐藏只匹配 `UI-Character-`/`PaperDoll`，不匹配 PVP 纹理 | `StripFrameRecursive(HonorFrame)` + `SkinArenaFrame()` 递归清除 |
-| **子 Tab 超出框体** | 自定义按钮锚定到 `customBg TOPLEFT(60,-60)` 与 HonorFrame 内容重叠 | 改为原地美化原生 `HonorFrameTab1`/`Tab2`（`SetBackdrop` + 覆盖 `SetHeight`） |
-| **团队框架内容消失** | `DisableDrawLayer("BACKGROUND")` 后在同层创建纹理 + 对子框架 `HideBlizzardTextures` 过于激进 | 改用 `SetBackdrop` 美化团队框架，不再 `DisableDrawLayer`，不再清除子框架 |
-| **选中 Tab 凸起** | 暴雪 Tab 选中时改变高度 | 覆盖 `tab.SetHeight = function() end` |
-
-#### 当前实现方案（优化后）
-
-```
-缓存系统（StripHonorSystem）：
-  - 首次调用：BuildRegionCache 递归扫描 HonorFrame/ArenaFrame/Tab 的所有纹理
-    - HonorFrame: depth=2（完整递归）
-    - ArenaFrame: depth=1（只到子框架，保护团队内容）
-    - Tab1/Tab2: depth=2
-  - 后续调用：HideAllCachedRegions 直接遍历缓存引用 Hide()，跳过字符串匹配
-  - SkinArenaTeams 用 _dfSkinned 标记只执行一次
-
-统一入口（RefreshHonorSkin）：
-  - = StripHonorSystem() + UpdateHonorSubTabs()
-  - 所有 Hook 共用：Tab1 OnClick / Tab2 OnClick / HonorFrame OnShow / ArenaFrame OnShow / ArenaFrame OnHide
-
-Tab 选中态（UpdateHonorSubTabs）：
-  - 唯一判据：ArenaFrame:IsShown()
-  - 不再依赖 PanelTemplates_GetSelectedTab 或 HonorFrame.selectedTab
-```
-
-## 四、未实施的面板
+## 五、未实施的面板
 
 | 面板 | 复杂度 | 说明 |
 |------|--------|------|
