@@ -29,7 +29,10 @@ DFUI:NewMod("pfQuestIntegration", 1, function()
     }
 
     for i, def in ipairs(btnDefs) do
+        local myDef = def
+        local myBtn
         local btn = CreateFrame("Button", "DFUI_pfQuest_" .. i, Minimap)
+        myBtn = btn
         btn:SetWidth(16)
         btn:SetHeight(16)
         btn:SetPoint("BOTTOMLEFT", Minimap, "BOTTOMLEFT", (i - 1) * 20 + 5, -20)
@@ -37,18 +40,18 @@ DFUI:NewMod("pfQuestIntegration", 1, function()
 
         local tex = btn:CreateTexture(nil, "ARTWORK")
         tex:SetAllPoints(btn)
-        tex:SetTexture(def.icon)
+        tex:SetTexture(myDef.icon)
         btn.tex = tex
 
         local hl = btn:CreateTexture(nil, "HIGHLIGHT")
         hl:SetAllPoints(btn)
-        hl:SetTexture(def.icon)
+        hl:SetTexture(myDef.icon)
         hl:SetBlendMode("ADD")
 
-        btn:SetScript("OnClick", def.click)
+        btn:SetScript("OnClick", myDef.click)
         btn:SetScript("OnEnter", function()
-            GameTooltip:SetOwner(btn, "ANCHOR_BOTTOMLEFT")
-            GameTooltip:SetText(def.tip, 1, 1, 1)
+            GameTooltip:SetOwner(myBtn, "ANCHOR_BOTTOMLEFT")
+            GameTooltip:SetText(myDef.tip, 1, 1, 1)
             GameTooltip:Show()
         end)
         btn:SetScript("OnLeave", function() GameTooltip:Hide() end)

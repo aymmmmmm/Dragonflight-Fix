@@ -337,12 +337,12 @@ DFUI:NewMod("Gui-base", 2, function()
         self.targetScroll = 0
         self.currentScroll = 0
         self.scrollFrame:Show()
-        if tabIndex == 1 or tabIndex == 3 or tabIndex == 4 then
+        if tabIndex == 1 or tabIndex == 3 then
             self.slider:Hide()
         else
             self.slider:Show()
         end
-        if tabIndex ~= 1 then
+        if tabIndex ~= 1 and tabIndex ~= 4 then
             self.panelTitle:SetText(self.tabs[tabIndex])
         else
             self.panelTitle:SetText("")
