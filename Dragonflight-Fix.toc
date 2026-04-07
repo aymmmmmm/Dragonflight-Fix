@@ -43,6 +43,7 @@ modules\menu\addons.lua
 modules\micro\micro.lua
 modules\frames\frames.lua
 modules\panels\paperdoll.lua
+modules\panels\scrollbar.lua
 modules\panels\bank.lua
 modules\panels\character.lua
 modules\panels\merchant.lua

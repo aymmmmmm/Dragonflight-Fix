@@ -98,6 +98,7 @@ DFUI:NewMod("Gui-elem", 3, function()
             ["Trainer"] = {10, 15},
             ["DressUp"] = {10, 16},
             ["Help"]    = {10, 17},
+            ["Scrollbar"] = {10, 18},
             ["Auras"]   = {14, 6},
         },
 

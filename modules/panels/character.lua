@@ -484,7 +484,6 @@ DFUI:NewMod("Character", 5, function()
     end
 
     -- 装备品质边框
-    local highlightTex = TEX .. "actionbars\\uiactionbariconframehighlight.tga"
     local slots = {"Head", "Neck", "Shoulder", "Shirt", "Chest", "Waist", "Legs", "Feet", "Wrist", "Hands", "Finger0", "Finger1", "Trinket0", "Trinket1", "Back", "MainHand", "SecondaryHand", "Ranged", "Tabard", "Ammo"}
     local slotButtons = {}
 
@@ -494,13 +493,6 @@ DFUI:NewMod("Character", 5, function()
             table.insert(slotButtons, button)
             local icon = getglobal("Character" .. slot .. "SlotIconTexture")
             if icon then
-                local hl = button:CreateTexture(nil, "HIGHLIGHT")
-                hl:SetPoint("TOPLEFT", icon, "TOPLEFT", -6, 6)
-                hl:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 6, -6)
-                hl:SetTexture(highlightTex)
-                hl:SetBlendMode("ADD")
-                button:SetHighlightTexture(hl)
-
                 button.qualityBorder = CreateFrame("Frame", nil, button)
                 button.qualityBorder:SetAllPoints(icon)
                 button.qualityBorderTex = button.qualityBorder:CreateTexture(nil, "OVERLAY")
