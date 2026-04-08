@@ -28,13 +28,18 @@ DFUI:NewMod("Scrollbar", 6, function()
 
     -------------------------------------------------------
     -- 箭头按钮换肤
-    -- 用两条斜线形成 chevron (∧ / ∨)
+    -- 替换为 ChatIcon 下拉箭头纹理 + 青铜着色
     -------------------------------------------------------
+    local ARROW_NORMAL   = "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up"
+    local ARROW_PUSHED   = "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Down"
+    local ARROW_DISABLED = "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Disabled"
+    local ARROW_HILIGHT  = "Interface\\Buttons\\UI-Common-MouseHilight"
+
     local function SkinArrowButton(button, direction)
         if not button or button._dfScrollSkinned then return end
         button._dfScrollSkinned = true
 
-        -- 隐藏所有暴雪纹理
+        -- 清理原生按钮的所有残留纹理
         local regions = {button:GetRegions()}
         for i = 1, table.getn(regions) do
             local region = regions[i]
@@ -43,66 +48,44 @@ DFUI:NewMod("Scrollbar", 6, function()
                 region:Hide()
             end
         end
-        button:SetNormalTexture("")
-        button:SetPushedTexture("")
-        button:SetHighlightTexture("")
-        if button.SetDisabledTexture then
-            button:SetDisabledTexture("")
-        end
 
-        -- 尺寸
-        button:SetWidth(16)
-        button:SetHeight(16)
+        button:SetWidth(24)
+        button:SetHeight(24)
 
-        -- 暗色背景
-        button:SetBackdrop(trackBackdrop)
-        button:SetBackdropColor(TRACK_BG[1], TRACK_BG[2], TRACK_BG[3], 0.7)
-        button:SetBackdropBorderColor(BORDER_WARM[1], BORDER_WARM[2], BORDER_WARM[3], 0.4)
-
-        -- chevron 指示器：用两条短斜线模拟 ∧ 或 ∨
-        -- 左斜线 + 右斜线，通过位置偏移形成 V 形
-        local lineL = button:CreateTexture(nil, "ARTWORK")
-        lineL:SetTexture(WHITE8X8)
-        lineL:SetWidth(4)
-        lineL:SetHeight(1)
-        lineL:SetVertexColor(BRONZE[1], BRONZE[2], BRONZE[3], 0.9)
-
-        local lineR = button:CreateTexture(nil, "ARTWORK")
-        lineR:SetTexture(WHITE8X8)
-        lineR:SetWidth(4)
-        lineR:SetHeight(1)
-        lineR:SetVertexColor(BRONZE[1], BRONZE[2], BRONZE[3], 0.9)
-
+        -- 翻转坐标：up 箭头垂直翻转，down 箭头正常
+        local L, R, T, B
         if direction == "up" then
-            -- ∧ 形：左线偏左下，右线偏右下
-            lineL:SetPoint("CENTER", button, "CENTER", -2, 1)
-            lineR:SetPoint("CENTER", button, "CENTER", 2, 1)
+            L, R, T, B = 0, 1, 1, 0
         else
-            -- ∨ 形：左线偏左上，右线偏右上
-            lineL:SetPoint("CENTER", button, "CENTER", -2, -1)
-            lineR:SetPoint("CENTER", button, "CENTER", 2, -1)
+            L, R, T, B = 0, 1, 0, 1
         end
 
-        button._dfLineL = lineL
-        button._dfLineR = lineR
+        -- 替换纹理
+        button:SetNormalTexture(ARROW_NORMAL)
+        button:SetPushedTexture(ARROW_PUSHED)
+        button:SetHighlightTexture(ARROW_HILIGHT)
+        if button.SetDisabledTexture then
+            button:SetDisabledTexture(ARROW_DISABLED)
+        end
 
-        -- 禁用状态监测
-        local lastState
-        local monitor = CreateFrame("Frame", nil, button)
-        monitor:SetScript("OnUpdate", function()
-            local enabled = button:IsEnabled()
-            if lastState == enabled then return end
-            lastState = enabled
-            if enabled > 0 then
-                lineL:SetVertexColor(BRONZE[1], BRONZE[2], BRONZE[3], 0.9)
-                lineR:SetVertexColor(BRONZE[1], BRONZE[2], BRONZE[3], 0.9)
-                button:SetBackdropBorderColor(BORDER_WARM[1], BORDER_WARM[2], BORDER_WARM[3], 0.4)
-            else
-                lineL:SetVertexColor(BRONZE_DIM[1], BRONZE_DIM[2], BRONZE_DIM[3], 0.5)
-                lineR:SetVertexColor(BRONZE_DIM[1], BRONZE_DIM[2], BRONZE_DIM[3], 0.5)
-                button:SetBackdropBorderColor(BORDER_WARM[1], BORDER_WARM[2], BORDER_WARM[3], 0.2)
-            end
-        end)
+        -- 设置 TexCoord 和着色
+        local normal = button:GetNormalTexture()
+        local pushed = button:GetPushedTexture()
+        local disabled = button:GetDisabledTexture()
+        local highlight = button:GetHighlightTexture()
+
+        if normal then
+            normal:SetTexCoord(L, R, T, B)
+        end
+        if pushed then
+            pushed:SetTexCoord(L, R, T, B)
+        end
+        if disabled then
+            disabled:SetTexCoord(L, R, T, B)
+        end
+        if highlight then
+            highlight:SetTexCoord(L, R, T, B)
+        end
     end
 
     -------------------------------------------------------
@@ -119,41 +102,9 @@ DFUI:NewMod("Scrollbar", 6, function()
         local down = _G[name .. "ScrollDownButton"]
         local thumb = scrollbar:GetThumbTexture()
 
-        -- 隐藏滚动条自身的暴雪轨道纹理
-        local regions = {scrollbar:GetRegions()}
-        for i = 1, table.getn(regions) do
-            local region = regions[i]
-            if region and region:GetObjectType() == "Texture" then
-                region:SetTexture(nil)
-                region:Hide()
-            end
-        end
-
-        -- 换肤箭头按钮
+        -- 换肤箭头按钮（轨道和滑块保留暴雪原生样式）
         SkinArrowButton(up, "up")
         SkinArrowButton(down, "down")
-
-        -- 轨道背景（凹陷暗色条）
-        if up and down then
-            local track = CreateFrame("Frame", nil, scrollbar)
-            track:SetPoint("TOPLEFT", up, "BOTTOMLEFT", 0, -2)
-            track:SetPoint("BOTTOMRIGHT", down, "TOPRIGHT", 0, 2)
-            track:SetBackdrop(trackBackdrop)
-            track:SetBackdropColor(TRACK_BG[1], TRACK_BG[2], TRACK_BG[3], 0.6)
-            track:SetBackdropBorderColor(BORDER_WARM[1], BORDER_WARM[2], BORDER_WARM[3], 0.25)
-            scrollbar._dfTrack = track
-        end
-
-        -- 青铜色滑块（锚定到原 thumb 位置）
-        if thumb then
-            thumb:SetTexture(nil)
-            local newThumb = scrollbar:CreateTexture(nil, "OVERLAY")
-            newThumb:SetTexture(WHITE8X8)
-            newThumb:SetVertexColor(BRONZE[1], BRONZE[2], BRONZE[3], 0.8)
-            newThumb:SetPoint("TOPLEFT", thumb, "TOPLEFT", 2, -2)
-            newThumb:SetPoint("BOTTOMRIGHT", thumb, "BOTTOMRIGHT", -2, 2)
-            scrollbar._dfThumb = newThumb
-        end
     end
 
     -------------------------------------------------------

@@ -469,11 +469,11 @@ DFUI:NewMod("Character", 5, function()
             elseif tab == "PetPaperDollFrame" and hasPet then
                 tabIndex = 2
             elseif tab == "ReputationFrame" then
-                tabIndex = hasPet and 3 or 2
+                tabIndex = 3
             elseif tab == "SkillFrame" then
-                tabIndex = hasPet and 4 or 3
+                tabIndex = 4
             elseif tab == "HonorFrame" then
-                tabIndex = hasPet and 5 or 4
+                tabIndex = 5
             end
 
             local selectedTab = customBg.Tabs[tabIndex]
