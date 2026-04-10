@@ -56,6 +56,11 @@ modules\panels\trade.lua
 modules\panels\trainer.lua
 modules\panels\dressup.lua
 modules\panels\help.lua
+modules\panels\openmail.lua
+modules\panels\inspect.lua
+modules\panels\macro.lua
+modules\panels\spellbook.lua
+modules\panels\keybinding.lua
 modules\ui\ui.lua
 modules\ui\tooltip.lua
 modules\ui\talents.lua

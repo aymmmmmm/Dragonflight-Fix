@@ -39,16 +39,6 @@ DFUI:NewMod("Scrollbar", 6, function()
         if not button or button._dfScrollSkinned then return end
         button._dfScrollSkinned = true
 
-        -- 清理原生按钮的所有残留纹理
-        local regions = {button:GetRegions()}
-        for i = 1, table.getn(regions) do
-            local region = regions[i]
-            if region and region:GetObjectType() == "Texture" then
-                region:SetTexture(nil)
-                region:Hide()
-            end
-        end
-
         button:SetWidth(24)
         button:SetHeight(24)
 

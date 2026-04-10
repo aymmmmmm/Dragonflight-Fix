@@ -257,60 +257,33 @@ DFUI:NewMod("Talents", 1, function()
         frame:SetFrameStrata('HIGH')
         frame:EnableMouse(true)
         frame:SetPoint('CENTER', UIParent, 'CENTER', 0, 0)
-        frame:SetBackdrop({
-            bgFile = 'Interface\\DialogFrame\\UI-DialogBox-Background',
-        })
-        frame:SetBackdropColor(0, 0, 0, 1)
         frame:EnableMouse(true)
         frame:SetMovable(true)
         frame:SetClampedToScreen(true)
         frame:SetScript("OnMouseDown", function() this:StartMoving() end)
         frame:SetScript("OnMouseUp", function() this:StopMovingOrSizing() end)
 
-        local leftHeader = frame:CreateTexture(nil, 'ARTWORK')
-        leftHeader:SetTexture('Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\ui\\top_ui_header_left.tga')
-        leftHeader:SetWidth(50)
-        leftHeader:SetHeight(50)
-        leftHeader:SetPoint('BOTTOMRIGHT', frame, 'TOPLEFT', 33, -10)
+        -- DF 金属边框（同时作为唯一背景）
+        local metalBg = DFUI.CreatePaperDollFrame("DFUI_TalentBg", frame, 1020, 600, 2)
+        metalBg:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+        metalBg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+        metalBg:SetFrameLevel(frame:GetFrameLevel() - 1)
+        -- 岩石背景偏暗以衬托天赋树
+        metalBg.Bg:SetVertexColor(0.35, 0.30, 0.25)
 
-        local rightHeader = frame:CreateTexture(nil, 'ARTWORK')
-        rightHeader:SetTexture('Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\ui\\top_ui_header_right.tga')
-        rightHeader:SetWidth(50)
-        rightHeader:SetHeight(50)
-        rightHeader:SetPoint('BOTTOMLEFT', frame, 'TOPRIGHT', -33, -11)
-
-        for i = 1, 5 do
-            local layer = i == 5 and 'BACKGROUND' or 'ARTWORK'
-            local middleHeader = frame:CreateTexture(nil, layer)
-            middleHeader:SetTexture('Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\ui\\top_ui_header.tga')
-            middleHeader:SetWidth(240)
-            middleHeader:SetHeight(50)
-            if i == 1 then
-                middleHeader:SetPoint('LEFT', leftHeader, 'RIGHT', -25, -1)
-            elseif i == 5 then
-                middleHeader:SetPoint('LEFT', frame['middleHeader' .. (i-1)], 'RIGHT', -140, 0)
-            else
-                middleHeader:SetPoint('LEFT', frame['middleHeader' .. (i-1)], 'RIGHT', -17, 0)
-            end
-            frame['middleHeader' .. i] = middleHeader
-        end
-
-        local closeButton = CreateFrame('Button', nil, frame)
-        closeButton:SetWidth(18)
-        closeButton:SetHeight(18)
-        closeButton:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -10, 25)
-        closeButton:SetNormalTexture('Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\ui\\close_normal.tga')
-        closeButton:SetPushedTexture('Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\ui\\close_pushed.tga')
-        closeButton:SetHighlightTexture('Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\ui\\close_normal.tga')
-        closeButton:SetScript('OnClick', function()
+        local closeButton = DFUI.CreateRedButton(frame, "close", function()
             pcall(PlaySound, "TalentScreenClose")
             frame:Hide()
             UpdateMicroButtons()
         end)
+        closeButton:SetPoint('TOPRIGHT', metalBg, 'TOPRIGHT', 0, -1)
+        closeButton:SetWidth(20)
+        closeButton:SetHeight(20)
+        closeButton:SetFrameLevel(frame:GetFrameLevel() + 3)
 
         local headerText = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
-        headerText:SetText('Talents')
-        headerText:SetPoint('TOP', frame, 'TOP', 0, 23)
+        headerText:SetText('天赋')
+        headerText:SetPoint('TOP', metalBg, 'TOP', 0, -3)
 
         local pointsLeft = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
         pointsLeft:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -10, 17)

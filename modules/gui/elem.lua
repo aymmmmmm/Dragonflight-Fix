@@ -99,6 +99,11 @@ DFUI:NewMod("Gui-elem", 3, function()
             ["DressUp"] = {10, 16},
             ["Help"]    = {10, 17},
             ["Scrollbar"] = {10, 18},
+            ["OpenMail"] = {10, 19},
+            ["Inspect"] = {10, 20},
+            ["Macros"] = {10, 21},
+            ["SpellBook"] = {10, 22},
+            ["KeyBinding"] = {10, 23},
             ["Auras"]   = {14, 6},
         },
 

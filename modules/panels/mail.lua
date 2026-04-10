@@ -25,7 +25,7 @@ DFUI:NewMod("Mail", 5, function()
     customBg:SetPoint("BOTTOMRIGHT", MailFrame, "BOTTOMRIGHT", -32, 75)
     customBg.Bg:SetDrawLayer("BACKGROUND", -1)
 
-    -- 保留邮件图标
+    -- 邮件图标放入头像框
     for i = 1, table.getn(regions) do
         local region = regions[i]
         if region:GetObjectType() == "Texture" then
@@ -33,6 +33,10 @@ DFUI:NewMod("Mail", 5, function()
             if texture and string.find(texture, "Mail%-Icon") then
                 region:SetParent(customBg)
                 region:SetDrawLayer("BORDER", 0)
+                region:ClearAllPoints()
+                region:SetPoint("CENTER", customBg, "TOPLEFT", 27, -23)
+                region:SetWidth(54)
+                region:SetHeight(54)
                 break
             end
         end

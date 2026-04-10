@@ -308,8 +308,8 @@ DFUI:NewMod("Orbs", 6, function()
     -- ================================================================
     local callbacks = {}
 
-    callbacks.orbScale = function(v) healthOrb:SetScale(v); manaOrb:SetScale(v) end
-    callbacks.orbAlpha = function(v) healthOrb:SetAlpha(v); manaOrb:SetAlpha(v) end
+    callbacks.orbScale = function(v) local s = v or 0.6; healthOrb:SetScale(s); manaOrb:SetScale(s) end
+    callbacks.orbAlpha = function(v) local a = v or 1; healthOrb:SetAlpha(a); manaOrb:SetAlpha(a) end
 
     callbacks.orbXOffset = function() RepositionOrbs() end
     callbacks.orbYOffset = function() RepositionOrbs() end
