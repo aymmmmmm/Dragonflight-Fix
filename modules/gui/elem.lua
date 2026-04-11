@@ -104,6 +104,7 @@ DFUI:NewMod("Gui-elem", 3, function()
             ["Macros"] = {10, 21},
             ["SpellBook"] = {10, 22},
             ["KeyBinding"] = {10, 23},
+            ["TradeSkill"] = {10, 24},
             ["Auras"]   = {14, 6},
         },
 
@@ -263,47 +264,111 @@ DFUI:NewMod("Gui-elem", 3, function()
             ["Orbs"]    = "血球/蓝球",
         }
 
+        -- card panel constants (matching superwow.lua / mods.lua style)
+        local PANEL_WIDTH = 680
+        local PANEL_INSET = 15
+        local PANEL_GAP = 12
+        local HEADER_AREA = 50   -- title(10) + desc(28) + sep(44) + pad to 50
+        local ITEM_SPACING = 50  -- per element row
+        local PANEL_PAD = 15     -- bottom padding
+
+        local function CreateCategoryPanel(parent, width, height)
+            local bg = CreateFrame("Frame", nil, parent)
+            bg:SetWidth(width)
+            bg:SetHeight(height)
+            bg:SetBackdrop({
+                bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                tile = true, tileSize = 16, edgeSize = 16,
+                insets = { left = 4, right = 4, top = 4, bottom = 4 }
+            })
+            bg:SetBackdropColor(0.10, 0.07, 0.03, 0.4)
+            bg:SetBackdropBorderColor(0.48, 0.33, 0.09, 0.3)
+            return bg
+        end
+
+        local function AddPanelHeader(catPanel, title, desc)
+            local titleFont = catPanel:CreateFontString(nil, "OVERLAY")
+            titleFont:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(16), "OUTLINE")
+            titleFont:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -10)
+            titleFont:SetText(title)
+            titleFont:SetTextColor(1, 0.82, 0)
+
+            if desc then
+                local descFont = catPanel:CreateFontString(nil, "OVERLAY")
+                descFont:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(11), "OUTLINE")
+                descFont:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET + 1, -28)
+                descFont:SetText(desc)
+                descFont:SetTextColor(0.54, 0.48, 0.35)
+            end
+
+            local sep = catPanel:CreateTexture(nil, "ARTWORK")
+            sep:SetTexture("Interface\\Buttons\\WHITE8X8")
+            sep:SetHeight(1)
+            sep:SetWidth(PANEL_WIDTH - 30)
+            sep:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -44)
+            sep:SetVertexColor(0.48, 0.33, 0.09, 0.25)
+        end
+
+        -- Dependency state helper (shared by all element types)
+        local function ApplyDependencyState(element, descLabel, extraDescLabel, dependencyEnabled, elementType)
+            if not dependencyEnabled then
+                if elementType == "checkbox" then
+                    if element and element.Disable then element:Disable() end
+                    if element and element.label then element.label:SetTextColor(0.5, 0.5, 0.5) end
+                elseif elementType == "slider" or elementType == "colour" then
+                    if element and element.Disable then
+                        element:Disable()
+                    elseif element then
+                        element.isDisabled = true
+                        element:EnableMouse(false)
+                        element:SetBackdropColor(0.5, 0.5, 0.5, 1)
+                        element:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+                        local t = element:GetThumbTexture()
+                        if t then t:SetVertexColor(0.5, 0.5, 0.5) end
+                    end
+                    if element and element.label then element.label:SetTextColor(0.5, 0.5, 0.5) end
+                    if element and element.valueText then element.valueText:SetTextColor(0.5, 0.5, 0.5) end
+                elseif elementType == "dropdown" then
+                    if element and element.Disable then element:Disable() end
+                    if element and element.text then element.text:SetTextColor(0.5, 0.5, 0.5) end
+                end
+                if descLabel then descLabel:SetTextColor(0.5, 0.5, 0.5) end
+                if extraDescLabel then extraDescLabel:SetTextColor(0.5, 0.5, 0.5) end
+            else
+                if elementType == "checkbox" then
+                    if element and element.Enable then element:Enable() end
+                    if element and element.label then element.label:SetTextColor(1, 1, 1) end
+                elseif elementType == "slider" or elementType == "colour" then
+                    if element and element.Enable then
+                        element:Enable()
+                    elseif element then
+                        element.isDisabled = false
+                        element:EnableMouse(true)
+                        element:SetBackdropColor(1, 1, 1, 1)
+                        element:SetBackdropBorderColor(1, 1, 1, 1)
+                        local t = element:GetThumbTexture()
+                        if t then t:SetVertexColor(1, 1, 1) end
+                    end
+                    if element and element.label then element.label:SetTextColor(1, 1, 1) end
+                    if element and element.valueText then element.valueText:SetTextColor(1, 1, 1) end
+                elseif elementType == "dropdown" then
+                    if element and element.Enable then element:Enable() end
+                    if element and element.text then element.text:SetTextColor(1, 1, 1) end
+                end
+                if descLabel then descLabel:SetTextColor(.9, .9, .9) end
+                if extraDescLabel then extraDescLabel:SetTextColor(1, 0.5, 0.5) end
+            end
+        end
+
         -- process each module in order
         for _, moduleInfo in ipairs(sortedModules) do
             local moduleName = moduleInfo.name
             local tabIndex = self.moduleMapping[moduleName][1]
             local scrollChild = Base.scrollChildren[tabIndex]
 
-
-
             if not self.tabPositions[tabIndex] then
                 self.tabPositions[tabIndex] = -10
-            end
-
-            local moduleKey = tabIndex .. "_" .. moduleName
-            if not self.moduleHeaders[moduleKey] then
-                self.moduleHeaders[moduleKey] = true
-
-                -- show module header for tabs with multiple modules (skip first module, panel title already shows it)
-                if (tabIndex == 6 or tabIndex == 14) and moduleInfo.order > 1 then
-                    local displayName = moduleDisplayNames[moduleName] or moduleName
-                    local yOffset = self.tabPositions[tabIndex]
-
-                    local headerFrame = CreateFrame("Frame", nil, scrollChild)
-                    headerFrame:SetWidth(400)
-                    headerFrame:SetHeight(20)
-                    headerFrame:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, yOffset - self.MODULE_TOP_SPACING)
-
-                    local headerText = headerFrame:CreateFontString(nil, "OVERLAY")
-                    headerText:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(16), "OUTLINE")
-                    headerText:SetPoint("LEFT", headerFrame, "LEFT", 0, 0)
-                    headerText:SetText(displayName)
-                    headerText:SetTextColor(1, 0.82, 0)
-
-                    local lineLeft = headerFrame:CreateTexture(nil, "ARTWORK")
-                    lineLeft:SetTexture("Interface\\Buttons\\WHITE8X8")
-                    lineLeft:SetHeight(1)
-                    lineLeft:SetPoint("LEFT", headerText, "RIGHT", 8, 0)
-                    lineLeft:SetPoint("RIGHT", headerFrame, "RIGHT", 0, 0)
-                    lineLeft:SetVertexColor(1, 0.82, 0, 0.3)
-
-                    self.tabPositions[tabIndex] = yOffset - self.MODULE_TOP_SPACING - 20
-                end
             end
 
             local sortedCategories = {}
@@ -316,23 +381,9 @@ DFUI:NewMod("Gui-elem", 3, function()
                 return aIndex < bIndex
             end)
 
-            for i, categoryInfo in ipairs(sortedCategories) do
+            for _, categoryInfo in ipairs(sortedCategories) do
                 local categoryKey = categoryInfo.key
                 local categoryData = categoryInfo.data
-
-                if i > 1 then
-                    self.tabPositions[tabIndex] = self.tabPositions[tabIndex] - self.HEADER_TOP_SPACING
-                end
-
-                local yOffset = self.tabPositions[tabIndex]
-
-                if not self.headers[categoryKey] then
-                    local header = DFUI.tools.CreateCategoryHeader(scrollChild, categoryData.category)
-                    header:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, yOffset - 25)
-                    self.headers[categoryKey] = header
-
-                    self.tabPositions[tabIndex] = yOffset - self.HEADER_BOTTOM_SPACING
-                end
 
                 local elements = moduleElements[moduleName][categoryKey] or {}
                 table.sort(elements, function(a, b)
@@ -341,336 +392,191 @@ DFUI:NewMod("Gui-elem", 3, function()
                     return aIndex < bIndex
                 end)
 
-                for _, element in ipairs(elements) do
-                    local elementName = element.name
-                    local data = element.data
-                    local elementModule = element.module
+                local elemCount = table.getn(elements)
+                if elemCount == 0 then
+                    -- skip empty categories
+                else
+                    -- calculate panel height
+                    local panelHeight = HEADER_AREA + elemCount * ITEM_SPACING + PANEL_PAD
 
-                    local currentValue = self:GetCache(elementModule, elementName)
-                    local dependencyEnabled = true
+                    -- create card panel
+                    local yPos = self.tabPositions[tabIndex]
 
-                    if data.dependency then
-                        local depValue = self:GetCache(elementModule, data.dependency)
-                        dependencyEnabled = depValue == true
+                    if not self.headers[categoryKey] then
+                        local displayName = moduleDisplayNames[moduleName] or moduleName
+                        local catTitle = categoryData.category or ""
+                        -- For multi-module tabs, prepend module name
+                        local panelTitle = catTitle
+                        if (tabIndex == 6 or tabIndex == 14) then
+                            local modDisplay = moduleDisplayNames[moduleName]
+                            if modDisplay and catTitle ~= "" then
+                                panelTitle = modDisplay .. " - " .. catTitle
+                            elseif modDisplay then
+                                panelTitle = modDisplay
+                            end
+                        end
+
+                        local catPanel = CreateCategoryPanel(scrollChild, PANEL_WIDTH, panelHeight)
+                        catPanel:SetPoint("TOP", scrollChild, "TOP", 0, yPos)
+
+                        AddPanelHeader(catPanel, panelTitle, nil)
+
+                        self.headers[categoryKey] = catPanel
+
+                        -- render elements inside panel
+                        local innerY = HEADER_AREA
+                        for _, element in ipairs(elements) do
+                            local elementName = element.name
+                            local data = element.data
+                            local elementModule = element.module
+
+                            local currentValue = self:GetCache(elementModule, elementName)
+                            local dependencyEnabled = true
+                            if data.dependency then
+                                local depValue = self:GetCache(elementModule, data.dependency)
+                                dependencyEnabled = depValue == true
+                            end
+
+                            if data.elementType == "checkbox" then
+                                local elementKey = elementModule .. "." .. elementName
+                                if not self.checkboxes[elementKey] then
+                                    local descLabel = catPanel:CreateFontString(nil, "BACKGROUND")
+                                    descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
+                                    descLabel:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY - 3)
+                                    descLabel:SetText(data.description or "")
+                                    descLabel:SetTextColor(.9,.9,.9)
+
+                                    if data.extraDescription then
+                                        local extraDescLabel = catPanel:CreateFontString(nil, "BACKGROUND")
+                                        extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.EXTRA_DESCRIPTION_FONT_SIZE), "OUTLINE")
+                                        extraDescLabel:SetPoint("LEFT", descLabel, "RIGHT", 10, 0)
+                                        extraDescLabel:SetText(data.extraDescription)
+                                        extraDescLabel:SetTextColor(1, 0.5, 0.5)
+                                        self.extraDescriptionLabels[elementKey] = extraDescLabel
+                                    end
+
+                                    local checkbox = DFUI.tools.CreateCheckbox(catPanel, nil, elementModule, elementName)
+                                    checkbox:SetPoint("TOPRIGHT", catPanel, "TOPRIGHT", -100, -innerY)
+                                    checkbox:SetChecked(currentValue)
+                                    if checkbox.label then
+                                        checkbox.label:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
+                                    end
+
+                                    self.checkboxes[elementKey] = checkbox
+                                    self.descriptionLabels[elementKey] = descLabel
+                                end
+                                ApplyDependencyState(self.checkboxes[elementModule .. "." .. elementName], self.descriptionLabels[elementModule .. "." .. elementName], self.extraDescriptionLabels[elementModule .. "." .. elementName], dependencyEnabled, "checkbox")
+
+                            elseif data.elementType == "slider" then
+                                local elementKey = elementModule .. "." .. elementName
+                                if not self.sliders[elementKey] then
+                                    local descLabel = catPanel:CreateFontString(nil, "BACKGROUND")
+                                    descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
+                                    descLabel:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY - 6)
+                                    descLabel:SetText(data.description or "")
+                                    descLabel:SetTextColor(.9,.9,.9)
+
+                                    if data.extraDescription then
+                                        local extraDescLabel = catPanel:CreateFontString(nil, "BACKGROUND")
+                                        extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.EXTRA_DESCRIPTION_FONT_SIZE), "OUTLINE")
+                                        extraDescLabel:SetPoint("LEFT", descLabel, "RIGHT", 10, 0)
+                                        extraDescLabel:SetText(data.extraDescription)
+                                        extraDescLabel:SetTextColor(1, 0.5, 0.5)
+                                        self.extraDescriptionLabels[elementKey] = extraDescLabel
+                                    end
+
+                                    local typeMeta = data.elementTypeMeta
+                                    local slider = DFUI.tools.CreateSlider(catPanel, nil, elementModule, elementName, typeMeta.min, typeMeta.max, typeMeta.step)
+                                    slider:SetPoint("TOPRIGHT", catPanel, "TOPRIGHT", -50, -innerY)
+                                    slider:SetValue(currentValue)
+                                    if slider.label then
+                                        slider.label:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
+                                    end
+
+                                    self.sliders[elementKey] = slider
+                                    self.descriptionLabels[elementKey] = descLabel
+                                end
+                                ApplyDependencyState(self.sliders[elementModule .. "." .. elementName], self.descriptionLabels[elementModule .. "." .. elementName], self.extraDescriptionLabels[elementModule .. "." .. elementName], dependencyEnabled, "slider")
+
+                            elseif data.elementType == "dropdown" then
+                                local elementKey = elementModule .. "." .. elementName
+                                if not self.dropdowns[elementKey] then
+                                    local descLabel = catPanel:CreateFontString(nil, "BACKGROUND")
+                                    descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
+                                    descLabel:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY - 10)
+                                    descLabel:SetText(data.description or "")
+                                    descLabel:SetTextColor(.9,.9,.9)
+
+                                    if data.extraDescription then
+                                        local extraDescLabel = catPanel:CreateFontString(nil, "BACKGROUND")
+                                        extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.EXTRA_DESCRIPTION_FONT_SIZE), "OUTLINE")
+                                        extraDescLabel:SetPoint("LEFT", descLabel, "RIGHT", 10, 0)
+                                        extraDescLabel:SetText(data.extraDescription)
+                                        extraDescLabel:SetTextColor(1, 0.5, 0.5)
+                                        self.extraDescriptionLabels[elementKey] = extraDescLabel
+                                    end
+
+                                    local typeMeta = data.elementTypeMeta
+                                    local dropdown = DFUI.tools.CreateDropDown(catPanel, nil, elementModule, elementName, typeMeta.items)
+                                    dropdown:SetPoint("TOPRIGHT", catPanel, "TOPRIGHT", -50, -innerY)
+                                    if dropdown.text then
+                                        dropdown.text:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
+                                    end
+
+                                    self.dropdowns[elementKey] = dropdown
+                                    self.descriptionLabels[elementKey] = descLabel
+                                end
+                                ApplyDependencyState(self.dropdowns[elementModule .. "." .. elementName], self.descriptionLabels[elementModule .. "." .. elementName], self.extraDescriptionLabels[elementModule .. "." .. elementName], dependencyEnabled, "dropdown")
+
+                            elseif data.elementType == "colour" then
+                                local elementKey = elementModule .. "." .. elementName
+                                if not self.colours[elementKey] then
+                                    local descLabel = catPanel:CreateFontString(nil, "BACKGROUND")
+                                    descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
+                                    descLabel:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY - 6)
+                                    descLabel:SetText(data.description or "")
+                                    descLabel:SetTextColor(.9,.9,.9)
+
+                                    if data.extraDescription then
+                                        local extraDescLabel = catPanel:CreateFontString(nil, "BACKGROUND")
+                                        extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.EXTRA_DESCRIPTION_FONT_SIZE), "OUTLINE")
+                                        extraDescLabel:SetPoint("LEFT", descLabel, "RIGHT", 10, 0)
+                                        extraDescLabel:SetText(data.extraDescription)
+                                        extraDescLabel:SetTextColor(1, 0.5, 0.5)
+                                        self.extraDescriptionLabels[elementKey] = extraDescLabel
+                                    end
+
+                                    local colour = DFUI.tools.CreateColour(catPanel, nil, elementModule, elementName)
+                                    colour:SetPoint("TOPRIGHT", catPanel, "TOPRIGHT", -50, -innerY)
+                                    if colour.label then
+                                        colour.label:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
+                                    end
+
+                                    self.colours[elementKey] = colour
+                                    self.descriptionLabels[elementKey] = descLabel
+                                end
+                                ApplyDependencyState(self.colours[elementModule .. "." .. elementName], self.descriptionLabels[elementModule .. "." .. elementName], self.extraDescriptionLabels[elementModule .. "." .. elementName], dependencyEnabled, "colour")
+                            end
+
+                            innerY = innerY + ITEM_SPACING
+                        end
                     end
 
-                    local topSpacing = self.CHECKBOX_TOP_SPACING
-                    local rowSpacing = self.CHECKBOX_ROW_SPACING
-                    if data.elementType == "slider" then
-                        topSpacing = self.SLIDER_TOP_SPACING
-                        rowSpacing = self.SLIDER_ROW_SPACING
-                    elseif data.elementType == "dropdown" then
-                        topSpacing = self.DROPDOWN_TOP_SPACING
-                        rowSpacing = self.DROPDOWN_ROW_SPACING
-                    elseif data.elementType == "colour" then
-                        topSpacing = self.COLOUR_TOP_SPACING
-                        rowSpacing = self.COLOUR_ROW_SPACING
-                    end
-
-                    local spacing = topSpacing + rowSpacing
-                    self.tabPositions[tabIndex] = self.tabPositions[tabIndex] - spacing
-                    local currentY = self.tabPositions[tabIndex]
-
-                    if data.elementType == "checkbox" then
-                        local elementKey = elementModule .. "." .. elementName
-                        if not self.checkboxes[elementKey] then
-                            local descLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                            descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
-                            descLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, currentY - 3)
-                            descLabel:SetText(data.description or "")
-                            descLabel:SetTextColor(.9,.9,.9)
-
-                            if data.extraDescription then
-                                local extraDescLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                                extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.EXTRA_DESCRIPTION_FONT_SIZE), "OUTLINE")
-                                extraDescLabel:SetPoint("LEFT", descLabel, "RIGHT", 10, 0)
-                                extraDescLabel:SetText(data.extraDescription)
-                                extraDescLabel:SetTextColor(1, 0.5, 0.5)
-                                self.extraDescriptionLabels[elementName] = extraDescLabel
-                            end
-
-                            local checkbox = DFUI.tools.CreateCheckbox(scrollChild, nil, elementModule, elementName)
-                            checkbox:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -166, currentY)
-                            checkbox:SetChecked(currentValue)
-                            if checkbox.label then
-                                checkbox.label:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
-                            end
-
-                            self.checkboxes[elementKey] = checkbox
-                            self.descriptionLabels[elementKey] = descLabel
-                        end
-
-                        local checkbox = self.checkboxes[elementKey]
-                        local descLabel = self.descriptionLabels[elementKey]
-                        local extraDescLabel = self.extraDescriptionLabels[elementKey]
-
-                        if not dependencyEnabled then
-                            if checkbox and checkbox.Disable then
-                                checkbox:Disable()
-                            end
-                            if checkbox and checkbox.label then
-                                checkbox.label:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                            if descLabel then
-                                descLabel:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                            if extraDescLabel then
-                                extraDescLabel:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                        else
-                            if checkbox and checkbox.Enable then
-                                checkbox:Enable()
-                            end
-                            if checkbox and checkbox.label then
-                                checkbox.label:SetTextColor(1, 1, 1)
-                            end
-                            if descLabel then
-                                descLabel:SetTextColor(.9, .9, .9)
-                            end
-                            if extraDescLabel then
-                                extraDescLabel:SetTextColor(1, 0.5, 0.5)
-                            end
-                        end
-
-                    elseif data.elementType == "slider" then
-                        local elementKey = elementModule .. "." .. elementName
-                        if not self.sliders[elementKey] then
-                            local descLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                            descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
-                            descLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, currentY - 6)
-                            descLabel:SetText(data.description or "")
-                            descLabel:SetTextColor(.9,.9,.9)
-
-                            if data.extraDescription then
-                                local extraDescLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                                extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.EXTRA_DESCRIPTION_FONT_SIZE), "OUTLINE")
-                                extraDescLabel:SetPoint("LEFT", descLabel, "RIGHT", 10, 0)
-                                extraDescLabel:SetText(data.extraDescription)
-                                extraDescLabel:SetTextColor(1, 0.5, 0.5)
-                                self.extraDescriptionLabels[elementKey] = extraDescLabel
-                            end
-
-                            local typeMeta = data.elementTypeMeta
-                            local slider = DFUI.tools.CreateSlider(scrollChild, nil, elementModule, elementName, typeMeta.min, typeMeta.max, typeMeta.step)
-                            slider:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -50, currentY)
-                            slider:SetValue(currentValue)
-                            if slider.label then
-                                slider.label:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
-                            end
-
-                            self.sliders[elementKey] = slider
-                            self.descriptionLabels[elementKey] = descLabel
-                        end
-
-                        local slider = self.sliders[elementKey]
-                        local descLabel = self.descriptionLabels[elementKey]
-                        local extraDescLabel = self.extraDescriptionLabels[elementKey]
-
-                        if not dependencyEnabled then
-                            if slider and slider.Disable then
-                                slider:Disable()
-                            elseif slider then
-                                slider.isDisabled = true
-                                slider:EnableMouse(false)
-                                slider:SetBackdropColor(0.5, 0.5, 0.5, 1)
-                                slider:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
-                                local thumbTexture = slider:GetThumbTexture()
-                                if thumbTexture then
-                                    thumbTexture:SetVertexColor(0.5, 0.5, 0.5)
-                                end
-                            end
-                            if slider and slider.label then
-                                slider.label:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                            if slider and slider.valueText then
-                                slider.valueText:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                            if descLabel then
-                                descLabel:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                            if extraDescLabel then
-                                extraDescLabel:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                        else
-                            if slider and slider.Enable then
-                                slider:Enable()
-                            elseif slider then
-                                slider.isDisabled = false
-                                slider:EnableMouse(true)
-                                slider:SetBackdropColor(1, 1, 1, 1)
-                                slider:SetBackdropBorderColor(1, 1, 1, 1)
-                                local thumbTexture = slider:GetThumbTexture()
-                                if thumbTexture then
-                                    thumbTexture:SetVertexColor(1, 1, 1)
-                                end
-                            end
-                            if slider and slider.label then
-                                slider.label:SetTextColor(1, 1, 1)
-                            end
-                            if slider and slider.valueText then
-                                slider.valueText:SetTextColor(1, 1, 1)
-                            end
-                            if descLabel then
-                                descLabel:SetTextColor(.9, .9, .9)
-                            end
-                            if extraDescLabel then
-                                extraDescLabel:SetTextColor(1, 0.5, 0.5)
-                            end
-                        end
-
-                    elseif data.elementType == "dropdown" then
-                        local elementKey = elementModule .. "." .. elementName
-                        if not self.dropdowns[elementKey] then
-                            local descLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                            descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
-                            descLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, currentY - 10)
-                            descLabel:SetText(data.description or "")
-                            descLabel:SetTextColor(.9,.9,.9)
-
-                            if data.extraDescription then
-                                local extraDescLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                                extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.EXTRA_DESCRIPTION_FONT_SIZE), "OUTLINE")
-                                extraDescLabel:SetPoint("LEFT", descLabel, "RIGHT", 10, 0)
-                                extraDescLabel:SetText(data.extraDescription)
-                                extraDescLabel:SetTextColor(1, 0.5, 0.5)
-                                self.extraDescriptionLabels[elementKey] = extraDescLabel
-                            end
-
-                            local typeMeta = data.elementTypeMeta
-                            local dropdown = DFUI.tools.CreateDropDown(scrollChild, nil, elementModule, elementName, typeMeta.items)
-                            dropdown:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -50, currentY)
-                            if dropdown.text then
-                                dropdown.text:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
-                            end
-
-                            self.dropdowns[elementKey] = dropdown
-                            self.descriptionLabels[elementKey] = descLabel
-                        end
-
-                        local dropdown = self.dropdowns[elementKey]
-                        local descLabel = self.descriptionLabels[elementKey]
-                        local extraDescLabel = self.extraDescriptionLabels[elementKey]
-
-                        if not dependencyEnabled then
-                            if dropdown and dropdown.Disable then
-                                dropdown:Disable()
-                            end
-                            if dropdown and dropdown.text then
-                                dropdown.text:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                            if descLabel then
-                                descLabel:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                            if extraDescLabel then
-                                extraDescLabel:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                        else
-                            if dropdown and dropdown.Enable then
-                                dropdown:Enable()
-                            end
-                            if dropdown and dropdown.text then
-                                dropdown.text:SetTextColor(1, 1, 1)
-                            end
-                            if descLabel then
-                                descLabel:SetTextColor(.9, .9, .9)
-                            end
-                            if extraDescLabel then
-                                extraDescLabel:SetTextColor(1, 0.5, 0.5)
-                            end
-                        end
-
-                    elseif data.elementType == "colour" then
-                        local elementKey = elementModule .. "." .. elementName
-                        if not self.colours[elementKey] then
-                            local descLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                            descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
-                            descLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, currentY - 6)
-                            descLabel:SetText(data.description or "")
-                            descLabel:SetTextColor(.9,.9,.9)
-
-                            if data.extraDescription then
-                                local extraDescLabel = scrollChild:CreateFontString(nil, "BACKGROUND")
-                                extraDescLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.EXTRA_DESCRIPTION_FONT_SIZE), "OUTLINE")
-                                extraDescLabel:SetPoint("LEFT", descLabel, "RIGHT", 10, 0)
-                                extraDescLabel:SetText(data.extraDescription)
-                                extraDescLabel:SetTextColor(1, 0.5, 0.5)
-                                self.extraDescriptionLabels[elementKey] = extraDescLabel
-                            end
-
-                            local colour = DFUI.tools.CreateColour(scrollChild, nil, elementModule, elementName)
-                            colour:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -50, currentY)
-                            if colour.label then
-                                colour.label:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
-                            end
-
-                            self.colours[elementKey] = colour
-                            self.descriptionLabels[elementKey] = descLabel
-                        end
-
-                        local colour = self.colours[elementKey]
-                        local descLabel = self.descriptionLabels[elementKey]
-                        local extraDescLabel = self.extraDescriptionLabels[elementKey]
-
-                        if not dependencyEnabled then
-                            if colour and colour.Disable then
-                                colour:Disable()
-                            elseif colour then
-                                colour.isDisabled = true
-                                colour:EnableMouse(false)
-                                colour:SetBackdropColor(0.5, 0.5, 0.5, 1)
-                                colour:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
-                                local thumbTexture = colour:GetThumbTexture()
-                                if thumbTexture then
-                                    thumbTexture:SetVertexColor(0.5, 0.5, 0.5)
-                                end
-                            end
-                            if colour and colour.label then
-                                colour.label:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                            if colour and colour.valueText then
-                                colour.valueText:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                            if descLabel then
-                                descLabel:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                            if extraDescLabel then
-                                extraDescLabel:SetTextColor(0.5, 0.5, 0.5)
-                            end
-                        else
-                            if colour and colour.Enable then
-                                colour:Enable()
-                            elseif colour then
-                                colour.isDisabled = false
-                                colour:EnableMouse(true)
-                                colour:SetBackdropColor(1, 1, 1, 1)
-                                colour:SetBackdropBorderColor(1, 1, 1, 1)
-                                local thumbTexture = colour:GetThumbTexture()
-                                if thumbTexture then
-                                    thumbTexture:SetVertexColor(1, 1, 1)
-                                end
-                            end
-                            if colour and colour.label then
-                                colour.label:SetTextColor(1, 1, 1)
-                            end
-                            if colour and colour.valueText then
-                                colour.valueText:SetTextColor(1, 1, 1)
-                            end
-                            if descLabel then
-                                descLabel:SetTextColor(.9, .9, .9)
-                            end
-                            if extraDescLabel then
-                                extraDescLabel:SetTextColor(1, 0.5, 0.5)
-                            end
-                        end
-                    end
+                    self.tabPositions[tabIndex] = yPos - panelHeight - PANEL_GAP
                 end
-            end
-
-            if moduleInfo ~= sortedModules[table.getn(sortedModules)] then
-                self.tabPositions[tabIndex] = self.tabPositions[tabIndex] - self.MODULE_SPACING
             end
         end
 
+        -- dynamically adjust scrollChild heights based on actual content
+        for tabIndex, yOffset in pairs(self.tabPositions) do
+            local scrollChild = Base.scrollChildren[tabIndex]
+            if scrollChild then
+                local neededHeight = math.abs(yOffset) + 50
+                if neededHeight > scrollChild:GetHeight() then
+                    scrollChild:SetHeight(neededHeight)
+                end
+            end
+        end
 
     end
 
@@ -790,7 +696,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                                         capDesc:SetTextColor(.9,.9,.9)
                                     end
                                     if capExtraDesc then
-                                        capExtraDesc:SetTextColor(.9,.9,.9)
+                                        capExtraDesc:SetTextColor(1, 0.5, 0.5)
                                     end
                                 end
                             end)
@@ -845,7 +751,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                 elseif data.type == "slider" then
                     element:SetValue(value)
                 elseif data.type == "dropdown" then
-                    element.text:SetText(value)
+                    if element.text then element.text:SetText(value) end
                 elseif data.type == "colour" then
                     if type(value) == "table" and table.getn(value) >= 3 then
                         for i = 1, 30 do
@@ -877,6 +783,9 @@ DFUI:NewMod("Gui-elem", 3, function()
                 if self.descriptionLabels[elementKey] then
                     self.descriptionLabels[elementKey]:SetTextColor(r, g, b)
                 end
+                if self.extraDescriptionLabels[elementKey] then
+                    self.extraDescriptionLabels[elementKey]:SetTextColor(enabled and 1 or 0.5, enabled and 0.5 or 0.5, enabled and 0.5 or 0.5)
+                end
 
                 if enabled then
                     if element.Enable then
@@ -886,7 +795,8 @@ DFUI:NewMod("Gui-elem", 3, function()
                         element:EnableMouse(true)
                         element:SetBackdropColor(1, 1, 1, 1)
                         element:SetBackdropBorderColor(1, 1, 1, 1)
-                        element:GetThumbTexture():SetVertexColor(1, 1, 1)
+                        local t = element:GetThumbTexture()
+                        if t then t:SetVertexColor(1, 1, 1) end
                     end
                 else
                     if element.Disable then
@@ -896,7 +806,8 @@ DFUI:NewMod("Gui-elem", 3, function()
                         element:EnableMouse(false)
                         element:SetBackdropColor(0.5, 0.5, 0.5, 1)
                         element:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
-                        element:GetThumbTexture():SetVertexColor(0.5, 0.5, 0.5)
+                        local t = element:GetThumbTexture()
+                        if t then t:SetVertexColor(0.5, 0.5, 0.5) end
                     end
                 end
 
@@ -908,7 +819,7 @@ DFUI:NewMod("Gui-elem", 3, function()
 
     function Setup:GetCache(moduleName, key)
         local cacheKey = moduleName .. "." .. key
-        if not self.configCache[cacheKey] then
+        if self.configCache[cacheKey] == nil then
             if DFUI.tempDB[moduleName] and DFUI.tempDB[moduleName][key] ~= nil then
                 self.configCache[cacheKey] = DFUI:GetTempDB(moduleName, key)
             else

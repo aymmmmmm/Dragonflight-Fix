@@ -84,13 +84,33 @@ DFUI:NewMod("Gui-shag", 3, function()
 
     function Setup:Elements()
 
+        local PANEL_WIDTH = 680
+        local PANEL_INSET = 15
+        local PANEL_GAP = 12
+        local HEADER_AREA = 50
+        local ITEM_SPACING = 45
+        local PANEL_PAD = 15
+
+        local function CreateCategoryPanel(parent, width, height)
+            local bg = CreateFrame("Frame", nil, parent)
+            bg:SetWidth(width)
+            bg:SetHeight(height)
+            bg:SetBackdrop({
+                bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                tile = true, tileSize = 16, edgeSize = 16,
+                insets = { left = 4, right = 4, top = 4, bottom = 4 }
+            })
+            bg:SetBackdropColor(0.10, 0.07, 0.03, 0.4)
+            bg:SetBackdropBorderColor(0.48, 0.33, 0.09, 0.3)
+            return bg
+        end
 
         local groups = {}
 
         for key, data in pairs(self.metadata) do
             local module = data.module or "other"
             local cat = data.category or "Other"
-
 
             if not groups[module] then groups[module] = {} end
             if not groups[module][cat] then groups[module][cat] = {} end
@@ -102,13 +122,19 @@ DFUI:NewMod("Gui-shag", 3, function()
 
         local moduleOrder = {"core", "extras"}
 
-        for _, module in pairs(moduleOrder) do
+        for _, module in ipairs(moduleOrder) do
             if groups[module] then
 
                 local moduleTitle = module == "core" and "ShaguTweaks" or "ShaguTweaks Extras"
-                local moduleHeader = DFUI.tools.CreateCategoryHeader(panel, moduleTitle, nil, 300, 50, 30)
-                moduleHeader:SetPoint("TOP", panel, "TOP", -200, -yPos)
-                yPos = yPos + self.HEADER_TOP_SPACING + self.HEADER_BOTTOM_SPACING
+                local moduleHeader = panel:CreateFontString(nil, "OVERLAY")
+                moduleHeader:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(22), "OUTLINE")
+                moduleHeader:SetPoint("TOP", panel, "TOP", 0, -yPos)
+                moduleHeader:SetText(moduleTitle)
+                moduleHeader:SetTextColor(1, 0.82, 0)
+                yPos = yPos + 30
+
+                T.GradientLine(panel, "TOP", -yPos, 1, 500)
+                yPos = yPos + 12
 
                 local categoryNames = {}
                 for categoryName in pairs(groups[module]) do
@@ -116,35 +142,59 @@ DFUI:NewMod("Gui-shag", 3, function()
                 end
                 table.sort(categoryNames)
 
-                for _, category in pairs(categoryNames) do
+                for _, category in ipairs(categoryNames) do
                     local elements = groups[module][category]
 
-                table.sort(elements, function(a, b)
-                    return (a.data.categoryIndex or 999) < (b.data.categoryIndex or 999)
-                end)
-                local header = DFUI.tools.CreateCategoryHeader(panel, category)
-                header:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -yPos)
-                self.headers[category] = header
-                yPos = yPos + self.HEADER_TOP_SPACING + self.HEADER_BOTTOM_SPACING
+                    table.sort(elements, function(a, b)
+                        return (a.data.categoryIndex or 999) < (b.data.categoryIndex or 999)
+                    end)
 
-                for i, element in pairs(elements) do
+                    local elemCount = table.getn(elements)
+                    local panelHeight = HEADER_AREA + elemCount * ITEM_SPACING + PANEL_PAD
 
-                    -- create description label on left
-                    local desc = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-                    desc:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
-                    desc:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -yPos)
-                    desc:SetText(element.data.description or element.key)
-                    desc:SetTextColor(.9, .9, .9)
-                    self.descriptionLabels[element.key] = desc
+                    local catPanel = CreateCategoryPanel(panel, PANEL_WIDTH, panelHeight)
+                    catPanel:SetPoint("TOP", panel, "TOP", 0, -yPos)
 
-                    -- create checkbox on right
-                    local cb = DFUI.tools.CreateShaguCheckbox(panel, "DFUI_Shagu_" .. element.key, element.key)
-                    cb:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -150, -yPos)
-                    self.checkboxes[element.key] = cb
-                    yPos = yPos + self.CHECKBOX_ROW_SPACING
-                end
+                    -- panel header
+                    local catTitle = catPanel:CreateFontString(nil, "OVERLAY")
+                    catTitle:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(16), "OUTLINE")
+                    catTitle:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -10)
+                    catTitle:SetText(category)
+                    catTitle:SetTextColor(1, 0.82, 0)
 
-                    yPos = yPos + self.MODULE_SPACING
+                    local countFont = catPanel:CreateFontString(nil, "OVERLAY")
+                    countFont:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(11), "OUTLINE")
+                    countFont:SetPoint("LEFT", catTitle, "RIGHT", 8, 0)
+                    countFont:SetText("(" .. elemCount .. ")")
+                    countFont:SetTextColor(0.54, 0.48, 0.35)
+
+                    local sep = catPanel:CreateTexture(nil, "ARTWORK")
+                    sep:SetTexture("Interface\\Buttons\\WHITE8X8")
+                    sep:SetHeight(1)
+                    sep:SetWidth(PANEL_WIDTH - 30)
+                    sep:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -32)
+                    sep:SetVertexColor(0.48, 0.33, 0.09, 0.25)
+
+                    self.headers[category] = catPanel
+
+                    -- render elements inside panel
+                    local innerY = HEADER_AREA - 10
+                    for i, element in ipairs(elements) do
+                        local desc = catPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                        desc:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
+                        desc:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY)
+                        desc:SetText(element.data.description or element.key)
+                        desc:SetTextColor(.9, .9, .9)
+                        self.descriptionLabels[element.key] = desc
+
+                        local cb = DFUI.tools.CreateShaguCheckbox(catPanel, "DFUI_Shagu_" .. element.key, element.key)
+                        cb:SetPoint("TOPRIGHT", catPanel, "TOPRIGHT", -100, -innerY)
+                        self.checkboxes[element.key] = cb
+
+                        innerY = innerY + ITEM_SPACING
+                    end
+
+                    yPos = yPos + panelHeight + PANEL_GAP
                 end
             elseif module == "extras" and not DFUI.gui.shaguExtrasData then
                 local txt = panel:CreateFontString(nil, "OVERLAY")

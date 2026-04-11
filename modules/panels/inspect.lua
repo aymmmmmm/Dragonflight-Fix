@@ -7,7 +7,7 @@ DFUI:NewDefaults("Inspect", {
 DFUI:NewMod("Inspect", 5, function()
     local skinned = false
 
-    -- 通用纹理隐藏：保留图标/头像/高亮
+    -- 通用纹理隐藏：保留图标/头像/高亮/状态条
     local function HideBlizzardTextures(frame)
         if not frame then return end
         local regions = {frame:GetRegions()}
@@ -40,8 +40,10 @@ DFUI:NewMod("Inspect", 5, function()
         HideBlizzardTextures(InspectFrame)
         HideBlizzardTextures(InspectPaperDollFrame)
         HideBlizzardTextures(InspectHonorFrame)
+        if InspectTalentsFrame then HideBlizzardTextures(InspectTalentsFrame) end
+        if InspectArenaFrame then HideBlizzardTextures(InspectArenaFrame) end
 
-        -- 隐藏所有暴雪 Tab（Turtle WoW 可能有 3 个）
+        -- 隐藏所有暴雪 Tab
         for i = 1, 5 do
             local tab = getglobal("InspectFrameTab" .. i)
             if tab then tab:Hide() end
@@ -51,7 +53,7 @@ DFUI:NewMod("Inspect", 5, function()
         local customBg = DFUI.CreatePaperDollFrame("DFUI_InspectBg", InspectFrame, 384, 512, 1)
         customBg:SetPoint("TOPLEFT", InspectFrame, "TOPLEFT", 12, -12)
         customBg:SetPoint("BOTTOMRIGHT", InspectFrame, "BOTTOMRIGHT", -32, 75)
-        customBg:SetFrameLevel(InspectFrame:GetFrameLevel() - 1)
+        customBg:SetFrameLevel(InspectFrame:GetFrameLevel() + 1)
         customBg.Bg:SetDrawLayer("BACKGROUND", -1)
 
         -- 头像
@@ -66,15 +68,42 @@ DFUI:NewMod("Inspect", 5, function()
         closeButton:SetHeight(20)
         closeButton:SetFrameLevel(customBg:GetFrameLevel() + 3)
 
-        customBg:AddTab("角色", function()
-            if InspectPaperDollFrame then InspectPaperDollFrame:Show() end
+        -- 隐藏所有子框架的辅助函数
+        local function HideAllSubFrames()
+            if InspectPaperDollFrame then InspectPaperDollFrame:Hide() end
             if InspectHonorFrame then InspectHonorFrame:Hide() end
-        end, 70)
+            if InspectTalentsFrame then InspectTalentsFrame:Hide() end
+            if InspectArenaFrame then InspectArenaFrame:Hide() end
+        end
+
+        -- 4 个 Tab
+        customBg:AddTab("角色", function()
+            HideAllSubFrames()
+            if InspectPaperDollFrame then InspectPaperDollFrame:Show() end
+            PanelTemplates_SetTab(InspectFrame, 1)
+        end, 55)
 
         customBg:AddTab("荣誉", function()
-            if InspectPaperDollFrame then InspectPaperDollFrame:Hide() end
+            HideAllSubFrames()
             if InspectHonorFrame then InspectHonorFrame:Show() end
-        end, 70)
+            PanelTemplates_SetTab(InspectFrame, 2)
+        end, 55)
+
+        if InspectTalentsFrame then
+            customBg:AddTab("天赋", function()
+                HideAllSubFrames()
+                InspectTalentsFrame:Show()
+                PanelTemplates_SetTab(InspectFrame, 3)
+            end, 55)
+        end
+
+        if InspectArenaFrame then
+            customBg:AddTab("竞技场", function()
+                HideAllSubFrames()
+                InspectArenaFrame:Show()
+                PanelTemplates_SetTab(InspectFrame, 4)
+            end, 60)
+        end
 
         HookScript(InspectFrame, "OnShow", function()
             customBg:Show()

@@ -14,12 +14,16 @@ DFUI:NewMod("PVPIcon", 1, function()
         local pvpIcon = _G[frame .. "PVPIcon"]
         if UnitIsPVPFreeForAll(unit) then
             pvpIcon:SetTexture("Interface\\TargetingFrame\\UI-PVP-FFA")
+            pvpIcon:Show()
         elseif factionGroup and UnitIsPVP(unit) then
             if factionGroup == "Alliance" then
                 pvpIcon:SetTexture(self.allianceTexture)
             else
                 pvpIcon:SetTexture(self.hordeTexture)
             end
+            pvpIcon:Show()
+        else
+            pvpIcon:Hide()
         end
     end
 

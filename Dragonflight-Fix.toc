@@ -54,6 +54,7 @@ modules\panels\social.lua
 modules\panels\mail.lua
 modules\panels\trade.lua
 modules\panels\trainer.lua
+modules\panels\tradeskill.lua
 modules\panels\dressup.lua
 modules\panels\help.lua
 modules\panels\openmail.lua
@@ -91,3 +92,4 @@ modules\gui\info.lua
 modules\gui\prof.lua
 modules\gui\mods.lua
 modules\gui\shag.lua
+modules\gui\superwow.lua

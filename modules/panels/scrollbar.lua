@@ -184,6 +184,11 @@ DFUI:NewMod("Scrollbar", 6, function()
         "HelpFrameOpenTicketScrollFrameScrollBar",
         -- 团队
         "RaidInfoScrollFrameScrollBar",
+        -- 专业技能 / 附魔
+        "TradeSkillListScrollFrameScrollBar",
+        "TradeSkillDetailScrollFrameScrollBar",
+        "CraftListScrollFrameScrollBar",
+        "CraftDetailScrollFrameScrollBar",
     }
 
     local dropdownTargets = {

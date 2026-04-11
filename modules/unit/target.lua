@@ -180,13 +180,16 @@ DFUI:NewMod("Target", 1, function()
     end
 
     function Setup:FrameTextures()
+        TargetFrameTexture:SetTexture(self.texpath .. "UI-TargetingFrameDF1.blp")
+        TargetFrameTexture:SetWidth(256)
+        TargetFrameTexture:SetHeight(128)
+        TargetFrameTexture:SetPoint("TOPRIGHT", TargetFrame, "TOPRIGHT", 0, 0)
+        TargetFrameTexture:SetDrawLayer("BACKGROUND")
         TargetFrameBackground:SetWidth(256)
         TargetFrameBackground:SetHeight(128)
         TargetFrameBackground:SetPoint("TOPRIGHT", TargetFrame, "TOPRIGHT", 0, 0)
         TargetFrameBackground:SetTexture(self.texpath .. "UI-TargetingFrameDF1-Background.blp")
-        if TargetFrameBackground.SetFrameLevel then
-            TargetFrameBackground:SetFrameLevel(TargetFrame:GetFrameLevel() - 2)
-        end
+        TargetFrameBackground:SetDrawLayer("BACKGROUND")
     end
 
     function Setup:Portrait()
@@ -340,6 +343,8 @@ DFUI:NewMod("Target", 1, function()
             else
                 TargetFrameTexture:SetTexture(Setup.texpath .. 'UI-TargetingFrameDF1.blp')
             end
+            TargetFrameTexture:SetWidth(256)
+            TargetFrameTexture:SetHeight(128)
         end
     end
 
