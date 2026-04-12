@@ -63,6 +63,7 @@ DFUI:NewMod("Trade", 5, function()
     recipientMoneyBg:SetBackdropColor(0, 0, 0, 0.5)
     recipientMoneyBg:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
 
+    CenterFrame(TradeFrame)
     HookScript(TradeFrame, "OnShow", function()
         leftBg:Show()
         rightBg:Show()

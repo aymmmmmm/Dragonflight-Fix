@@ -49,8 +49,11 @@ DFUI:NewMod("ComboPoints", 1, function()
     container:SetScale(setup.scale)
 
     -- 更新显示
+    local lastPoints = -1
     local function UpdateComboPoints()
         local points = GetComboPoints("target")
+        if points == lastPoints then return end
+        lastPoints = points
         for i = 1, 5 do
             if points == 0 then
                 frames[i]:Hide()

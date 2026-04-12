@@ -76,14 +76,14 @@ DFUI:NewMod("Gui-base", 2, function()
             [4] = "模块",
             [5] = "ShaguTweaks",
 
-            [6] = "动作条",
-            [7] = "背包",
-            [8] = "施法条",
-            [9] = "聊天",
-            [10] = "界面",
-            [11] = "微型菜单",
-            [12] = "小地图",
-            [13] = "SuperWoW",
+            [6] = "SuperWoW",
+            [7] = "动作条",
+            [8] = "背包",
+            [9] = "施法条",
+            [10] = "聊天",
+            [11] = "界面",
+            [12] = "微型菜单",
+            [13] = "小地图",
             [14] = "单位框架",
             [15] = "经验/声望",
         }
@@ -293,8 +293,8 @@ DFUI:NewMod("Gui-base", 2, function()
 
                 self.tabButtons[i] = tab
             end
-            self.tabButtons[13]:Disable()
-            self.tabButtons[13]:GetFontString():SetTextColor(.4, .4, .4, 1)
+            self.tabButtons[6]:Disable()
+            self.tabButtons[6]:GetFontString():SetTextColor(.4, .4, .4, 1)
             self.tabsCreated = true
         end
     end
@@ -573,15 +573,6 @@ DFUI:NewMod("Gui-base", 2, function()
     DFUI.gui.Base = Setup
     DFUISetup = Setup -- Need to move this to .gui
 
-    --=================
-    -- DEBUG
-    --=================
-    local DEBUG_MODE = false
-
-    if DEBUG_MODE then
-        Setup.mainFrame:Show()
-        else
-        Setup.mainFrame:Hide()
-        Setup.titleFrame:Hide()
-    end
+    Setup.mainFrame:Hide()
+    Setup.titleFrame:Hide()
 end)

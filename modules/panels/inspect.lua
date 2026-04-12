@@ -105,6 +105,7 @@ DFUI:NewMod("Inspect", 5, function()
             end, 60)
         end
 
+        CenterFrame(InspectFrame)
         HookScript(InspectFrame, "OnShow", function()
             customBg:Show()
         end)

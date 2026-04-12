@@ -283,7 +283,7 @@ Phase 4: 第三批（低频，6 个面板）
 | 关闭按钮 | `DF.ui.CreateRedButton` | `DFUI.tools.CreateButton` 或自定义 |
 | Tab 系统 | 内嵌在 PaperDollFrame 方法 | 同样内嵌 |
 | 配置 | 全局开关 | **每个面板独立开关** |
-| SpellBookFrame | 535 行全新重写 | 暂不做（太复杂，收益有限） |
+| SpellBookFrame | 535 行全新重写 | **已完成** 660 行（详见 spellbook-ui-design.md） |
 | TalentFrame | 536 行重写 | Fix 已有自己的实现（+天赋规划） |
 
 ## 十、验证

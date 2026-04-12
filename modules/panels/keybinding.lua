@@ -63,6 +63,7 @@ DFUI:NewMod("KeyBinding", 5, function()
             KeyBindingFrameCharacterButton:SetPoint("LEFT", KeyBindingFrameHeaderText, "RIGHT", 15, 0)
         end
 
+        CenterFrame(KeyBindingFrame)
         HookScript(KeyBindingFrame, "OnShow", function()
             customBg:Show()
         end)

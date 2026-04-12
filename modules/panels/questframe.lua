@@ -62,6 +62,7 @@ DFUI:NewMod("QuestDialog", 5, function()
         QuestFrameCompleteQuestButton:SetPoint("BOTTOMLEFT", customBg, "BOTTOMLEFT", 4, 3)
     end
 
+    CenterFrame(QuestFrame)
     HookScript(QuestFrame, "OnShow", function()
         customBg:Show()
     end)

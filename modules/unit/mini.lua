@@ -744,32 +744,7 @@ DFUI:NewMod("Mini", 1, function()
     end
 
     callbacks.frameFont = function(value)
-        local fontPath
-        if value == "Expressway" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Expressway.ttf"
-        elseif value == "Homespun" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Homespun.ttf"
-        elseif value == "Hooge" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Hooge.ttf"
-        elseif value == "Myriad-Pro" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Myriad-Pro.ttf"
-        elseif value == "Prototype" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Prototype.ttf"
-        elseif value == "PT-Sans-Narrow-Bold" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\PT-Sans-Narrow-Bold.ttf"
-        elseif value == "PT-Sans-Narrow-Regular" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\PT-Sans-Narrow-Regular.ttf"
-        elseif value == "RobotoMono" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\RobotoMono.ttf"
-        elseif value == "BigNoodleTitling" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\BigNoodleTitling.ttf"
-        elseif value == "Continuum" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Continuum.ttf"
-        elseif value == "DieDieDie" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\DieDieDie.ttf"
-        else
-            fontPath = "Fonts\\FRIZQT__.TTF"
-        end
+        local fontPath = GetFontPath(value)
         Setup.healthPercentText:SetFont(fontPath, 9, "OUTLINE")
         Setup.healthValueText:SetFont(fontPath, 9, "OUTLINE")
         Setup.manaPercentText:SetFont(fontPath, 8, "OUTLINE")
@@ -885,11 +860,11 @@ DFUI:NewMod("Mini", 1, function()
         end
         local partyUpdateTimer = nil
         if event == "PLAYER_ENTERING_WORLD" or event == "PARTY_MEMBERS_CHANGED" or
-            (event == "UNIT_HEALTH" and string.find(arg1, "party")) or
-            (event == "UNIT_MANA" and string.find(arg1, "party")) or
-            (event == "UNIT_ENERGY" and string.find(arg1, "party")) or
-            (event == "UNIT_RAGE" and string.find(arg1, "party")) or
-            (event == "UNIT_FOCUS" and string.find(arg1, "party")) then
+            (event == "UNIT_HEALTH" and string.sub(arg1, 1, 5) == "party") or
+            (event == "UNIT_MANA" and string.sub(arg1, 1, 5) == "party") or
+            (event == "UNIT_ENERGY" and string.sub(arg1, 1, 5) == "party") or
+            (event == "UNIT_RAGE" and string.sub(arg1, 1, 5) == "party") or
+            (event == "UNIT_FOCUS" and string.sub(arg1, 1, 5) == "party") then
             local now = GetTime()
             if not configCache.noPartyPercent or (now - configCache.lastUpdate > 1) then
                 configCache.noPartyPercent = DFUI:GetTempDB("Mini", "noPartyPercent")

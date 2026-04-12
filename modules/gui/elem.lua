@@ -65,47 +65,47 @@ DFUI:NewMod("Gui-elem", 3, function()
                 --             [14] = "Unitframes",
                 --             [15] = "Xprep",
         moduleMapping = {
-            ["Bars"]    = {6, 1},
-            ["RangeIndicator"]    = {6, 2},
-            ["Bags"]    = {7, 1},
-            ["Cast"]    = {8, 1},
-            ["Chat"]    = {9, 1},
-            ["GUI-Dragonflight"]   = {10, 1},
-            ["Errors"]      = {10, 2},
-            ["Tooltip"]      = {10, 3},
-            ["Ui"]      = {10, 4},
-            ["Micro"]   = {11, 1},
-            ["Collector"] = {12, 1},
-            ["Map"]     = {12, 2},
+            ["Bars"]    = {7, 1},
+            ["RangeIndicator"]    = {7, 2},
+            ["Cooldowns"] = {7, 3},
+            ["Orbs"]    = {7, 4},
+            ["Bags"]    = {8, 1},
+            ["Cast"]    = {9, 1},
+            ["Chat"]    = {10, 1},
+            ["GUI-Dragonflight"]   = {11, 1},
+            ["Errors"]      = {11, 2},
+            ["Tooltip"]      = {11, 3},
+            ["Ui"]      = {11, 4},
+            ["ItemCompare"] = {11, 5},
+            ["Character"] = {11, 6},
+            ["Bank"]    = {11, 7},
+            ["Merchant"] = {11, 8},
+            ["QuestDialog"] = {11, 9},
+            ["Gossip"]  = {11, 10},
+            ["QuestLog"] = {11, 11},
+            ["Social"]  = {11, 12},
+            ["Mail"]    = {11, 13},
+            ["Trade"]   = {11, 14},
+            ["Trainer"] = {11, 15},
+            ["DressUp"] = {11, 16},
+            ["Help"]    = {11, 17},
+            ["Scrollbar"] = {11, 18},
+            ["OpenMail"] = {11, 19},
+            ["Inspect"] = {11, 20},
+            ["Macros"] = {11, 21},
+            ["SpellBook"] = {11, 22},
+            ["KeyBinding"] = {11, 23},
+            ["TradeSkill"] = {11, 24},
+            ["Micro"]   = {12, 1},
+            ["Collector"] = {13, 1},
+            ["Map"]     = {13, 2},
             ["Player"]  = {14, 1},
             ["PVPIcon"]  = {14, 2},
             ["Target"]  = {14, 3},
             ["Mini"]    = {14, 4},
-            ["Xprep"]   = {15, 1},
             ["Colors"]  = {14, 5},
-            ["Cooldowns"] = {6, 3},
-            ["Orbs"]    = {6, 4},
-            ["ItemCompare"] = {10, 5},
-            ["Character"] = {10, 6},
-            ["Bank"]    = {10, 7},
-            ["Merchant"] = {10, 8},
-            ["QuestDialog"] = {10, 9},
-            ["Gossip"]  = {10, 10},
-            ["QuestLog"] = {10, 11},
-            ["Social"]  = {10, 12},
-            ["Mail"]    = {10, 13},
-            ["Trade"]   = {10, 14},
-            ["Trainer"] = {10, 15},
-            ["DressUp"] = {10, 16},
-            ["Help"]    = {10, 17},
-            ["Scrollbar"] = {10, 18},
-            ["OpenMail"] = {10, 19},
-            ["Inspect"] = {10, 20},
-            ["Macros"] = {10, 21},
-            ["SpellBook"] = {10, 22},
-            ["KeyBinding"] = {10, 23},
-            ["TradeSkill"] = {10, 24},
             ["Auras"]   = {14, 6},
+            ["Xprep"]   = {15, 1},
         },
 
         -- 分类显示位置覆盖：将某模块的特定分类渲染到另一个模块的 tab 位置
@@ -265,7 +265,7 @@ DFUI:NewMod("Gui-elem", 3, function()
         }
 
         -- card panel constants (matching superwow.lua / mods.lua style)
-        local PANEL_WIDTH = 680
+        local PANEL_WIDTH = 800
         local PANEL_INSET = 15
         local PANEL_GAP = 12
         local HEADER_AREA = 50   -- title(10) + desc(28) + sep(44) + pad to 50
@@ -282,8 +282,8 @@ DFUI:NewMod("Gui-elem", 3, function()
                 tile = true, tileSize = 16, edgeSize = 16,
                 insets = { left = 4, right = 4, top = 4, bottom = 4 }
             })
-            bg:SetBackdropColor(0.10, 0.07, 0.03, 0.4)
-            bg:SetBackdropBorderColor(0.48, 0.33, 0.09, 0.3)
+            bg:SetBackdropColor(0.05, 0.04, 0.02, 0.7)
+            bg:SetBackdropBorderColor(0.30, 0.25, 0.15, 0.4)
             return bg
         end
 
@@ -407,7 +407,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                         local catTitle = categoryData.category or ""
                         -- For multi-module tabs, prepend module name
                         local panelTitle = catTitle
-                        if (tabIndex == 6 or tabIndex == 14) then
+                        if (tabIndex == 7 or tabIndex == 14) then
                             local modDisplay = moduleDisplayNames[moduleName]
                             if modDisplay and catTitle ~= "" then
                                 panelTitle = modDisplay .. " - " .. catTitle
@@ -417,7 +417,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                         end
 
                         local catPanel = CreateCategoryPanel(scrollChild, PANEL_WIDTH, panelHeight)
-                        catPanel:SetPoint("TOP", scrollChild, "TOP", 0, yPos)
+                        catPanel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 25, yPos)
 
                         AddPanelHeader(catPanel, panelTitle, nil)
 
@@ -442,7 +442,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                                 if not self.checkboxes[elementKey] then
                                     local descLabel = catPanel:CreateFontString(nil, "BACKGROUND")
                                     descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
-                                    descLabel:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY - 3)
+                                    descLabel:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY - 5)
                                     descLabel:SetText(data.description or "")
                                     descLabel:SetTextColor(.9,.9,.9)
 
@@ -456,7 +456,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                                     end
 
                                     local checkbox = DFUI.tools.CreateCheckbox(catPanel, nil, elementModule, elementName)
-                                    checkbox:SetPoint("TOPRIGHT", catPanel, "TOPRIGHT", -100, -innerY)
+                                    checkbox:SetPoint("TOPRIGHT", catPanel, "TOPRIGHT", -166, -innerY)
                                     checkbox:SetChecked(currentValue)
                                     if checkbox.label then
                                         checkbox.label:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.VALUE_FONT_SIZE), "OUTLINE")
@@ -472,7 +472,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                                 if not self.sliders[elementKey] then
                                     local descLabel = catPanel:CreateFontString(nil, "BACKGROUND")
                                     descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
-                                    descLabel:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY - 6)
+                                    descLabel:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY - 5)
                                     descLabel:SetText(data.description or "")
                                     descLabel:SetTextColor(.9,.9,.9)
 
@@ -503,7 +503,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                                 if not self.dropdowns[elementKey] then
                                     local descLabel = catPanel:CreateFontString(nil, "BACKGROUND")
                                     descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
-                                    descLabel:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY - 10)
+                                    descLabel:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY - 5)
                                     descLabel:SetText(data.description or "")
                                     descLabel:SetTextColor(.9,.9,.9)
 
@@ -533,7 +533,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                                 if not self.colours[elementKey] then
                                     local descLabel = catPanel:CreateFontString(nil, "BACKGROUND")
                                     descLabel:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(self.DESCRIPTION_FONT_SIZE), "OUTLINE")
-                                    descLabel:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY - 6)
+                                    descLabel:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET, -innerY - 5)
                                     descLabel:SetText(data.description or "")
                                     descLabel:SetTextColor(.9,.9,.9)
 

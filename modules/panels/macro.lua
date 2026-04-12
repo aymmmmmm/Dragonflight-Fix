@@ -89,6 +89,7 @@ DFUI:NewMod("Macros", 5, function()
             MacroFrameSelectedMacroButton:SetHighlightTexture(highlight)
         end
 
+        CenterFrame(MacroFrame)
         HookScript(MacroFrame, "OnShow", function()
             customBg:Show()
         end)

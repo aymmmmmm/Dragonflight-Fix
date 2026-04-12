@@ -88,6 +88,7 @@ DFUI:NewMod("Trainer", 5, function()
         closeButton:SetHeight(20)
         closeButton:SetFrameLevel(customBg:GetFrameLevel() + 3)
 
+        CenterFrame(ClassTrainerFrame)
         HookScript(ClassTrainerFrame, "OnShow", function()
             customBg:Show()
         end)

@@ -46,6 +46,7 @@ DFUI:NewMod("Merchant", 5, function()
         MerchantFrame_Update()
     end, 70)
 
+    CenterFrame(MerchantFrame)
     HookScript(MerchantFrame, "OnShow", function()
         customBg:Show()
     end)

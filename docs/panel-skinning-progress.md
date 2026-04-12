@@ -85,7 +85,58 @@
   - 不要随意 ClearAllPoints + SetPoint 移动整个控件位置，容易破坏布局
 ```
 
-## 四、已尝试但撤回的方案
+## 四、2026-04-11 批量改进
+
+### 4.1 法术书面板（spellbook.lua）
+| 改动 | 说明 |
+|------|------|
+| 复选框过滤修复 | `this:SetChecked()` → 显式变量引用，避免 setfenv 下 `this` 解析失败 |
+| 原生残留隐藏 | KillFrame 后显式隐藏 SpellBookSkillLineTab1~8、FrameTabButton1~3 |
+| 技能按钮右移 | 左偏移 15 → 50，避免和页面左边缘重叠 |
+| 文字配色 | 白色 → 深棕墨水色 (0.35,0.20,0.08) + 浅棕 (0.50,0.35,0.18)，匹配羊皮纸 |
+| 可拖动 | SetMovable + RegisterForDrag + OnDragStart/OnDragStop |
+
+### 4.2 所有面板统一改动（13个文件）
+| 改动 | 说明 |
+|------|------|
+| 统一内边框 | 12 个面板添加 contentBg(黑色0.3) + contentBorder(UI-Tooltip-Border, edgeSize=16, 色 0.6/0.55/0.5) |
+| 统一居中 | 17 个面板添加 CenterFrame() 钩子，打开时屏幕居中 |
+
+### 4.3 工具函数（core/tools.lua）
+| 函数 | 说明 |
+|------|------|
+| CenterFrame(frame) | OnShow 时 ClearAllPoints + SetPoint CENTER |
+| AddSubBorder(parent, frame, inset) | 仅描边无背景，edgeSize=16，颜色与 contentBorder 统一 |
+
+### 4.4 专业技能面板（tradeskill.lua）
+| 改动 | 说明 |
+|------|------|
+| 可拖动 | SetMovable + RegisterForDrag |
+| 技能列表描边 | ListScrollFrame 手动定位(TOPLEFT -17,9 / BOTTOMRIGHT +26,27)，包住滚动条 |
+| InputBox 描边 | AddSubBorder 给制作数量输入框加描边 |
+| 标题上移 | TitleText 重定位到 TOP, frame, TOP, 0, -8 |
+| FrameLevel 修正 | customBg 从 +1 改为 -1，防止遮挡原生内容 |
+
+### 4.5 其他面板小改
+| 面板 | 改动 |
+|------|------|
+| social.lua | WhoFrameEditBox 添加 AddSubBorder 描边 |
+| character.lua | SkillRankFrame 在技能页 OnShow 动态添加描边 |
+
+### 4.6 新增文档
+| 文档 | 内容 |
+|------|------|
+| docs/spellbook-ui-design.md | 法术书 UI 完整设计规范（配色/纹理/布局/复用指南） |
+| docs/panel-known-issues.md | 已知问题（CraftFrame 训练点数不显示等） |
+
+### 4.7 关键教训
+- **改之前先确认改的是什么** — 分清"标题文字位置"和"内边框偏移"，避免改错对象
+- **描边只加边不加背景** — AddSubBorder 初版错误地加了 bgFile 覆盖原内容，二版修正为仅 edgeFile
+- **描边尺寸要和外层统一** — edgeSize 必须和 contentBorder 一致（16），否则不和谐
+- **ScrollFrame 描边要考虑滚动条宽度** — 右侧需 +26px 包住 ~20px 宽的滚动条
+- **不给大面积区域加描边** — ScrollFrame 加描边显得笨重，只给小控件（RankFrame/InputBox/EditBox）加
+
+## 五、已尝试但撤回的方案
 
 | 方案 | 原因 | 教训 |
 |------|------|------|
@@ -102,11 +153,12 @@
 
 | 面板 | 复杂度 | 说明 |
 |------|--------|------|
-| SpellBookFrame（法术书） | 高 | D3 全重写 535 行；ModernSpellBook 功能更全。详见 `docs/spellbook-comparison.md` |
-| MacroFrame（宏编辑器） | 中 | 18 个宏按钮美化 |
-| KeyBindingFrame（按键绑定） | 低 | 标准面板 |
-| WorldMapFrame（世界地图） | 高 | Map 模块已有部分实现 |
-| OpenMailFrame（读信面板） | 低 | MailFrame 的子面板 |
+| SpellBookFrame（法术书） | ✅ 已完成 | 660 行全重写，详见 `docs/spellbook-ui-design.md` |
+| MacroFrame（宏编辑器） | ✅ 已完成 | 18 个宏按钮美化 + 内边框 |
+| KeyBindingFrame（按键绑定） | ✅ 已完成 | frameStyle 2 + 内边框 |
+| InspectFrame（观察面板） | ✅ 已完成 | 内边框 + 居中 |
+| OpenMailFrame（读信面板） | ✅ 已完成 | frameStyle 2 + 内边框 |
+| WorldMapFrame（世界地图） | 未实施 | Map 模块已有部分实现 |
 | GameMenu（游戏菜单） | — | Fix 已有 menu.lua |
 | TalentFrame（天赋） | — | Fix 已有 1077 行实现 |
 | LootFrame（拾取） | — | Fix 已有 865 行实现 |

@@ -48,6 +48,14 @@ DFUI:NewMod("Frames", 2, function()
             DFUI.rollAnchor,
         }
 
+        -- orbs + track button
+        local orbHP = _G["DFUI_HealthOrb"]
+        local orbMP = _G["DFUI_ManaOrb"]
+        local trackBtn = _G["DFUI_TrackBtn"]
+        if orbHP then table.insert(framesToMakeMovable, orbHP) end
+        if orbMP then table.insert(framesToMakeMovable, orbMP) end
+        if trackBtn then table.insert(framesToMakeMovable, trackBtn) end
+
 
         local function SaveFramePosition(frame)
             local name = frame:GetName()

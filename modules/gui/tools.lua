@@ -77,25 +77,7 @@ function DFUI.tools.MoveFrame(f, dirX, dirY, time, dist)
     end)
 end
 
-function DFUI.tools.CreateDFUIFrame(parent, w, h, gradPos, alpha, mouse)
-    parent = parent or UIParent
-    local f = CreateFrame("Frame", nil, parent)
-    f:SetWidth(w or 100)
-    f:SetHeight(h or 100)
-    f:EnableMouse(mouse or false)
-    f:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 16,
-        insets = {left = 4, right = 4, top = 4, bottom = 4}
-    })
-    f:SetBackdropColor(0, 0, 0, alpha or 0.5)
-    f:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
-    DFUI.tools.GradientLine(f, gradPos or "TOP", -1, 3)
-    return f
-end
-
-function DFUI.tools.CreateDFUIFrameName(parent, w, h, gradPos, alpha, mouse, name)
+function DFUI.tools.CreateDFUIFrame(parent, w, h, gradPos, alpha, mouse, name)
     parent = parent or UIParent
     local f = CreateFrame("Frame", name, parent)
     f:SetWidth(w or 100)
@@ -112,6 +94,8 @@ function DFUI.tools.CreateDFUIFrameName(parent, w, h, gradPos, alpha, mouse, nam
     DFUI.tools.GradientLine(f, gradPos or "TOP", -1, 3)
     return f
 end
+
+DFUI.tools.CreateDFUIFrameName = DFUI.tools.CreateDFUIFrame
 
 function DFUI.tools.CreateFont(parent, size, text, colour, align)
     local font = parent:CreateFontString(nil, "OVERLAY")

@@ -375,7 +375,10 @@ DFUI:NewMod("Cast", 1, function()
                 timeStr = string.format('%.1f', remaining)
             end
 
-            self.timeText:SetText(timeStr)
+            if timeStr ~= self._lastTimeStr then
+                self.timeText:SetText(timeStr)
+                self._lastTimeStr = timeStr
+            end
         end
     end
 
@@ -585,33 +588,8 @@ DFUI:NewMod("Cast", 1, function()
     callbacks.fontSize = function(value)
         Setup.config.fontSizeName = value
         Setup.config.fontSizeTime = value
-        local fontPath
         local fontValue = DFUI:GetTempDB("Cast", "castFont")
-        if fontValue == "Expressway" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Expressway.ttf"
-        elseif fontValue == "Homespun" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Homespun.ttf"
-        elseif fontValue == "Hooge" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Hooge.ttf"
-        elseif fontValue == "Myriad-Pro" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Myriad-Pro.ttf"
-        elseif fontValue == "Prototype" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Prototype.ttf"
-        elseif fontValue == "PT-Sans-Narrow-Bold" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\PT-Sans-Narrow-Bold.ttf"
-        elseif fontValue == "PT-Sans-Narrow-Regular" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\PT-Sans-Narrow-Regular.ttf"
-        elseif fontValue == "RobotoMono" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\RobotoMono.ttf"
-        elseif fontValue == "BigNoodleTitling" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\BigNoodleTitling.ttf"
-        elseif fontValue == "Continuum" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Continuum.ttf"
-        elseif fontValue == "DieDieDie" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\DieDieDie.ttf"
-        else
-            fontPath = Setup.config.font
-        end
+        local fontPath = GetFontPath(fontValue, Setup.config.font)
         Setup.text:SetFont(fontPath, value, "OUTLINE")
         Setup.timeText:SetFont(fontPath, value, "OUTLINE")
     end
@@ -681,41 +659,11 @@ DFUI:NewMod("Cast", 1, function()
     end
 
     callbacks.castFont = function(value)
-        local fontPath
-        if value == "Expressway" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Expressway.ttf"
-        elseif value == "Homespun" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Homespun.ttf"
-        elseif value == "Hooge" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Hooge.ttf"
-        elseif value == "Myriad-Pro" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Myriad-Pro.ttf"
-        elseif value == "Prototype" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Prototype.ttf"
-        elseif value == "PT-Sans-Narrow-Bold" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\PT-Sans-Narrow-Bold.ttf"
-        elseif value == "PT-Sans-Narrow-Regular" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\PT-Sans-Narrow-Regular.ttf"
-        elseif value == "RobotoMono" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\RobotoMono.ttf"
-        elseif value == "BigNoodleTitling" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\BigNoodleTitling.ttf"
-        elseif value == "Continuum" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Continuum.ttf"
-        elseif value == "DieDieDie" then
-            fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\DieDieDie.ttf"
-        else
-            fontPath = "Fonts\\FRIZQT__.TTF"
-        end
+        local fontPath = GetFontPath(value)
         Setup.config.font = fontPath
         Setup.text:SetFont(fontPath, DFUI:GetTempDB("Cast", "fontSize"), "OUTLINE")
         Setup.timeText:SetFont(fontPath, DFUI:GetTempDB("Cast", "fontSize"), "OUTLINE")
     end
-
-    -- callbacks.castColor = function(value)
-    --     Setup.config.barColor = {r = value[1], g = value[2], b = value[3]}
-    --     Setup.barTexture:SetVertexColor(value[1], value[2], value[3])
-    -- end
 
     callbacks.textAlign = function(value)
         Setup.text:SetJustifyH(value)

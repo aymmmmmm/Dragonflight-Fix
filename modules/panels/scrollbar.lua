@@ -92,9 +92,37 @@ DFUI:NewMod("Scrollbar", 6, function()
         local down = _G[name .. "ScrollDownButton"]
         local thumb = scrollbar:GetThumbTexture()
 
-        -- 换肤箭头按钮（轨道和滑块保留暴雪原生样式）
+        -- 换肤箭头按钮
         SkinArrowButton(up, "up")
         SkinArrowButton(down, "down")
+
+        -- 隐藏原生轨道纹理
+        local trackTop = _G[name .. "Top"]
+        local trackBottom = _G[name .. "Bottom"]
+        local trackMiddle = _G[name .. "Middle"]
+        if trackTop then trackTop:SetTexture(nil) end
+        if trackBottom then trackBottom:SetTexture(nil) end
+        if trackMiddle then trackMiddle:SetTexture(nil) end
+
+        -- 轨道背景
+        if up and down then
+            local track = CreateFrame("Frame", nil, scrollbar)
+            track:SetPoint("TOP", up, "BOTTOM", 0, 0)
+            track:SetPoint("BOTTOM", down, "TOP", 0, 0)
+            track:SetPoint("LEFT", scrollbar, "LEFT", 0, 0)
+            track:SetPoint("RIGHT", scrollbar, "RIGHT", 0, 0)
+            track:SetFrameLevel(scrollbar:GetFrameLevel() - 1)
+            track:SetBackdrop(trackBackdrop)
+            track:SetBackdropColor(TRACK_BG[1], TRACK_BG[2], TRACK_BG[3], 0.8)
+            track:SetBackdropBorderColor(BORDER_WARM[1], BORDER_WARM[2], BORDER_WARM[3], 0.5)
+        end
+
+        -- 滑块换肤
+        if thumb then
+            thumb:SetTexture(WHITE8X8)
+            thumb:SetVertexColor(BRONZE[1], BRONZE[2], BRONZE[3], 0.9)
+            thumb:SetWidth(8)
+        end
     end
 
     -------------------------------------------------------
@@ -206,6 +234,26 @@ DFUI:NewMod("Scrollbar", 6, function()
     }
 
     -------------------------------------------------------
+    -- 箭头纹理偏移（只移动按钮内部纹理，不动按钮帧本身）
+    -------------------------------------------------------
+    local function NudgeArrowTextures(button, dx, dy)
+        if not button then return end
+        local textures = {
+            button:GetNormalTexture(),
+            button:GetPushedTexture(),
+            button:GetDisabledTexture(),
+            button:GetHighlightTexture(),
+        }
+        for _, tex in ipairs(textures) do
+            if tex then
+                tex:ClearAllPoints()
+                tex:SetPoint("TOPLEFT", button, "TOPLEFT", dx, dy)
+                tex:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", dx, dy)
+            end
+        end
+    end
+
+    -------------------------------------------------------
     -- 延迟应用
     -------------------------------------------------------
     local function ApplyAll()
@@ -213,6 +261,8 @@ DFUI:NewMod("Scrollbar", 6, function()
             local frame = _G[sbName]
             if frame then DFUI.SkinScrollbar(frame) end
         end
+        -- 声望滚动条下箭头纹理微调（往上3px）
+        NudgeArrowTextures(_G["ReputationListScrollFrameScrollBarScrollDownButton"], 0, 3)
         for _, ddName in ipairs(dropdownTargets) do
             local frame = _G[ddName]
             if frame then DFUI.SkinDropDown(frame) end
@@ -237,15 +287,20 @@ DFUI:NewMod("Scrollbar", 6, function()
     end)
 
     local addonFrame = CreateFrame("Frame")
+    local addonElapsed = 0
+    local addonPending = false
     addonFrame:RegisterEvent("ADDON_LOADED")
     addonFrame:SetScript("OnEvent", function()
-        local elapsed2 = 0
-        local retry = CreateFrame("Frame")
-        retry:SetScript("OnUpdate", function()
-            elapsed2 = elapsed2 + arg1
-            if elapsed2 < 0.2 then return end
-            retry:SetScript("OnUpdate", nil)
-            ApplyAll()
-        end)
+        addonElapsed = 0
+        if not addonPending then
+            addonPending = true
+            addonFrame:SetScript("OnUpdate", function()
+                addonElapsed = addonElapsed + arg1
+                if addonElapsed < 0.2 then return end
+                addonFrame:SetScript("OnUpdate", nil)
+                addonPending = false
+                ApplyAll()
+            end)
+        end
     end)
 end)

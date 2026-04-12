@@ -293,32 +293,7 @@ DFUI:NewMod("Xprep", 1, function()
         end
 
         callbacks.barFont = function(value)
-            local fontPath
-            if value == "Expressway" then
-                fontPath = Setup.fontpath .. "Expressway.ttf"
-            elseif value == "Homespun" then
-                fontPath = Setup.fontpath .. "Homespun.ttf"
-            elseif value == "Hooge" then
-                fontPath = Setup.fontpath .. "Hooge.ttf"
-            elseif value == "Myriad-Pro" then
-                fontPath = Setup.fontpath .. "Myriad-Pro.ttf"
-            elseif value == "Prototype" then
-                fontPath = Setup.fontpath .. "Prototype.ttf"
-            elseif value == "PT-Sans-Narrow-Bold" then
-                fontPath = Setup.fontpath .. "PT-Sans-Narrow-Bold.ttf"
-            elseif value == "PT-Sans-Narrow-Regular" then
-                fontPath = Setup.fontpath .. "PT-Sans-Narrow-Regular.ttf"
-            elseif value == "RobotoMono" then
-                fontPath = Setup.fontpath .. "RobotoMono.ttf"
-            elseif value == "BigNoodleTitling" then
-                fontPath = Setup.fontpath .. "BigNoodleTitling.ttf"
-            elseif value == "Continuum" then
-                fontPath = Setup.fontpath .. "Continuum.ttf"
-            elseif value == "DieDieDie" then
-                fontPath = Setup.fontpath .. "DieDieDie.ttf"
-            else
-                fontPath = "Fonts\\FRIZQT__.TTF"
-            end
+            local fontPath = GetFontPath(value)
 
             if Setup.xpBarText then
                 local _, size = Setup.xpBarText:GetFont()
@@ -381,32 +356,7 @@ DFUI:NewMod("Xprep", 1, function()
         callbacks.xpBarTextSize = function(value)
             if Setup.xpBarText then
                 local fontValue = DFUI:GetTempDB("Xprep", "barFont")
-                local fontPath
-                if fontValue == "Expressway" then
-                    fontPath = Setup.fontpath .. "Expressway.ttf"
-                elseif fontValue == "Homespun" then
-                    fontPath = Setup.fontpath .. "Homespun.ttf"
-                elseif fontValue == "Hooge" then
-                    fontPath = Setup.fontpath .. "Hooge.ttf"
-                elseif fontValue == "Myriad-Pro" then
-                    fontPath = Setup.fontpath .. "Myriad-Pro.ttf"
-                elseif fontValue == "Prototype" then
-                    fontPath = Setup.fontpath .. "Prototype.ttf"
-                elseif fontValue == "PT-Sans-Narrow-Bold" then
-                    fontPath = Setup.fontpath .. "PT-Sans-Narrow-Bold.ttf"
-                elseif fontValue == "PT-Sans-Narrow-Regular" then
-                    fontPath = Setup.fontpath .. "PT-Sans-Narrow-Regular.ttf"
-                elseif fontValue == "RobotoMono" then
-                    fontPath = Setup.fontpath .. "RobotoMono.ttf"
-                elseif fontValue == "BigNoodleTitling" then
-                    fontPath = Setup.fontpath .. "BigNoodleTitling.ttf"
-                elseif fontValue == "Continuum" then
-                    fontPath = Setup.fontpath .. "Continuum.ttf"
-                elseif fontValue == "DieDieDie" then
-                    fontPath = Setup.fontpath .. "DieDieDie.ttf"
-                else
-                    fontPath = "Fonts\\FRIZQT__.TTF"
-                end
+                local fontPath = GetFontPath(fontValue)
                 Setup.xpBarText:SetFont(fontPath, value, "OUTLINE")
             end
         end
@@ -488,32 +438,7 @@ DFUI:NewMod("Xprep", 1, function()
         callbacks.repBarTextSize = function(value)
             if Setup.repBarText then
                 local fontValue = DFUI:GetTempDB("Xprep", "barFont")
-                local fontPath
-                if fontValue == "Expressway" then
-                    fontPath = Setup.fontpath .. "Expressway.ttf"
-                elseif fontValue == "Homespun" then
-                    fontPath = Setup.fontpath .. "Homespun.ttf"
-                elseif fontValue == "Hooge" then
-                    fontPath = Setup.fontpath .. "Hooge.ttf"
-                elseif fontValue == "Myriad-Pro" then
-                    fontPath = Setup.fontpath .. "Myriad-Pro.ttf"
-                elseif fontValue == "Prototype" then
-                    fontPath = Setup.fontpath .. "Prototype.ttf"
-                elseif fontValue == "PT-Sans-Narrow-Bold" then
-                    fontPath = Setup.fontpath .. "PT-Sans-Narrow-Bold.ttf"
-                elseif fontValue == "PT-Sans-Narrow-Regular" then
-                    fontPath = Setup.fontpath .. "PT-Sans-Narrow-Regular.ttf"
-                elseif fontValue == "RobotoMono" then
-                    fontPath = Setup.fontpath .. "RobotoMono.ttf"
-                elseif fontValue == "BigNoodleTitling" then
-                    fontPath = Setup.fontpath .. "BigNoodleTitling.ttf"
-                elseif fontValue == "Continuum" then
-                    fontPath = Setup.fontpath .. "Continuum.ttf"
-                elseif fontValue == "DieDieDie" then
-                    fontPath = Setup.fontpath .. "DieDieDie.ttf"
-                else
-                    fontPath = "Fonts\\FRIZQT__.TTF"
-                end
+                local fontPath = GetFontPath(fontValue)
                 Setup.repBarText:SetFont(fontPath, value, "OUTLINE")
             end
         end

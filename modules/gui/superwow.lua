@@ -22,7 +22,7 @@ DFUI:NewDefaults("SuperWoW", {
 
 DFUI:NewMod("Gui-superwow", 3, function()
     local Base = DFUI.gui.Base
-    local panel = Base.scrollChildren[13]
+    local panel = Base.scrollChildren[6]
     local SS = DFUI.tools.ScaledSize
     local fontPath = DFUI:GetInfoOrCons("font")
 
@@ -236,8 +236,8 @@ DFUI:NewMod("Gui-superwow", 3, function()
             tile = true, tileSize = 16, edgeSize = 16,
             insets = { left = 4, right = 4, top = 4, bottom = 4 }
         })
-        bg:SetBackdropColor(0.10, 0.07, 0.03, 0.4)
-        bg:SetBackdropBorderColor(0.48, 0.33, 0.09, 0.3)
+        bg:SetBackdropColor(0.05, 0.04, 0.02, 0.7)
+        bg:SetBackdropBorderColor(0.30, 0.25, 0.15, 0.4)
         return bg
     end
 
@@ -628,21 +628,21 @@ DFUI:NewMod("Gui-superwow", 3, function()
                 end
 
                 -- Enable/disable tab 13
-                if DFUI.gui.Base and DFUI.gui.Base.tabButtons and DFUI.gui.Base.tabButtons[13] then
-                    local tab = DFUI.gui.Base.tabButtons[13]
+                if DFUI.gui.Base and DFUI.gui.Base.tabButtons and DFUI.gui.Base.tabButtons[6] then
+                    local tab = DFUI.gui.Base.tabButtons[6]
                     if SUPERWOW_VERSION then
                         tab:Enable()
                         tab:GetFontString():SetTextColor(.7, .7, .7, 1)
                         tab:SetScript("OnClick", function()
-                            DFUI.gui.Base:SelectTab(13)
+                            DFUI.gui.Base:SelectTab(6)
                         end)
                         tab:SetScript("OnEnter", function()
-                            if 13 ~= DFUI.gui.Base.selectedTab then
+                            if 6 ~= DFUI.gui.Base.selectedTab then
                                 tab.highlight:Show()
                             end
                         end)
                         tab:SetScript("OnLeave", function()
-                            if 13 ~= DFUI.gui.Base.selectedTab then
+                            if 6 ~= DFUI.gui.Base.selectedTab then
                                 tab.highlight:Hide()
                             end
                         end)

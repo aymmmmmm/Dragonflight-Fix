@@ -66,6 +66,27 @@ function AbbreviateName(name)
     end
 end
 
+-- 面板打开时恢复默认位置（由原生 ShowUIPanel 系统处理左侧堆叠）
+-- 保留函数签名，避免调用处报错；原生面板无需额外干预
+function CenterFrame(frame)
+    -- no-op: 让 ShowUIPanel 的原生定位生效
+end
+
+-- 给深色背景上的控件添加描边（仅边框，无背景）
+function AddSubBorder(parent, frame, inset)
+    inset = inset or 0
+    local border = CreateFrame("Frame", nil, parent)
+    border:SetPoint("TOPLEFT", frame, "TOPLEFT", -inset, inset)
+    border:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", inset, -inset)
+    border:SetFrameLevel(frame:GetFrameLevel() + 1)
+    border:SetBackdrop({
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 16,
+    })
+    border:SetBackdropBorderColor(0.6, 0.55, 0.5, 1)
+    return border
+end
+
 HookScript = function(f, script, func)
     local prev = f:GetScript(script)
     f:SetScript(script, function(a1,a2,a3,a4,a5,a6,a7,a8,a9)
@@ -135,4 +156,25 @@ function HookUnitData(unit, func)
             this:UnregisterAllEvents()
         end
     end)
+end
+
+-- Font name → path lookup table (shared across all modules)
+local FONT_BASE = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\"
+DFUI_FONT_PATHS = {
+    ["FRIZQT__.TTF"]         = "Fonts\\FRIZQT__.TTF",
+    ["Expressway"]           = FONT_BASE .. "Expressway.ttf",
+    ["Homespun"]             = FONT_BASE .. "Homespun.ttf",
+    ["Hooge"]                = FONT_BASE .. "Hooge.ttf",
+    ["Myriad-Pro"]           = FONT_BASE .. "Myriad-Pro.ttf",
+    ["Prototype"]            = FONT_BASE .. "Prototype.ttf",
+    ["PT-Sans-Narrow-Bold"]  = FONT_BASE .. "PT-Sans-Narrow-Bold.ttf",
+    ["PT-Sans-Narrow-Regular"] = FONT_BASE .. "PT-Sans-Narrow-Regular.ttf",
+    ["RobotoMono"]           = FONT_BASE .. "RobotoMono.ttf",
+    ["BigNoodleTitling"]     = FONT_BASE .. "BigNoodleTitling.ttf",
+    ["Continuum"]            = FONT_BASE .. "Continuum.ttf",
+    ["DieDieDie"]            = FONT_BASE .. "DieDieDie.ttf",
+}
+
+function GetFontPath(fontName, fallback)
+    return DFUI_FONT_PATHS[fontName] or fallback or "Fonts\\FRIZQT__.TTF"
 end

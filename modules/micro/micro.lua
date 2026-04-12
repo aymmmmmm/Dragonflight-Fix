@@ -295,8 +295,9 @@ DFUI:NewMod("Micro", 1, function()
         self.latencyTexture:SetAllPoints(self.latencyIndicator)
 
         self.netStatsFrame:SetScript("OnUpdate", function()
-            if (this.tick or 0) > GetTime() then return end
-            this.tick = GetTime() + 0.5
+            local now = GetTime()
+            if (this.tick or 0) > now then return end
+            this.tick = now + 0.5
 
             local bandwidthIn, bandwidthOut, latencyHome = GetNetStats()
             self.msText:SetText(string.format("MS: %d", latencyHome))
@@ -305,8 +306,9 @@ DFUI:NewMod("Micro", 1, function()
         end)
 
         self.latencyIndicator:SetScript("OnUpdate", function()
-            if (this.tick or 0) > GetTime() then return end
-            this.tick = GetTime() + 2
+            local now = GetTime()
+            if (this.tick or 0) > now then return end
+            this.tick = now + 2
 
             local _, _, latencyHome = GetNetStats()
             if latencyHome < 100 then

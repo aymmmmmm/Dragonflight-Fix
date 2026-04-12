@@ -28,6 +28,7 @@ DFUI:NewMod("OpenMail", 5, function()
     closeButton:SetHeight(20)
     closeButton:SetFrameLevel(customBg:GetFrameLevel() + 3)
 
+    CenterFrame(OpenMailFrame)
     HookScript(OpenMailFrame, "OnShow", function()
         customBg:Show()
     end)

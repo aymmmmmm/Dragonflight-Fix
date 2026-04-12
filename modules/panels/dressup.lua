@@ -36,6 +36,7 @@ DFUI:NewMod("DressUp", 5, function()
     closeButton:SetHeight(20)
     closeButton:SetFrameLevel(customBg:GetFrameLevel() + 3)
 
+    CenterFrame(DressUpFrame)
     HookScript(DressUpFrame, "OnShow", function()
         customBg:Show()
     end)

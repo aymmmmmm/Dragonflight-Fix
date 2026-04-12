@@ -56,6 +56,7 @@ DFUI:NewMod("Mail", 5, function()
         MailFrameTab_OnClick(2)
     end, 70)
 
+    CenterFrame(MailFrame)
     HookScript(MailFrame, "OnShow", function()
         customBg:Show()
     end)

@@ -22,6 +22,8 @@ DFUI:NewMod("Bank", 5, function()
     customBg:SetFrameLevel(BankFrame:GetFrameLevel() - 1)
     customBg.Bg:SetDrawLayer("BACKGROUND", -1)
 
+    CenterFrame(BankFrame)
+
     BankPortraitTexture:SetParent(customBg)
     BankPortraitTexture:ClearAllPoints()
     BankPortraitTexture:SetPoint("TOPLEFT", customBg, "TOPLEFT", -5, 7)

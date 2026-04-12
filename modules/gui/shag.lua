@@ -84,7 +84,7 @@ DFUI:NewMod("Gui-shag", 3, function()
 
     function Setup:Elements()
 
-        local PANEL_WIDTH = 680
+        local PANEL_WIDTH = 800
         local PANEL_INSET = 15
         local PANEL_GAP = 12
         local HEADER_AREA = 50
@@ -101,8 +101,8 @@ DFUI:NewMod("Gui-shag", 3, function()
                 tile = true, tileSize = 16, edgeSize = 16,
                 insets = { left = 4, right = 4, top = 4, bottom = 4 }
             })
-            bg:SetBackdropColor(0.10, 0.07, 0.03, 0.4)
-            bg:SetBackdropBorderColor(0.48, 0.33, 0.09, 0.3)
+            bg:SetBackdropColor(0.05, 0.04, 0.02, 0.7)
+            bg:SetBackdropBorderColor(0.30, 0.25, 0.15, 0.4)
             return bg
         end
 
@@ -153,7 +153,7 @@ DFUI:NewMod("Gui-shag", 3, function()
                     local panelHeight = HEADER_AREA + elemCount * ITEM_SPACING + PANEL_PAD
 
                     local catPanel = CreateCategoryPanel(panel, PANEL_WIDTH, panelHeight)
-                    catPanel:SetPoint("TOP", panel, "TOP", 0, -yPos)
+                    catPanel:SetPoint("TOPLEFT", panel, "TOPLEFT", 25, -yPos)
 
                     -- panel header
                     local catTitle = catPanel:CreateFontString(nil, "OVERLAY")
@@ -188,7 +188,7 @@ DFUI:NewMod("Gui-shag", 3, function()
                         self.descriptionLabels[element.key] = desc
 
                         local cb = DFUI.tools.CreateShaguCheckbox(catPanel, "DFUI_Shagu_" .. element.key, element.key)
-                        cb:SetPoint("TOPRIGHT", catPanel, "TOPRIGHT", -100, -innerY)
+                        cb:SetPoint("TOPRIGHT", catPanel, "TOPRIGHT", -166, -innerY)
                         self.checkboxes[element.key] = cb
 
                         innerY = innerY + ITEM_SPACING

@@ -37,6 +37,7 @@ DFUI:NewMod("Help", 5, function()
     closeButton:SetHeight(20)
     closeButton:SetFrameLevel(customBg:GetFrameLevel() + 3)
 
+    CenterFrame(HelpFrame)
     HookScript(HelpFrame, "OnShow", function()
         customBg:Show()
     end)

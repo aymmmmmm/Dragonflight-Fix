@@ -246,16 +246,10 @@ DFUI:NewMod("Bags", 1, function()
 
         function Setup:KeyRingHook()
             hooksecurefunc("MainMenuBar_UpdateKeyRing", function()
-                local toggleBagsValue = DFUI:GetTempDB("Bags", "toggleBags")
-                local hideBagsValue = DFUI:GetTempDB("Bags", "showBags")
-
-                if not toggleBagsValue and hideBagsValue and KeyRingButton then
-                    KeyRingButton:Hide()
-                end
-                if not toggleBagsValue and not hideBagsValue and KeyRingButton then
-                    KeyRingButton:Hide()
-                end
-                if toggleBagsValue and hideBagsValue and KeyRingButton then
+                if not KeyRingButton then return end
+                local toggleBags = DFUI:GetTempDB("Bags", "toggleBags")
+                local showBags = DFUI:GetTempDB("Bags", "showBags")
+                if not toggleBags or showBags then
                     KeyRingButton:Hide()
                 end
             end, true)

@@ -1653,10 +1653,15 @@ DFUI:NewMod("Auras", 2, function()
                 if btn.timerDuration and btn.timerStart then
                     local remaining = btn.timerDuration - (GetTime() - btn.timerStart)
                     if remaining > 0 then
-                        btn.timer:SetText(FormatTime(remaining, btn.timerStyle, true))
+                        local newText = FormatTime(remaining, btn.timerStyle, true)
+                        if btn._lastTimerText ~= newText then
+                            btn.timer:SetText(newText)
+                            btn._lastTimerText = newText
+                        end
                         btn.timer:Show()
                     else
                         btn.timer:SetText("")
+                        btn._lastTimerText = nil
                         btn.timer:Hide()
                         btn.timerStart = nil
                         btn.timerDuration = nil
@@ -1666,45 +1671,85 @@ DFUI:NewMod("Auras", 2, function()
         end
     end
 
+    -- Cache timer settings to avoid repeated GetTempDB calls in OnUpdate
+    local timerSettings = {
+        playerBuffTimer = false, playerBuffs = false,
+        playerDebuffTimer = false, playerDebuffs = false,
+        targetBuffTimer = false, targetBuffs = false,
+        targetDebuffTimer = false, targetDebuffs = false,
+        petBuffTimer = false, petBuffs = false,
+        petDebuffTimer = false, petDebuffs = false,
+        partyBuffTimer = false, partyBuffs = false,
+        partyDebuffTimer = false, partyDebuffs = false,
+    }
+    local function RefreshTimerSettings()
+        timerSettings.playerBuffTimer = DFUI:GetTempDB("Auras", "playerShowBuffTimer")
+        timerSettings.playerBuffs = DFUI:GetTempDB("Auras", "playerBuffs")
+        timerSettings.playerDebuffTimer = DFUI:GetTempDB("Auras", "playerShowDebuffTimer")
+        timerSettings.playerDebuffs = DFUI:GetTempDB("Auras", "playerDebuffs")
+        timerSettings.targetBuffTimer = DFUI:GetTempDB("Auras", "targetShowBuffTimer")
+        timerSettings.targetBuffs = DFUI:GetTempDB("Auras", "targetBuffs")
+        timerSettings.targetDebuffTimer = DFUI:GetTempDB("Auras", "targetShowDebuffTimer")
+        timerSettings.targetDebuffs = DFUI:GetTempDB("Auras", "targetDebuffs")
+        timerSettings.petBuffTimer = DFUI:GetTempDB("Auras", "petShowBuffTimer")
+        timerSettings.petBuffs = DFUI:GetTempDB("Auras", "petBuffs")
+        timerSettings.petDebuffTimer = DFUI:GetTempDB("Auras", "petShowDebuffTimer")
+        timerSettings.petDebuffs = DFUI:GetTempDB("Auras", "petDebuffs")
+        timerSettings.partyBuffTimer = DFUI:GetTempDB("Auras", "partyShowBuffTimer")
+        timerSettings.partyBuffs = DFUI:GetTempDB("Auras", "partyBuffs")
+        timerSettings.partyDebuffTimer = DFUI:GetTempDB("Auras", "partyShowDebuffTimer")
+        timerSettings.partyDebuffs = DFUI:GetTempDB("Auras", "partyDebuffs")
+    end
+    RefreshTimerSettings()
+
     local timerFrame = CreateFrame("Frame")
     timerFrame.elapsed = 0
+    timerFrame.settingsElapsed = 0
     timerFrame:SetScript("OnUpdate", function()
         timerFrame.elapsed = timerFrame.elapsed + arg1
         if timerFrame.elapsed < 0.1 then return end
         timerFrame.elapsed = 0
 
+        -- Refresh cached settings every ~2 seconds
+        timerFrame.settingsElapsed = timerFrame.settingsElapsed + 0.1
+        if timerFrame.settingsElapsed >= 2 then
+            RefreshTimerSettings()
+            timerFrame.settingsElapsed = 0
+        end
+
+        local ts = timerSettings
         -- Player
-        if DFUI:GetTempDB("Auras", "playerShowBuffTimer") and DFUI:GetTempDB("Auras", "playerBuffs") then
+        if ts.playerBuffTimer and ts.playerBuffs then
             RefreshTimers(unitData.player.buffs, 16, "player", false)
         end
-        if DFUI:GetTempDB("Auras", "playerShowDebuffTimer") and DFUI:GetTempDB("Auras", "playerDebuffs") then
+        if ts.playerDebuffTimer and ts.playerDebuffs then
             RefreshTimers(unitData.player.debuffs, 16, "player", true)
         end
         -- Target
         if UnitExists("target") then
-            if DFUI:GetTempDB("Auras", "targetShowBuffTimer") and DFUI:GetTempDB("Auras", "targetBuffs") then
+            if ts.targetBuffTimer and ts.targetBuffs then
                 RefreshTimers(unitData.target.buffs, 16, "target", false)
             end
-            if DFUI:GetTempDB("Auras", "targetShowDebuffTimer") and DFUI:GetTempDB("Auras", "targetDebuffs") then
+            if ts.targetDebuffTimer and ts.targetDebuffs then
                 RefreshTimers(unitData.target.debuffs, 16, "target", true)
             end
         end
         -- Pet
         if UnitExists("pet") then
-            if DFUI:GetTempDB("Auras", "petShowBuffTimer") and DFUI:GetTempDB("Auras", "petBuffs") then
+            if ts.petBuffTimer and ts.petBuffs then
                 RefreshTimers(unitData.pet.buffs, 16, "pet", false)
             end
-            if DFUI:GetTempDB("Auras", "petShowDebuffTimer") and DFUI:GetTempDB("Auras", "petDebuffs") then
+            if ts.petDebuffTimer and ts.petDebuffs then
                 RefreshTimers(unitData.pet.debuffs, 16, "pet", true)
             end
         end
         -- Party
         for idx = 1, 4 do
             if UnitExists("party" .. idx) then
-                if DFUI:GetTempDB("Auras", "partyShowBuffTimer") and DFUI:GetTempDB("Auras", "partyBuffs") then
+                if ts.partyBuffTimer and ts.partyBuffs then
                     RefreshTimers(partyData[idx].buffs, 16, "party" .. idx, false)
                 end
-                if DFUI:GetTempDB("Auras", "partyShowDebuffTimer") and DFUI:GetTempDB("Auras", "partyDebuffs") then
+                if ts.partyDebuffTimer and ts.partyDebuffs then
                     RefreshTimers(partyData[idx].debuffs, 16, "party" .. idx, true)
                 end
             end
@@ -2236,10 +2281,10 @@ DFUI:NewMod("Auras", 2, function()
     local callbacks = {}
 
     -- Player callbacks
-    callbacks.playerBuffs = function() UpdatePlayerAuras() end
-    callbacks.playerDebuffs = function() UpdatePlayerAuras() end
-    callbacks.playerShowBuffTimer = function() UpdatePlayerAuras() end
-    callbacks.playerShowDebuffTimer = function() UpdatePlayerAuras() end
+    callbacks.playerBuffs = function() RefreshTimerSettings() UpdatePlayerAuras() end
+    callbacks.playerDebuffs = function() RefreshTimerSettings() UpdatePlayerAuras() end
+    callbacks.playerShowBuffTimer = function() RefreshTimerSettings() UpdatePlayerAuras() end
+    callbacks.playerShowDebuffTimer = function() RefreshTimerSettings() UpdatePlayerAuras() end
     callbacks.playerAuraSize = function() UpdatePlayerAuras() end
     callbacks.playerAuraSpacing = function() UpdatePlayerAuras() end
     callbacks.playerAurasPerRow = function() UpdatePlayerAuras() end
@@ -2247,10 +2292,10 @@ DFUI:NewMod("Auras", 2, function()
     callbacks.playerTimerFontSize = function() UpdatePlayerAuras() end
     callbacks.playerTimerStyle = function() UpdatePlayerAuras() end
     -- Target callbacks
-    callbacks.targetBuffs = function() UpdateTargetAuras() end
-    callbacks.targetDebuffs = function() UpdateTargetAuras() end
-    callbacks.targetShowBuffTimer = function() UpdateTargetAuras() end
-    callbacks.targetShowDebuffTimer = function() UpdateTargetAuras() end
+    callbacks.targetBuffs = function() RefreshTimerSettings() UpdateTargetAuras() end
+    callbacks.targetDebuffs = function() RefreshTimerSettings() UpdateTargetAuras() end
+    callbacks.targetShowBuffTimer = function() RefreshTimerSettings() UpdateTargetAuras() end
+    callbacks.targetShowDebuffTimer = function() RefreshTimerSettings() UpdateTargetAuras() end
     callbacks.targetAuraSize = function() UpdateTargetAuras() end
     callbacks.targetAuraSpacing = function() UpdateTargetAuras() end
     callbacks.targetAurasPerRow = function() UpdateTargetAuras() end
@@ -2258,10 +2303,10 @@ DFUI:NewMod("Auras", 2, function()
     callbacks.targetTimerFontSize = function() UpdateTargetAuras() end
     callbacks.targetTimerStyle = function() UpdateTargetAuras() end
     -- Pet callbacks
-    callbacks.petBuffs = function() UpdatePetAuras() end
-    callbacks.petDebuffs = function() UpdatePetAuras() end
-    callbacks.petShowBuffTimer = function() UpdatePetAuras() end
-    callbacks.petShowDebuffTimer = function() UpdatePetAuras() end
+    callbacks.petBuffs = function() RefreshTimerSettings() UpdatePetAuras() end
+    callbacks.petDebuffs = function() RefreshTimerSettings() UpdatePetAuras() end
+    callbacks.petShowBuffTimer = function() RefreshTimerSettings() UpdatePetAuras() end
+    callbacks.petShowDebuffTimer = function() RefreshTimerSettings() UpdatePetAuras() end
     callbacks.petAuraSize = function() UpdatePetAuras() end
     callbacks.petAuraSpacing = function() UpdatePetAuras() end
     callbacks.petAurasPerRow = function() UpdatePetAuras() end
@@ -2269,10 +2314,10 @@ DFUI:NewMod("Auras", 2, function()
     callbacks.petTimerFontSize = function() UpdatePetAuras() end
     callbacks.petTimerStyle = function() UpdatePetAuras() end
     -- Party callbacks
-    callbacks.partyBuffs = function() UpdatePartyAuras() end
-    callbacks.partyDebuffs = function() UpdatePartyAuras() end
-    callbacks.partyShowBuffTimer = function() UpdatePartyAuras() end
-    callbacks.partyShowDebuffTimer = function() UpdatePartyAuras() end
+    callbacks.partyBuffs = function() RefreshTimerSettings() UpdatePartyAuras() end
+    callbacks.partyDebuffs = function() RefreshTimerSettings() UpdatePartyAuras() end
+    callbacks.partyShowBuffTimer = function() RefreshTimerSettings() UpdatePartyAuras() end
+    callbacks.partyShowDebuffTimer = function() RefreshTimerSettings() UpdatePartyAuras() end
     callbacks.partyAuraSize = function() UpdatePartyAuras() end
     callbacks.partyAuraSpacing = function() UpdatePartyAuras() end
     callbacks.partyAurasPerRow = function() UpdatePartyAuras() end

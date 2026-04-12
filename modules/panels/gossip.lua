@@ -67,6 +67,7 @@ DFUI:NewMod("Gossip", 5, function()
         GossipFrameNpcNameText:SetPoint("TOP", customBg, "TOP", 0, -6)
     end
 
+    CenterFrame(GossipFrame)
     HookScript(GossipFrame, "OnShow", function()
         customBg:Show()
     end)

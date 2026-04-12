@@ -25,6 +25,7 @@ DFUI:NewMod("QuestLog", 5, function()
     customBg:SetPoint("BOTTOMRIGHT", QuestLogFrame, "BOTTOMRIGHT", -91, 50)
     customBg:SetFrameLevel(QuestLogFrame:GetFrameLevel() - 1)
 
+    CenterFrame(QuestLogFrame)
     HookScript(QuestLogFrame, "OnShow", function()
         customBg:Show()
     end)

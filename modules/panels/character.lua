@@ -8,31 +8,6 @@ DFUI:NewDefaults("Character", {
 })
 
 DFUI:NewMod("Character", 5, function()
-    local frames = {PaperDollFrame, PetPaperDollFrame, SkillFrame, ReputationFrame, HonorFrame}
-    for _, frame in ipairs(frames) do
-        if frame then
-            local regions = {frame:GetRegions()}
-            for i = 1, table.getn(regions) do
-                local region = regions[i]
-                if region:GetObjectType() == "Texture" then
-                    local texture = region:GetTexture()
-                    if texture and (string.find(texture, "UI%-Character%-") or string.find(texture, "PaperDoll")) then
-                        region:Hide()
-                    end
-                end
-            end
-        end
-    end
-
-    CharacterFrameTab1:Hide()
-    CharacterFrameTab2:Hide()
-    CharacterFrameTab3:Hide()
-    CharacterFrameTab4:Hide()
-    CharacterFrameTab5:Hide()
-    CharacterFrameCloseButton:Hide()
-    PetPaperDollCloseButton:Hide()
-    SkillFrameCancelButton:Hide()
-
     -- 通用：隐藏框架所有暴雪背景纹理，保留图标/按钮相关
     local function HideBlizzardTextures(frame)
         if not frame then return end
@@ -57,6 +32,48 @@ DFUI:NewMod("Character", 5, function()
             end
         end
     end
+
+    -- 隐藏子框体上的暴雪纹理
+    local frames = {PaperDollFrame, PetPaperDollFrame, SkillFrame, ReputationFrame, HonorFrame}
+    for _, frame in ipairs(frames) do
+        if frame then
+            local regions = {frame:GetRegions()}
+            for i = 1, table.getn(regions) do
+                local region = regions[i]
+                if region:GetObjectType() == "Texture" then
+                    local texture = region:GetTexture()
+                    if texture and (string.find(texture, "UI%-Character%-") or string.find(texture, "PaperDoll")) then
+                        region:Hide()
+                    end
+                end
+            end
+        end
+    end
+
+    -- 隐藏 CharacterFrame 自身的背景/边框纹理（用 SetAlpha(0) 防止 tab 切换时被 Show 恢复）
+    local cfRegions = {CharacterFrame:GetRegions()}
+    for i = 1, table.getn(cfRegions) do
+        local region = cfRegions[i]
+        if region:GetObjectType() == "Texture" then
+            local name = region:GetName()
+            if not (name and string.find(name, "Portrait")) then
+                region:SetAlpha(0)
+            end
+        end
+    end
+
+    -- 通用隐藏：清除 SkillFrame / ReputationFrame 上不匹配特定模式的残余纹理
+    HideBlizzardTextures(SkillFrame)
+    HideBlizzardTextures(ReputationFrame)
+
+    CharacterFrameTab1:Hide()
+    CharacterFrameTab2:Hide()
+    CharacterFrameTab3:Hide()
+    CharacterFrameTab4:Hide()
+    CharacterFrameTab5:Hide()
+    CharacterFrameCloseButton:Hide()
+    PetPaperDollCloseButton:Hide()
+    SkillFrameCancelButton:Hide()
 
     -- 荣誉/竞技场：隐藏暴雪纹理
     local function StripHonorAndArena()
@@ -452,6 +469,7 @@ DFUI:NewMod("Character", 5, function()
     end)
     customBg:UpdatePetTab()
 
+    CenterFrame(CharacterFrame)
     HookScript(CharacterFrame, "OnShow", function()
         customBg:Show()
     end)

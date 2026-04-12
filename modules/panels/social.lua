@@ -43,11 +43,11 @@ DFUI:NewMod("Social", 5, function()
     friendsBg:SetVertexColor(0, 0, 0, 0.3)
     friendsBg:Hide()
 
-    local whoBg = WhoFrameEditBox:CreateTexture(nil, "BACKGROUND")
+    local whoBg = customBg:CreateTexture(nil, "BORDER")
     whoBg:SetTexture("Interface\\Buttons\\WHITE8X8")
-    whoBg:SetPoint("TOPLEFT", WhoFrameEditBox, "TOPLEFT", -1, -7)
-    whoBg:SetPoint("BOTTOMRIGHT", WhoFrameEditBox, "BOTTOMRIGHT", 15, 5)
-    whoBg:SetVertexColor(0, 0, 0, 0.5)
+    whoBg:SetPoint("TOPLEFT", customBg, "TOPLEFT", 8, -60)
+    whoBg:SetPoint("BOTTOMRIGHT", customBg, "BOTTOMRIGHT", -8, 55)
+    whoBg:SetVertexColor(0, 0, 0, 0.3)
     whoBg:Hide()
 
     local title = customBg:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -97,6 +97,7 @@ DFUI:NewMod("Social", 5, function()
     end
     UpdateGuildTab()
 
+    CenterFrame(FriendsFrame)
     HookScript(FriendsFrame, "OnShow", function()
         customBg:Show()
         UpdateGuildTab()

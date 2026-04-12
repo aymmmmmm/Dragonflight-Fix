@@ -1,8 +1,8 @@
 setfenv(1, DFUI:GetEnv())
 
-local animations = {}
-local pulses = {}
-local cutouts = {}
+local animations = setmetatable({}, { __mode = "k" })
+local pulses = setmetatable({}, { __mode = "k" })
+local cutouts = setmetatable({}, { __mode = "k" })
 
 local ANIMATION_SPEED = 0.1
 local PULSE_DURATION = 0.3

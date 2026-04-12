@@ -115,17 +115,27 @@ DFUI:NewMod("RangeIndicator", 1, function()
         end
     end
 
-    function Setup:ProcessAllButtons(func)
-        for _, buttonType in ipairs(self.buttonTypes) do
-            local i = 1
-            while true do
-                local button = getglobal(buttonType .. i)
-                if not button then
-                    break
+    -- Cache button references to avoid repeated getglobal + string concat
+    Setup._cachedButtons = nil
+    function Setup:GetCachedButtons()
+        if not self._cachedButtons then
+            self._cachedButtons = {}
+            for _, buttonType in ipairs(self.buttonTypes) do
+                local i = 1
+                while true do
+                    local button = getglobal(buttonType .. i)
+                    if not button then break end
+                    table.insert(self._cachedButtons, button)
+                    i = i + 1
                 end
-                func(self, button)
-                i = i + 1
             end
+        end
+        return self._cachedButtons
+    end
+
+    function Setup:ProcessAllButtons(func)
+        for _, button in ipairs(self:GetCachedButtons()) do
+            func(self, button)
         end
     end
 
@@ -149,80 +159,40 @@ DFUI:NewMod("RangeIndicator", 1, function()
     local callbacks = {}
 
     callbacks.indicatorAlpha = function(value)
-        for _, buttonType in ipairs(Setup.buttonTypes) do
-            local i = 1
-            while true do
-                local button = getglobal(buttonType .. i)
-                if not button then
-                    break
-                end
-                if button.rangeIndicator then
-                    button.rangeIndicator:SetAlpha(value)
-                end
-                i = i + 1
+        Setup:ProcessAllButtons(function(self, button)
+            if button.rangeIndicator then
+                button.rangeIndicator:SetAlpha(value)
             end
-        end
+        end)
     end
 
     callbacks.indicatorDark = function(value)
-        for _, buttonType in ipairs(Setup.buttonTypes) do
-            local i = 1
-            while true do
-                local button = getglobal(buttonType .. i)
-                if not button then
-                    break
+        Setup:ProcessAllButtons(function(self, button)
+            if button.rangeIndicator then
+                if button.rangeIndicator.isSimple then
+                    button.rangeIndicator:SetTextColor(value and 0 or 1, value and 0 or 0.2, value and 0 or 0.2)
+                else
+                    button.rangeIndicator:SetVertexColor(value and 0 or 1, 0, 0)
                 end
-                if button.rangeIndicator then
-                    if button.rangeIndicator.isSimple then
-                        if value then
-                            button.rangeIndicator:SetTextColor(0, 0, 0)
-                        else
-                            button.rangeIndicator:SetTextColor(1, 0.2, 0.2)
-                        end
-                    else
-                        if value then
-                            button.rangeIndicator:SetVertexColor(0, 0, 0)
-                        else
-                            button.rangeIndicator:SetVertexColor(1, 0, 0)
-                        end
-                    end
-                end
-                i = i + 1
             end
-        end
+        end)
     end
 
     callbacks.indicatorFade = function(value)
-        for _, buttonType in ipairs(Setup.buttonTypes) do
-            local i = 1
-            while true do
-                local button = getglobal(buttonType .. i)
-                if not button then
-                    break
-                end
-                if button.rangeIndicator then
-                    button.rangeIndicator.useFade = value
-                end
-                i = i + 1
+        Setup:ProcessAllButtons(function(self, button)
+            if button.rangeIndicator then
+                button.rangeIndicator.useFade = value
             end
-        end
+        end)
     end
 
     callbacks.indicatorSimple = function(value)
-        for _, buttonType in ipairs(Setup.buttonTypes) do
-            local i = 1
-            while true do
-                local button = getglobal(buttonType .. i)
-                if not button then
-                    break
-                end
-                if button.rangeIndicator then
-                    button.rangeIndicator:Hide()
-                    button.rangeIndicator = nil
-                end
-                i = i + 1
+        Setup:ProcessAllButtons(function(self, button)
+            if button.rangeIndicator then
+                button.rangeIndicator:Hide()
+                button.rangeIndicator = nil
             end
-        end
+        end)
         Setup:ProcessAllButtons(Setup.CreateIndicatorTexture)
     end
 

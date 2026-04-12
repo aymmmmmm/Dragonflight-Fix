@@ -297,8 +297,8 @@ DFUI:NewMod("Map", 1, function()
                         frame_width = 200,
                         frame_height = 20,
 
-                        custom_text  = color and "|cffff9999Horde"    or "|cffddddddHorde",
-                        custom_text2 = color and "|cff99ccffAlliance" or "|cffddddddAlliance",
+                        custom_text  = color and "|cff99ccffAlliance" or "|cffddddddAlliance",
+                        custom_text2 = color and "|cffff9999Horde"    or "|cffddddddHorde",
                         custom_text3 = "",
 
                         line_spacing = 0,
@@ -310,9 +310,9 @@ DFUI:NewMod("Map", 1, function()
 
                     local function getCustomText()
                         if currentColorMode then
-                            return "|cffff9999Horde", "|cff99ccffAlliance"
+                            return "|cff99ccffAlliance", "|cffff9999Horde"
                         else
-                            return "|cffddddddHorde", "|cffddddddAlliance"
+                            return "|cffddddddAlliance", "|cffddddddHorde"
                         end
                     end
 
@@ -350,11 +350,11 @@ DFUI:NewMod("Map", 1, function()
                     -- PWB_txt3.text:SetText(CONTROL.custom_text3)
 
                     -- update
-                    local hordeText, allianceText = getCustomText()
+                    local allianceText, hordeText = getCustomText()
                     PWB_txt1.text:SetFont(CONTROL.font_path, CONTROL.font_custom, CONTROL.font_flags)
-                    PWB_txt1.text:SetText(hordeText)
+                    PWB_txt1.text:SetText(allianceText)
                     PWB_txt2.text:SetFont(CONTROL.font_path, CONTROL.font_custom, CONTROL.font_flags)
-                    PWB_txt2.text:SetText(allianceText)
+                    PWB_txt2.text:SetText(hordeText)
                     PWB_txt3.text:SetFont(CONTROL.font_path, CONTROL.font_custom, CONTROL.font_flags)
                     PWB_txt3.text:SetText("") -- hack to give us a free space
 
@@ -435,9 +435,9 @@ DFUI:NewMod("Map", 1, function()
                             end
 
                             -- update custom frame
-                            local hordeText2, allianceText2 = getCustomText()
-                            PWB_txt1.text:SetText(hordeText2)
-                            PWB_txt2.text:SetText(allianceText2)
+                            local allianceText2, hordeText2 = getCustomText()
+                            PWB_txt1.text:SetText(allianceText2)
+                            PWB_txt2.text:SetText(hordeText2)
                         end
                         PizzaWorldBuffs.frame._dfui_update_hooked = true
                     end
@@ -633,33 +633,8 @@ DFUI:NewMod("Map", 1, function()
         end
 
         callbacks.zoneTextSize = function(value)
-            local fontPath
             local fontValue = DFUI:GetTempDB("Map", "topPanelFont")
-            if fontValue == "Expressway" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Expressway.ttf"
-            elseif fontValue == "Homespun" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Homespun.ttf"
-            elseif fontValue == "Hooge" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Hooge.ttf"
-            elseif fontValue == "Myriad-Pro" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Myriad-Pro.ttf"
-            elseif fontValue == "Prototype" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Prototype.ttf"
-            elseif fontValue == "PT-Sans-Narrow-Bold" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\PT-Sans-Narrow-Bold.ttf"
-            elseif fontValue == "PT-Sans-Narrow-Regular" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\PT-Sans-Narrow-Regular.ttf"
-            elseif fontValue == "RobotoMono" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\RobotoMono.ttf"
-            elseif fontValue == "BigNoodleTitling" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\BigNoodleTitling.ttf"
-            elseif fontValue == "Continuum" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Continuum.ttf"
-            elseif fontValue == "DieDieDie" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\DieDieDie.ttf"
-            else
-                fontPath = "Fonts\\FRIZQT__.TTF"
-            end
+            local fontPath = GetFontPath(fontValue)
             MinimapZoneText:SetFont(fontPath, value, "")
         end
 
@@ -674,33 +649,8 @@ DFUI:NewMod("Map", 1, function()
         end
 
         callbacks.timeSize = function(value)
-            local fontPath
             local fontValue = DFUI:GetTempDB("Map", "topPanelFont")
-            if fontValue == "Expressway" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Expressway.ttf"
-            elseif fontValue == "Homespun" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Homespun.ttf"
-            elseif fontValue == "Hooge" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Hooge.ttf"
-            elseif fontValue == "Myriad-Pro" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Myriad-Pro.ttf"
-            elseif fontValue == "Prototype" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Prototype.ttf"
-            elseif fontValue == "PT-Sans-Narrow-Bold" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\PT-Sans-Narrow-Bold.ttf"
-            elseif fontValue == "PT-Sans-Narrow-Regular" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\PT-Sans-Narrow-Regular.ttf"
-            elseif fontValue == "RobotoMono" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\RobotoMono.ttf"
-            elseif fontValue == "BigNoodleTitling" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\BigNoodleTitling.ttf"
-            elseif fontValue == "Continuum" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Continuum.ttf"
-            elseif fontValue == "DieDieDie" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\DieDieDie.ttf"
-            else
-                fontPath = "Fonts\\FRIZQT__.TTF"
-            end
+            local fontPath = GetFontPath(fontValue)
             Setup.timeText:SetFont(fontPath, value, "")
         end
 
@@ -757,33 +707,7 @@ DFUI:NewMod("Map", 1, function()
         end
 
         callbacks.topPanelFont = function(value)
-            local fontPath
-            if value == "Expressway" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Expressway.ttf"
-            elseif value == "Homespun" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Homespun.ttf"
-            elseif value == "Hooge" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Hooge.ttf"
-            elseif value == "Myriad-Pro" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Myriad-Pro.ttf"
-            elseif value == "Prototype" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Prototype.ttf"
-            elseif value == "PT-Sans-Narrow-Bold" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\PT-Sans-Narrow-Bold.ttf"
-            elseif value == "PT-Sans-Narrow-Regular" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\PT-Sans-Narrow-Regular.ttf"
-            elseif value == "RobotoMono" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\RobotoMono.ttf"
-            elseif value == "BigNoodleTitling" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\BigNoodleTitling.ttf"
-            elseif value == "Continuum" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\Continuum.ttf"
-            elseif value == "DieDieDie" then
-                fontPath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\DieDieDie.ttf"
-            else
-                fontPath = "Fonts\\FRIZQT__.TTF"
-            end
-
+            local fontPath = GetFontPath(value)
             MinimapZoneText:SetFont(fontPath, DFUI:GetTempDB("Map", "zoneTextSize"), "")
             Setup.timeText:SetFont(fontPath, DFUI:GetTempDB("Map", "timeSize"), "")
         end

@@ -42,22 +42,6 @@ DFUI:NewMod("Menu", 1, function()
             return origShowUIPanel(frame, force)
         end
 
-        local frames = {OptionsFrame, SoundOptionsFrame, UIOptionsFrame}
-        for _, frame in ipairs(frames) do
-            if frame then
-                local origOnShow = frame:GetScript("OnShow")
-                frame:SetScript("OnShow", function()
-                    if origOnShow then origOnShow() end
-                    Disable_BagButtons()
-                end)
-
-                local origOnHide = frame:GetScript("OnHide")
-                frame:SetScript("OnHide", function()
-                    if origOnHide then origOnHide() end
-                    Enable_BagButtons()
-                end)
-            end
-        end
     end
 
     function Setup:MenuFrame()
@@ -69,7 +53,6 @@ DFUI:NewMod("Menu", 1, function()
 
           self.menuframe:SetScript("OnShow", function()
     UpdateMicroButtons()
-    Disable_BagButtons()
 
     if SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPEN then
         PlaySound(SOUNDKIT.IG_MAINMENU_OPEN)
@@ -80,7 +63,6 @@ end)
 
 self.menuframe:SetScript("OnHide", function()
     UpdateMicroButtons()
-    Enable_BagButtons()
 
     if SOUNDKIT and SOUNDKIT.IG_MAINMENU_CLOSE then
         PlaySound(SOUNDKIT.IG_MAINMENU_CLOSE)
@@ -126,18 +108,6 @@ end)
             keyBtn:SetScript("OnClick", function()
                 self.menuframe:Hide()
                 KeyBindingFrame_LoadUI()
-                if KeyBindingFrame then
-                    local origOnShow = KeyBindingFrame:GetScript("OnShow")
-                    KeyBindingFrame:SetScript("OnShow", function()
-                        if origOnShow then origOnShow() end
-                        Disable_BagButtons()
-                    end)
-                    local origOnHide = KeyBindingFrame:GetScript("OnHide")
-                    KeyBindingFrame:SetScript("OnHide", function()
-                        if origOnHide then origOnHide() end
-                        Enable_BagButtons()
-                    end)
-                end
                 ShowUIPanel(KeyBindingFrame)
             end)
 
@@ -145,19 +115,8 @@ end)
             macroBtn:SetPoint("TOP", keyBtn, "BOTTOM", 0, -self.gap)
             macroBtn:SetScript("OnClick", function()
                 self.menuframe:Hide()
-                ShowMacroFrame()
-                if MacroFrame then
-                    local origOnShow = MacroFrame:GetScript("OnShow")
-                    MacroFrame:SetScript("OnShow", function()
-                        if origOnShow then origOnShow() end
-                        Disable_BagButtons()
-                    end)
-                    local origOnHide = MacroFrame:GetScript("OnHide")
-                    MacroFrame:SetScript("OnHide", function()
-                        if origOnHide then origOnHide() end
-                        Enable_BagButtons()
-                    end)
-                end
+                MacroFrame_LoadUI()
+                ShowUIPanel(MacroFrame)
             end)
 
             local logBtn = DFUI.tools.CreateButton(self.menuframe, "登出", self.btnw, self.btnh)
