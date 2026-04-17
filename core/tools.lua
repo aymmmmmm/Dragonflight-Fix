@@ -178,3 +178,55 @@ DFUI_FONT_PATHS = {
 function GetFontPath(fontName, fallback)
     return DFUI_FONT_PATHS[fontName] or fallback or "Fonts\\FRIZQT__.TTF"
 end
+
+-- Shared power type → color mapping (0=Mana, 1=Rage, 2=Focus, 3=Energy)
+DFUI_POWER_COLORS = {
+    [0] = {0, 0, 1},     -- Mana - blue
+    [1] = {1, 0, 0},     -- Rage - red
+    [2] = {1, 1, 0},     -- Focus - yellow
+    [3] = {1, 1, 0},     -- Energy - yellow
+}
+
+function GetPowerColor(powerType)
+    local c = DFUI_POWER_COLORS[powerType]
+    if c then return c[1], c[2], c[3] end
+    return 0, 0, 1
+end
+
+-- Shared class icon TexCoord table
+DFUI_CLASS_ICON_COORDS = {
+    WARRIOR = {0, 0.25, 0, 0.25},
+    MAGE = {0.25, 0.49609375, 0, 0.25},
+    ROGUE = {0.49609375, 0.7421875, 0, 0.25},
+    DRUID = {0.7421875, 0.98828125, 0, 0.25},
+    HUNTER = {0, 0.25, 0.25, 0.5},
+    SHAMAN = {0.25, 0.49609375, 0.25, 0.5},
+    PRIEST = {0.49609375, 0.7421875, 0.25, 0.5},
+    WARLOCK = {0.7421875, 0.98828125, 0.25, 0.5},
+    PALADIN = {0, 0.25, 0.5, 0.75},
+}
+
+-- Shared checkbox factory (spellbook / tradeskill panels)
+function CreatePanelCheckbox(parent, text)
+    local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    cb:SetWidth(20)
+    cb:SetHeight(20)
+    local label = cb:CreateFontString(nil, "OVERLAY")
+    label:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+    label:SetPoint("LEFT", cb, "RIGHT", 5, 0)
+    label:SetText(text)
+    label:SetTextColor(0.9, 0.9, 0.9)
+    cb.label = label
+    return cb
+end
+
+-- Shared number formatting (1000 → 1.0k, 1000000 → 1.0M)
+function FormatNumber(num)
+    if num >= 1000000 then
+        return string.format("%.1fM", num / 1000000)
+    elseif num >= 1000 then
+        return string.format("%.1fk", num / 1000)
+    else
+        return tostring(num)
+    end
+end

@@ -2,18 +2,7 @@ setfenv(1, DFUI:GetEnv())
 
 local TEX = DFUI:GetInfoOrCons("tex")
 
--- 职业图标坐标
-local CLASS_ICON_COORDS = {
-    WARRIOR = {0, 0.25, 0, 0.25},
-    MAGE = {0.25, 0.49609375, 0, 0.25},
-    ROGUE = {0.49609375, 0.7421875, 0, 0.25},
-    DRUID = {0.7421875, 0.98828125, 0, 0.25},
-    HUNTER = {0, 0.25, 0.25, 0.5},
-    SHAMAN = {0.25, 0.49609375, 0.25, 0.5},
-    PRIEST = {0.49609375, 0.7421875, 0.25, 0.5},
-    WARLOCK = {0.7421875, 0.98828125, 0.25, 0.5},
-    PALADIN = {0, 0.25, 0.5, 0.75},
-}
+local CLASS_ICON_COORDS = DFUI_CLASS_ICON_COORDS
 
 -- Turtle WoW Tab 名称清理
 local function CleanTurtleTabName(name)
@@ -72,19 +61,7 @@ local function CreatePageButton(parent, width, height, direction)
     return btn
 end
 
--- 复选框工厂（不依赖 CreateIndiCheckbox，匹配 D3 模式）
-local function CreateCheckbox(parent, text)
-    local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-    cb:SetWidth(20)
-    cb:SetHeight(20)
-    local label = cb:CreateFontString(nil, "OVERLAY")
-    label:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
-    label:SetPoint("LEFT", cb, "RIGHT", 5, 0)
-    label:SetText(text)
-    label:SetTextColor(0.9, 0.9, 0.9)
-    cb.label = label
-    return cb
-end
+local CreateCheckbox = CreatePanelCheckbox
 
 DFUI:NewDefaults("SpellBook", {
     enabled = {true},
@@ -159,7 +136,7 @@ DFUI:NewMod("SpellBook", 5, function()
 
     local title = spellbook:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetText("法术书")
-    title:SetTextColor(0.94, 0.75, 0.38)
+    title:SetTextColor(0.95, 0.90, 0.80)
     title:SetPoint("TOP", spellbook, "TOP", 0, -6)
 
     -- 5. 关闭按钮
@@ -288,8 +265,8 @@ DFUI:NewMod("SpellBook", 5, function()
         container:SetHeight(42)
 
         local iconBtn = CreateFrame("Button", nil, container)
-        iconBtn:SetWidth(36)
-        iconBtn:SetHeight(36)
+        iconBtn:SetWidth(35)
+        iconBtn:SetHeight(35)
         iconBtn:SetPoint("LEFT", container, "LEFT", 5, 0)
         container.iconBtn = iconBtn
 
@@ -298,12 +275,13 @@ DFUI:NewMod("SpellBook", 5, function()
 
         local icon = iconBtn:CreateTexture(nil, "BACKGROUND")
         icon:SetAllPoints(iconBtn)
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         container.icon = icon
 
         local border = iconBtn:CreateTexture(nil, "ARTWORK")
-        border:SetWidth(47)
-        border:SetHeight(47)
-        border:SetPoint("CENTER", iconBtn, "CENTER", -3, -2)
+        border:SetWidth(48)
+        border:SetHeight(48)
+        border:SetPoint("CENTER", iconBtn, "CENTER", -2, -1)
         container.border = border
 
         local highlight = iconBtn:CreateTexture(nil, "HIGHLIGHT")
@@ -329,36 +307,37 @@ DFUI:NewMod("SpellBook", 5, function()
         name:SetPoint("LEFT", iconBtn, "RIGHT", 5, 0)
         name:SetPoint("RIGHT", container, "RIGHT", -5, 0)
         name:SetJustifyH("LEFT")
-        name:SetTextColor(0.35, 0.20, 0.08)
+        name:SetTextColor(0.15, 0.10, 0.05)
         container.name = name
 
         local passive = container:CreateFontString(nil, "OVERLAY")
         passive:SetFont("Fonts\\FRIZQT__.TTF", 9)
         passive:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, 0)
         passive:SetText("被动")
-        passive:SetTextColor(0.50, 0.35, 0.18)
+        passive:SetTextColor(0.15, 0.10, 0.05)
         passive:Hide()
         container.passive = passive
 
         local racial = container:CreateFontString(nil, "OVERLAY")
         racial:SetFont("Fonts\\FRIZQT__.TTF", 9)
         racial:SetText("种族技能")
-        racial:SetTextColor(0.50, 0.35, 0.18)
+        racial:SetTextColor(0.15, 0.10, 0.05)
         racial:Hide()
         container.racial = racial
 
         local rank = container:CreateFontString(nil, "OVERLAY")
         rank:SetFont("Fonts\\FRIZQT__.TTF", 9)
         rank:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, 0)
-        rank:SetTextColor(0.50, 0.35, 0.18)
+        rank:SetTextColor(0.15, 0.10, 0.05)
         rank:Hide()
         container.rank = rank
 
         iconBtn:SetScript("OnMouseDown", function()
             if container.isPassive then return end
             icon:ClearAllPoints()
-            icon:SetPoint("TOPLEFT", iconBtn, "TOPLEFT", 2, -2)
-            icon:SetPoint("BOTTOMRIGHT", iconBtn, "BOTTOMRIGHT", 2, -2)
+            icon:SetWidth(36)
+            icon:SetHeight(36)
+            icon:SetPoint("CENTER", iconBtn, "CENTER", 2, -2)
             border:ClearAllPoints()
             border:SetPoint("CENTER", iconBtn, "CENTER", -1, -4)
         end)
@@ -366,7 +345,9 @@ DFUI:NewMod("SpellBook", 5, function()
         iconBtn:SetScript("OnMouseUp", function()
             -- 无条件重置，防止翻页/切过滤后 isPassive 改变导致卡住
             icon:ClearAllPoints()
-            icon:SetAllPoints(iconBtn)
+            icon:SetWidth(36)
+            icon:SetHeight(36)
+            icon:SetPoint("CENTER", iconBtn, "CENTER", 0, 0)
             border:ClearAllPoints()
             border:SetPoint("CENTER", iconBtn, "CENTER", -3, -2)
         end)
@@ -466,7 +447,7 @@ DFUI:NewMod("SpellBook", 5, function()
         for i, btn in ipairs(spellbook.spellButtons) do
             local spell = filteredSpells[startIndex + i - 1]
             if spell then
-                btn.icon:SetTexture(spell.texture)
+                if spell.texture then btn.icon:SetTexture(spell.texture) end
                 btn.name:SetText(spell.name)
                 btn.spellIndex = spell.index
                 btn.bookType = spellbook.bookType
@@ -630,7 +611,7 @@ DFUI:NewMod("SpellBook", 5, function()
         if petToken then
             local petTypeName = getglobal("PET_TYPE_" .. petToken)
             if petTypeName then
-                petTabText = TEXT(petTypeName)
+                petTabText = petTypeName
             end
         end
 
@@ -674,7 +655,7 @@ DFUI:NewMod("SpellBook", 5, function()
             if token then
                 local petTypeName = getglobal("PET_TYPE_" .. token)
                 if petTypeName and spellbook.petTab.Text then
-                    spellbook.petTab.Text:SetText(TEXT(petTypeName))
+                    spellbook.petTab.Text:SetText(petTypeName)
                 end
             end
             spellbook.petTab:Show()

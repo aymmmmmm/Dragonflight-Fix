@@ -205,14 +205,8 @@ DFUI:NewMod("Mini", 1, function()
                 Setup.petManaBar.max = maxMana
                 Setup.petManaBar:SetValue(mana > 0 and mana or 0.001)
 
-                local powerType = UnitPowerType('pet')
-                if powerType == 0 then
-                    Setup.petManaBar:SetFillColor(0, 0, 1)
-                elseif powerType == 1 then
-                    Setup.petManaBar:SetFillColor(1, 0, 0)
-                elseif powerType == 2 then
-                    Setup.petManaBar:SetFillColor(1, 1, 0)
-                end
+                local r, g, b = GetPowerColor(UnitPowerType('pet'))
+                Setup.petManaBar:SetFillColor(r, g, b)
             end
 
             Setup.UpdatePetTexts()
@@ -259,16 +253,8 @@ DFUI:NewMod("Mini", 1, function()
                     Setup.totManaBar:Hide()
                 end
 
-                local powerType = UnitPowerType('targettarget')
-                if powerType == 0 then
-                    Setup.totManaBar:SetFillColor(0, 0, 1)
-                elseif powerType == 1 then
-                    Setup.totManaBar:SetFillColor(1, 0, 0)
-                elseif powerType == 2 then
-                    Setup.totManaBar:SetFillColor(1, 1, 0)
-                elseif powerType == 3 then
-                    Setup.totManaBar:SetFillColor(1, 1, 0)
-                end
+                local r, g, b = GetPowerColor(UnitPowerType('targettarget'))
+                Setup.totManaBar:SetFillColor(r, g, b)
 
                 TargetofTargetFrame.name:SetText(AbbreviateName(UnitName("targettarget")))
             end
@@ -421,7 +407,7 @@ DFUI:NewMod("Mini", 1, function()
             local manaPercent = maxMana > 0 and math.floor((mana / maxMana) * 100) or 0
 
             local now = GetTime()
-            if not configCache.noPetPercent or (now - configCache.lastUpdate > 1) then
+            if configCache.noPetPercent == nil or (now - configCache.lastUpdate > 1) then
                 configCache.noPetPercent = DFUI:GetTempDB("Mini", "noPetPercent")
                 configCache.lastUpdate = now
             end
@@ -478,7 +464,7 @@ DFUI:NewMod("Mini", 1, function()
         local manaPercent = maxMana > 0 and math.floor((mana / maxMana) * 100) or 0
         local now = GetTime()
         local isMaxHealthManaEnabled = configCache.miniTotTextMaxShow
-        if not configCache.noTotPercent or (now - configCache.lastUpdate > 0.5) then
+        if configCache.noTotPercent == nil or (now - configCache.lastUpdate > 0.5) then
             configCache.noTotPercent = DFUI:GetTempDB("Mini", "noTotPercent")
             configCache.lastUpdate = now
         end
@@ -866,7 +852,7 @@ DFUI:NewMod("Mini", 1, function()
             (event == "UNIT_RAGE" and string.sub(arg1, 1, 5) == "party") or
             (event == "UNIT_FOCUS" and string.sub(arg1, 1, 5) == "party") then
             local now = GetTime()
-            if not configCache.noPartyPercent or (now - configCache.lastUpdate > 1) then
+            if configCache.noPartyPercent == nil or (now - configCache.lastUpdate > 1) then
                 configCache.noPartyPercent = DFUI:GetTempDB("Mini", "noPartyPercent")
                 configCache.lastUpdate = now
             end
@@ -905,16 +891,8 @@ DFUI:NewMod("Mini", 1, function()
                                     Setup.partyManaBars[i].max = maxMana
                                     Setup.partyManaBars[i]:SetValue(mana > 0 and mana or 0.001)
 
-                                    local powerType = UnitPowerType("party" .. i)
-                                    if powerType == 0 then
-                                        Setup.partyManaBars[i]:SetFillColor(0, 0, 1)
-                                    elseif powerType == 1 then
-                                        Setup.partyManaBars[i]:SetFillColor(1, 0, 0)
-                                    elseif powerType == 2 then
-                                        Setup.partyManaBars[i]:SetFillColor(1, 1, 0)
-                                    elseif powerType == 3 then
-                                        Setup.partyManaBars[i]:SetFillColor(1, 1, 0)
-                                    end
+                                    local r, g, b = GetPowerColor(UnitPowerType("party" .. i))
+                                    Setup.partyManaBars[i]:SetFillColor(r, g, b)
                                 else
                                     Setup.partyManaBars[i]:Hide()
                                 end

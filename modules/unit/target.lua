@@ -40,16 +40,14 @@ DFUI:NewMod("Target", 1, function()
         textMaxShow = nil,
         textColoringHealth = nil,
         textColoringResource = nil,
-        lastUpdate = 0
+        lastUpdate = 0,
+        lastLayoutMode = nil,
     }
 
     local Setup = {
         texpath = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\unitframes\\",
         texpath2 = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\ui\\",
         fontpath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\",
-
-        hideFrame = nil,
-        healthPercentText = nil,
 
         combatOverlay = nil,
         combatOverlayTex = nil,
@@ -142,16 +140,8 @@ DFUI:NewMod("Target", 1, function()
                 self.manaBar.max = maxMana
                 local mana = UnitMana('target')
                 self.manaBar:SetValue(mana > 0 and mana or 0.001)
-                local powerType = UnitPowerType('target')
-                if powerType == 0 then
-                    self.manaBar:SetFillColor(0, 0, 1, 1)
-                elseif powerType == 1 then
-                    self.manaBar:SetFillColor(1, 0, 0, 1)
-                elseif powerType == 2 then
-                    self.manaBar:SetFillColor(1, 1, 0, 1)
-                elseif powerType == 3 then
-                    self.manaBar:SetFillColor(1, 1, 0, 1)
-                end
+                local r, g, b = GetPowerColor(UnitPowerType('target'))
+                self.manaBar:SetFillColor(r, g, b, 1)
             else
                 self.manaBar:Hide()
             end
@@ -193,8 +183,8 @@ DFUI:NewMod("Target", 1, function()
     end
 
     function Setup:Portrait()
-        TargetFrame.portrait:SetHeight(61)
-        TargetFrame.portrait:SetWidth(61)
+        TargetFrame.portrait:SetHeight(62)
+        TargetFrame.portrait:SetWidth(62)
     end
 
     function Setup:NameText()
@@ -214,16 +204,6 @@ DFUI:NewMod("Target", 1, function()
         TargetLevelText:SetTextColor(unpack(cfg.levelColor))
     end
 
-    local function FormatNumber(num)
-        if num >= 1000000 then
-            return string.format("%.1fM", num / 1000000)
-        elseif num >= 1000 then
-            return string.format("%.1fk", num / 1000)
-        else
-            return tostring(num)
-        end
-    end
-
     function Setup:UpdateTexts()
         if not UnitExists("target") then return end
 
@@ -238,8 +218,9 @@ DFUI:NewMod("Target", 1, function()
         local manaPercentInt = math.floor(manaPercent * 100)
 
         local now = GetTime()
-        if not configCache.noPercent or not configCache.textColoringHealth or not configCache.textColoringResource or (now - configCache.lastUpdate > 1) then
+        if configCache.noPercent == nil or configCache.textColoringHealth == nil or configCache.textColoringResource == nil or (now - configCache.lastUpdate > 1) then
             configCache.noPercent = DFUI:GetTempDB("Target", "noPercent")
+            configCache.textMaxShow = DFUI:GetTempDB("Target", "textMaxShow")
             configCache.textColoringHealth = DFUI:GetTempDB("Target", "textColoringHealth")
             configCache.textColoringResource = DFUI:GetTempDB("Target", "textColoringResource")
             configCache.lastUpdate = now
@@ -251,6 +232,22 @@ DFUI:NewMod("Target", 1, function()
 
         local isDead = UnitIsDead("target")
 
+        -- reanchor only when layout mode changes
+        if configCache.lastLayoutMode ~= noPercentEnabled then
+            configCache.lastLayoutMode = noPercentEnabled
+            if noPercentEnabled then
+                self.texts.healthValue:ClearAllPoints()
+                self.texts.healthValue:SetPoint('CENTER', self.healthBar, 'CENTER', 0, 0)
+                self.texts.manaValue:ClearAllPoints()
+                self.texts.manaValue:SetPoint('CENTER', self.manaBar, 'CENTER', 0, 0)
+            else
+                self.texts.healthValue:ClearAllPoints()
+                self.texts.healthValue:SetPoint('RIGHT', self.healthBar, 'RIGHT', 0, 0)
+                self.texts.manaValue:ClearAllPoints()
+                self.texts.manaValue:SetPoint('RIGHT', self.manaBar, 'RIGHT', 0, 0)
+            end
+        end
+
         if noPercentEnabled then
             self.texts.healthPercent:SetText("")
             if isDead then
@@ -258,14 +255,10 @@ DFUI:NewMod("Target", 1, function()
             else
                 self.texts.healthValue:SetText(FormatNumber(health) .. (configCache.textMaxShow and "/" .. FormatNumber(maxHealth) or ""))
             end
-            self.texts.healthValue:ClearAllPoints()
-            self.texts.healthValue:SetPoint('CENTER', self.healthBar, 'CENTER', 0, 0)
 
             self.texts.manaPercent:SetText("")
             if maxMana > 0 then
                 self.texts.manaValue:SetText(FormatNumber(mana) .. (configCache.textMaxShow and "/" .. FormatNumber(maxMana) or ""))
-                self.texts.manaValue:ClearAllPoints()
-                self.texts.manaValue:SetPoint('CENTER', self.manaBar, 'CENTER', -0, 0)
             else
                 self.texts.manaValue:SetText("")
             end
@@ -277,14 +270,10 @@ DFUI:NewMod("Target", 1, function()
                 self.texts.healthPercent:SetText(healthPercentInt .. "%")
                 self.texts.healthValue:SetText(FormatNumber(health) .. (configCache.textMaxShow and "/" .. FormatNumber(maxHealth) or ""))
             end
-            self.texts.healthValue:ClearAllPoints()
-            self.texts.healthValue:SetPoint('RIGHT', self.healthBar, 'RIGHT', -0, 0)
 
             if maxMana > 0 then
                 self.texts.manaPercent:SetText(manaPercentInt .. "%")
                 self.texts.manaValue:SetText(FormatNumber(mana) .. (configCache.textMaxShow and "/" .. FormatNumber(maxMana) or ""))
-                self.texts.manaValue:ClearAllPoints()
-                self.texts.manaValue:SetPoint('RIGHT', self.manaBar, 'RIGHT', -0, 0)
             else
                 self.texts.manaPercent:SetText("")
                 self.texts.manaValue:SetText("")
@@ -595,16 +584,8 @@ DFUI:NewMod("Target", 1, function()
                     Setup.manaBar.max = maxMana
                     local mana = UnitMana('target')
                     Setup.manaBar:SetValue(mana > 0 and mana or 0.001)
-                    local powerType = UnitPowerType('target')
-                    if powerType == 0 then
-                        Setup.manaBar:SetFillColor(0, 0, 1, 1)
-                    elseif powerType == 1 then
-                        Setup.manaBar:SetFillColor(1, 0, 0, 1)
-                    elseif powerType == 2 then
-                        Setup.manaBar:SetFillColor(1, 1, 0, 1)
-                    elseif powerType == 3 then
-                        Setup.manaBar:SetFillColor(1, 1, 0, 1)
-                    end
+                    local r, g, b = GetPowerColor(UnitPowerType('target'))
+                    Setup.manaBar:SetFillColor(r, g, b, 1)
                 else
                     Setup.manaBar:Hide()
                 end
@@ -612,11 +593,7 @@ DFUI:NewMod("Target", 1, function()
             Setup:CheckTargetTapped()
             Setup:UpdateTexts()
             Setup:UpdateBarColor()
-        elseif (event == "UNIT_HEALTH" and arg1 == "target") or
-            (event == "UNIT_MANA" and arg1 == "target") or
-            (event == "UNIT_ENERGY" and arg1 == "target") or
-            (event == "UNIT_RAGE" and arg1 == "target") or
-            (event == "UNIT_FOCUS" and arg1 == "target") then
+        elseif arg1 == "target" then
             if Setup.healthBar and UnitExists('target') then
                 local health = UnitHealth('target')
                 local maxHealth = UnitHealthMax('target')
@@ -634,9 +611,11 @@ DFUI:NewMod("Target", 1, function()
                     Setup.manaBar:Hide()
                 end
             end
-            Setup:CheckTargetTapped()
             Setup:UpdateTexts()
-            Setup:UpdateBarColor()
+            if event == "UNIT_HEALTH" then
+                Setup:CheckTargetTapped()
+                Setup:UpdateBarColor()
+            end
         end
 
         if event == "PLAYER_ENTERING_WORLD" then
@@ -650,7 +629,7 @@ DFUI:NewMod("Target", 1, function()
         _G.TargetFrame_UpdateChallenges = function(player)
             originalFunc(player)
             if string.find(TargetFrameTexture:GetTexture() or '', 'UI%-TargetingFrame_HC') then
-                TargetFrameTexture:SetTexture(Setup.texpath .. 'UI-TargetingFrameDF1_HC.blp')
+                TargetFrameTexture:SetTexture(Setup.texpath .. 'UI-TargetingFrameDF1.blp')
             end
         end
     end

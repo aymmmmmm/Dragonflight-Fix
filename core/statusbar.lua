@@ -12,6 +12,36 @@ local PULSE_SCALE = 1.05
 local CUTOUT_DURATION = .3
 local CUTOUT_ALPHA = 1
 
+-- Cutout texture pool per bar (avoids permanent texture allocation leak)
+local cutoutPools = setmetatable({}, { __mode = "k" })
+
+local function AcquireCutoutTexture(bar)
+    local pool = cutoutPools[bar]
+    if not pool then
+        pool = {}
+        cutoutPools[bar] = pool
+    end
+    for i = 1, table.getn(pool) do
+        local tex = pool[i]
+        if not tex._inUse then
+            tex._inUse = true
+            tex:Show()
+            tex:ClearAllPoints()
+            return tex
+        end
+    end
+    local tex = bar:CreateTexture(nil, 'ARTWORK')
+    tex._inUse = true
+    table.insert(pool, tex)
+    return tex
+end
+
+local function ReleaseCutoutTexture(tex)
+    tex._inUse = false
+    tex:Hide()
+    tex:SetAlpha(0)
+end
+
 -- public
 function CreateStatusBar(parent, width, height, animConfig)
     local bar = CreateFrame('Frame', nil, parent)
@@ -70,8 +100,8 @@ function CreateStatusBar(parent, width, height, animConfig)
                 local newPct = val / self.max
                 local cutWidth = self:GetWidth() * (oldPct - newPct)
 
-                -- create cutout texture to show lost value
-                local cutout = self:CreateTexture(nil, 'ARTWORK')
+                -- acquire cutout texture from pool (avoids permanent allocation)
+                local cutout = AcquireCutoutTexture(self)
                 cutout:SetTexture(self.cutoutTexture)
                 cutout:SetVertexColor(self.cutoutColor[1], self.cutoutColor[2], self.cutoutColor[3], CUTOUT_ALPHA)
                 -- set texture coordinates for cutout portion
@@ -264,9 +294,8 @@ local function UpdateCutoutAnimations(now)
     for cutout, data in pairs(cutouts) do
         -- check if cutout fade is complete
         if now >= data.endTime then
-            -- destroy cutout texture
-            cutout:SetTexture(nil)
-            -- remove from cutouts table
+            -- release cutout back to pool for reuse
+            ReleaseCutoutTexture(cutout)
             cutouts[cutout] = nil
         else
             -- calculate fade progress
@@ -277,11 +306,33 @@ local function UpdateCutoutAnimations(now)
     end
 end
 
--- handler
+-- handler (auto-disables when idle, re-enabled by SetValue)
 local animate = CreateFrame'Frame'
-animate:SetScript('OnUpdate', function()
+local function AnimateOnUpdate()
     local now = GetTime()
     UpdateBarAnimations()
     UpdatePulseAnimations(now)
     UpdateCutoutAnimations(now)
-end)
+    -- disable when all tables are empty
+    if not next(animations) and not next(pulses) and not next(cutouts) then
+        animate:SetScript('OnUpdate', nil)
+    end
+end
+
+local function EnsureAnimating()
+    if not animate:GetScript('OnUpdate') then
+        animate:SetScript('OnUpdate', AnimateOnUpdate)
+    end
+end
+
+-- Patch SetValue to re-enable the animation pump
+local origCreateStatusBar = CreateStatusBar
+function CreateStatusBar(parent, width, height, animConfig)
+    local bar = origCreateStatusBar(parent, width, height, animConfig)
+    local origSetValue = bar.SetValue
+    bar.SetValue = function(self, val, instant)
+        origSetValue(self, val, instant)
+        EnsureAnimating()
+    end
+    return bar
+end

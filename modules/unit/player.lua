@@ -93,24 +93,22 @@ DFUI:NewMod("Player", 1, function()
 
     
     function Setup:HealthBar()
--- Hard-disable vanilla bars/text so they can never reappear under DFUI
-if PlayerFrameHealthBar then
-    PlayerFrameHealthBar:Hide()
-    PlayerFrameHealthBar.Show = function() end
-end
--- Vanilla health texts (optional, but prevents pop-back / overlap)
-if PlayerFrameHealthBarText then
-    PlayerFrameHealthBarText:Hide()
-    PlayerFrameHealthBarText.Show = function() end
-end
-if PlayerFrameHealthBarTextLeft then
-    PlayerFrameHealthBarTextLeft:Hide()
-    PlayerFrameHealthBarTextLeft.Show = function() end
-end
-if PlayerFrameHealthBarTextRight then
-    PlayerFrameHealthBarTextRight:Hide()
-    PlayerFrameHealthBarTextRight.Show = function() end
-end
+        if PlayerFrameHealthBar then
+            PlayerFrameHealthBar:Hide()
+            PlayerFrameHealthBar.Show = function() end
+        end
+        if PlayerFrameHealthBarText then
+            PlayerFrameHealthBarText:Hide()
+            PlayerFrameHealthBarText.Show = function() end
+        end
+        if PlayerFrameHealthBarTextLeft then
+            PlayerFrameHealthBarTextLeft:Hide()
+            PlayerFrameHealthBarTextLeft.Show = function() end
+        end
+        if PlayerFrameHealthBarTextRight then
+            PlayerFrameHealthBarTextRight:Hide()
+            PlayerFrameHealthBarTextRight.Show = function() end
+        end
         self.healthBar = CreateStatusBar(PlayerFrame, 130, 30)
         self.healthBar:SetPoint('TOPLEFT', PlayerFrame, 'TOPLEFT', 100, -29)
         self.healthBar:SetTextures(self.texpath .. 'healthDF2.tga')
@@ -138,36 +136,29 @@ end
     end
 
     function Setup:ManaBar()
--- Hard-disable vanilla mana bar/text so it can never reappear under DFUI
-if PlayerFrameManaBar then
-    PlayerFrameManaBar:Hide()
-    PlayerFrameManaBar.Show = function() end
-end
-if PlayerFrameManaBarText then
-    PlayerFrameManaBarText:Hide()
-    PlayerFrameManaBarText.Show = function() end
-end
-if PlayerFrameManaBarTextLeft then
-    PlayerFrameManaBarTextLeft:Hide()
-    PlayerFrameManaBarTextLeft.Show = function() end
-end
-if PlayerFrameManaBarTextRight then
-    PlayerFrameManaBarTextRight:Hide()
-    PlayerFrameManaBarTextRight.Show = function() end
-end
+        if PlayerFrameManaBar then
+            PlayerFrameManaBar:Hide()
+            PlayerFrameManaBar.Show = function() end
+        end
+        if PlayerFrameManaBarText then
+            PlayerFrameManaBarText:Hide()
+            PlayerFrameManaBarText.Show = function() end
+        end
+        if PlayerFrameManaBarTextLeft then
+            PlayerFrameManaBarTextLeft:Hide()
+            PlayerFrameManaBarTextLeft.Show = function() end
+        end
+        if PlayerFrameManaBarTextRight then
+            PlayerFrameManaBarTextRight:Hide()
+            PlayerFrameManaBarTextRight.Show = function() end
+        end
         self.manaBar = CreateStatusBar(PlayerFrame, 130, 12)
         self.manaBar:SetPoint('TOPLEFT', PlayerFrame, 'TOPLEFT', 100, -53)
         self.manaBar:SetTextures(self.texpath .. 'UI-HUD-UnitFrame-Player-PortraitOn-Bar-Mana-Status.tga')
         self.manaBar.max = UnitManaMax('player')
         self.manaBar:SetValue(UnitMana('player'))
-        local powerType = UnitPowerType('player')
-        if powerType == 0 then
-            self.manaBar:SetFillColor(0, 0, 1, 1)
-        elseif powerType == 1 then
-            self.manaBar:SetFillColor(1, 0, 0, 1)
-        elseif powerType == 3 then
-            self.manaBar:SetFillColor(1, 1, 0, 1)
-        end
+        local r, g, b = GetPowerColor(UnitPowerType('player'))
+        self.manaBar:SetFillColor(r, g, b, 1)
         local cutoutColor = DFUI:GetTempDB('Player', 'cutoutColor')
         local pulseColor = DFUI:GetTempDB('Player', 'pulseColor')
         self.manaBar:SetCutoutColor(cutoutColor[1], cutoutColor[2], cutoutColor[3], 1)
@@ -479,18 +470,10 @@ end
     end
 
     callbacks.textColoringHealth  = function(value)
-        local health = UnitHealth("player")
-        local maxHealth = UnitHealthMax("player")
-        local healthPercent = maxHealth > 0 and (health / maxHealth) or 1
-
-        local function getColor(p)
-            return 1, p, p
-        end
-
         if value then
-            local hr, hg, hb = getColor(healthPercent)
-            Setup.texts.healthValue:SetTextColor(hr, hg, hb)
-            Setup.texts.healthPercent:SetTextColor(hr, hg, hb)
+            local healthPercent = UnitHealthMax("player") > 0 and (UnitHealth("player") / UnitHealthMax("player")) or 1
+            Setup.texts.healthValue:SetTextColor(1, healthPercent, healthPercent)
+            Setup.texts.healthPercent:SetTextColor(1, healthPercent, healthPercent)
         else
             local hc = Setup.texts.config.healthColor
             Setup.texts.healthValue:SetTextColor(hc[1], hc[2], hc[3])
@@ -499,18 +482,10 @@ end
     end
 
     callbacks.textColoringResource = function(value)
-        local mana = UnitMana("player")
-        local maxMana = UnitManaMax("player")
-        local manaPercent = maxMana > 0 and (mana / maxMana) or 1
-
-        local function getColor(p)
-            return 1, p, p
-        end
-
         if value then
-            local mr, mg, mb = getColor(manaPercent)
-            Setup.texts.manaValue:SetTextColor(mr, mg, mb)
-            Setup.texts.manaPercent:SetTextColor(mr, mg, mb)
+            local manaPercent = UnitManaMax("player") > 0 and (UnitMana("player") / UnitManaMax("player")) or 1
+            Setup.texts.manaValue:SetTextColor(1, manaPercent, manaPercent)
+            Setup.texts.manaPercent:SetTextColor(1, manaPercent, manaPercent)
         else
             local mc = Setup.texts.config.manaColor
             Setup.texts.manaValue:SetTextColor(mc[1], mc[2], mc[3])
@@ -695,9 +670,13 @@ end
             DFUI.UpdatePortraits(PartyMemberFrame3)
             DFUI.UpdatePortraits(PartyMemberFrame4)
 
-            -- tot update
+            -- tot update (throttled to 0.2s)
             DFUI.totPortraitFrame = CreateFrame("Frame", nil, TargetFrame)
+            DFUI.totPortraitFrame.nextUpdate = 0
             DFUI.totPortraitFrame:SetScript("OnUpdate", function()
+                local now = GetTime()
+                if now < this.nextUpdate then return end
+                this.nextUpdate = now + 0.2
                 DFUI.UpdatePortraits(TargetofTargetFrame)
                 DFUI.activeScripts["PortraitUpdateScript"] = true
             end)
@@ -759,7 +738,7 @@ end
                 if not UnitAffectingCombat("player") then
                     local alpha = Setup.combatOverlayTex:GetAlpha()
                     alpha = alpha - (Setup.combatGlow.fadeSpeed * elapsed * 2)
-                    if alpha < 0 then alpha = PlayerFrameHealthBar:GetAlpha() * 0 end
+                    if alpha < 0 then alpha = 0 end
                     Setup.combatOverlayTex:SetAlpha(alpha)
                     DFUI.activeScripts["CombatGlowScript"] = true
                     return
@@ -779,17 +758,19 @@ end
             Setup.combatOverlayTex:SetAlpha(0)
         end
 
-        local f = CreateFrame("Frame")
-        f:RegisterEvent("PLAYER_REGEN_DISABLED")
-        f:RegisterEvent("PLAYER_REGEN_ENABLED")
-        f:SetScript("OnEvent", function()
-            if event == "PLAYER_REGEN_DISABLED" then
-                currentAlpha = Setup.combatGlow.alphaMin
-                fadeDirection = 1
-            elseif event == "PLAYER_REGEN_ENABLED" then
-                fadeDirection = -1
-            end
-        end)
+        if not Setup.combatGlowEventFrame then
+            Setup.combatGlowEventFrame = CreateFrame("Frame")
+            Setup.combatGlowEventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+            Setup.combatGlowEventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+            Setup.combatGlowEventFrame:SetScript("OnEvent", function()
+                if event == "PLAYER_REGEN_DISABLED" then
+                    currentAlpha = Setup.combatGlow.alphaMin
+                    fadeDirection = 1
+                elseif event == "PLAYER_REGEN_ENABLED" then
+                    fadeDirection = -1
+                end
+            end)
+        end
     end
 
     callbacks.glowSpeed = function(value)
@@ -821,7 +802,7 @@ end
                 if not IsResting() then
                     local alpha = Setup.restingOverlayTex:GetAlpha()
                     alpha = alpha - (Setup.restingGlow.fadeSpeed * elapsed * 2)
-                    if alpha < 0 then alpha = PlayerFrameHealthBar:GetAlpha() * 0 end
+                    if alpha < 0 then alpha = 0 end
                     Setup.restingOverlayTex:SetAlpha(alpha)
                     DFUI.activeScripts["RestingGlowScript"] = true
                     return
@@ -842,12 +823,14 @@ end
             Setup.restingOverlayTex:SetAlpha(0)
         end
 
-        local f = CreateFrame("Frame")
-        f:RegisterEvent("PLAYER_UPDATE_RESTING")
-        f:SetScript("OnEvent", function()
-            currentAlpha = Setup.restingGlow.alphaMin
-            fadeDirection = 1
-        end)
+        if not Setup.restingGlowEventFrame then
+            Setup.restingGlowEventFrame = CreateFrame("Frame")
+            Setup.restingGlowEventFrame:RegisterEvent("PLAYER_UPDATE_RESTING")
+            Setup.restingGlowEventFrame:SetScript("OnEvent", function()
+                currentAlpha = Setup.restingGlow.alphaMin
+                fadeDirection = 1
+            end)
+        end
     end
 
     callbacks.restingSpeed = function(value)
@@ -939,19 +922,16 @@ end
                 Setup.manaBar.max = UnitManaMax('player')
                 local mana = UnitMana('player')
                 Setup.manaBar:SetValue(mana > 0 and mana or 0.001)
-                local powerType = UnitPowerType('player')
-                if powerType == 0 then
-                    Setup.manaBar:SetFillColor(0, 0, 1, 1)
-                elseif powerType == 1 then
-                    Setup.manaBar:SetFillColor(1, 0, 0, 1)
-                elseif powerType == 3 then
-                    Setup.manaBar:SetFillColor(1, 1, 0, 1)
-                end
+                local r, g, b = GetPowerColor(UnitPowerType('player'))
+                Setup.manaBar:SetFillColor(r, g, b, 1)
             end
             callbacks.textShow(DFUI:GetTempDB("Player", "textShow"))
             callbacks.textColoringHealth(DFUI:GetTempDB("Player", "textColoringHealth"))
             callbacks.textColoringResource(DFUI:GetTempDB("Player", "textColoringResource"))
-            callbacks.classColor(DFUI:GetTempDB("Player", "classColor"))
+            -- classColor only changes on login/settings, not per health/mana tick
+            if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
+                callbacks.classColor(DFUI:GetTempDB("Player", "classColor"))
+            end
         end
     end)
 end)
