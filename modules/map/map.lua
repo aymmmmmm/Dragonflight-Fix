@@ -199,8 +199,11 @@ DFUI:NewMod("Map", 1, function()
             BuffButton16:ClearAllPoints()
             BuffButton16:SetPoint("TOPRIGHT", Setup.topPanel, "TOPLEFT", -50, -150)
 
-	    BuffButton32:ClearAllPoints()
-            BuffButton32:SetPoint("TOPRIGHT", Setup.topPanel, "TOPLEFT", -50, -200)
+            -- BuffButton32 is a Turtle 1.18 extension (扩展 buff 槽); absent on 1.17.
+            if BuffButton32 then
+                BuffButton32:ClearAllPoints()
+                BuffButton32:SetPoint("TOPRIGHT", Setup.topPanel, "TOPLEFT", -50, -200)
+            end
         end
 
         function Setup:Tracker()

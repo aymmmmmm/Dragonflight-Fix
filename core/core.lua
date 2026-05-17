@@ -378,6 +378,7 @@ function DFUI:NewCallbacks(mod, callbacks)
 end
 
 function DFUI:TriggerCallback(cb, value)
+    if not self.callbacks[cb] then return end
     for _, func in ipairs(self.callbacks[cb]) do
         func(value)
     end

@@ -233,17 +233,17 @@ DFUI:NewMod("Mini", 1, function()
             TargetofTargetHealthBar:Hide()
             TargetofTargetManaBar:Hide()
             if UnitExists('targettarget') then
-                local health, maxHealth = UnitHealth('targettarget'), UnitHealthMax('targettarget')
+                local health, maxHealth, status = GetUnitRealHealth('targettarget')
                 local mana, maxMana = UnitMana('targettarget'), UnitManaMax('targettarget')
-                if maxHealth > 0 and health >= 0 then
-                    Setup.totHealthBar.max = maxHealth
-                    Setup.totHealthBar.val_ = health
-                    Setup.totHealthBar:SetValue(health > 0 and health or 0.001)
-                else
+                if status == "none" or maxHealth <= 0 then
                     Setup.totHealthBar:Hide()
                     Setup.totManaBar:Hide()
                     return
                 end
+                Setup.totHealthBar:Show()
+                Setup.totHealthBar.max = maxHealth
+                Setup.totHealthBar.val_ = health
+                Setup.totHealthBar:SetValue(health > 0 and health or 0.001)
                 if maxMana > 0 then
                     Setup.totManaBar:Show()
                     Setup.totManaBar.max = maxMana
@@ -456,8 +456,7 @@ DFUI:NewMod("Mini", 1, function()
             self.totManaValueText:SetText("")
             return
         end
-        local health = UnitHealth("targettarget")
-        local maxHealth = UnitHealthMax("targettarget")
+        local health, maxHealth, status = GetUnitRealHealth("targettarget")
         local healthPercent = maxHealth > 0 and math.floor((health / maxHealth) * 100) or 0
         local mana = UnitMana("targettarget")
         local maxMana = UnitManaMax("targettarget")
@@ -470,16 +469,27 @@ DFUI:NewMod("Mini", 1, function()
         end
         local noTotPercentEnabled = configCache.noTotPercent
         local isDead = UnitIsDead("targettarget") or UnitIsGhost("targettarget")
-        if isDead then
+        if isDead or status == "none" then
             self.totHealthPercentText:SetText("")
             self.totHealthValueText:SetText("")
             self.totManaPercentText:SetText("")
             self.totManaValueText:SetText("")
             return
         end
+
+        -- 按 status 决定健康文本(同 target.lua 逻辑)
+        local healthTextStr, percentTextStr
+        if status == "percent" then
+            healthTextStr = healthPercent .. "%"
+            percentTextStr = healthPercent .. "%"
+        else
+            healthTextStr = health .. (isMaxHealthManaEnabled and "/" .. maxHealth or "")
+            percentTextStr = healthPercent .. "%"
+        end
+
         if noTotPercentEnabled then
             self.totHealthPercentText:SetText("")
-            self.totHealthValueText:SetText(health .. (isMaxHealthManaEnabled and "/" .. maxHealth or ""))
+            self.totHealthValueText:SetText(healthTextStr)
             self.totHealthValueText:ClearAllPoints()
             self.totHealthValueText:SetPoint("CENTER", self.totHealthBar, "CENTER", 0, 0)
 
@@ -492,8 +502,8 @@ DFUI:NewMod("Mini", 1, function()
                 self.totManaValueText:SetText("")
             end
         else
-            self.totHealthPercentText:SetText(healthPercent .. "%")
-            self.totHealthValueText:SetText(health .. (isMaxHealthManaEnabled and "/" .. maxHealth or ""))
+            self.totHealthPercentText:SetText(percentTextStr)
+            self.totHealthValueText:SetText(healthTextStr)
             self.totHealthValueText:ClearAllPoints()
             self.totHealthValueText:SetPoint("RIGHT", self.totHealthBar, "RIGHT", -5, 0)
 

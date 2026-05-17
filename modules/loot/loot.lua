@@ -29,18 +29,17 @@ DFUI:NewMod("Loot", 1, function()
     local FADE_DELAY = 5.0
     local FADE_DURATION = 3.0
 
-    local BACKDROP_MAIN = {
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 16,
-        insets = {left = 4, right = 4, top = 4, bottom = 4}
-    }
+    -- 顶部标题栏占用（CreatePaperDollFrame 内 bgTexture 上方留 21px）
+    local TITLE_BAR_HEIGHT = 21
 
-    local BACKDROP_ICON = {
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 12,
-        insets = {left = 2, right = 2, top = 2, bottom = 2}
+    local PROF_TEX = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\panels\\df\\professions\\"
+    local SLOT_TEX_BY_QUALITY = {
+        [0] = PROF_TEX .. "slot_neutral.tga",   -- 粗糙(灰)
+        [1] = PROF_TEX .. "slot_neutral.tga",   -- 普通(白)
+        [2] = PROF_TEX .. "slot_green.tga",     -- 优秀(绿)
+        [3] = PROF_TEX .. "slot_blue.tga",      -- 精良(蓝)
+        [4] = PROF_TEX .. "slot_epic.tga",      -- 史诗(紫)
+        [5] = PROF_TEX .. "slot_legendary.tga", -- 传说(橙)
     }
 
     ---------------------------------------------------------------------------
@@ -133,21 +132,23 @@ DFUI:NewMod("Loot", 1, function()
         slot.rarity:SetAlpha(0.12)
         slot.rarity:Hide()
 
-        slot.iconShadow = slot:CreateTexture(nil, "ARTWORK")
-        slot.iconShadow:SetTexture("Interface\\Buttons\\WHITE8X8")
-        slot.iconShadow:SetVertexColor(0, 0, 0, 0.6)
-        slot.iconShadow:SetWidth(ICON_SIZE + 6)
-        slot.iconShadow:SetHeight(ICON_SIZE + 6)
-        slot.iconShadow:SetPoint("CENTER", slot, "LEFT", ICON_SIZE / 2 + 3, 0)
-
         slot.iconFrame = CreateFrame("Frame", nil, slot)
         slot.iconFrame:SetWidth(ICON_SIZE)
         slot.iconFrame:SetHeight(ICON_SIZE)
         slot.iconFrame:SetPoint("LEFT", slot, "LEFT", 3, 0)
-        slot.iconFrame:SetBackdrop(BACKDROP_ICON)
-        slot.iconFrame:SetBackdropColor(0, 0, 0, 0.8)
-        slot.iconFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
         slot.iconFrame:EnableMouse(false)  -- don't intercept parent Button clicks
+
+        slot.iconBg = slot.iconFrame:CreateTexture(nil, "BACKGROUND")
+        slot.iconBg:SetTexture("Interface\\Buttons\\WHITE8X8")
+        slot.iconBg:SetAllPoints(slot.iconFrame)
+        slot.iconBg:SetVertexColor(0, 0, 0, 1)
+
+        slot.iconBorder = slot:CreateTexture(nil, "OVERLAY")
+        slot.iconBorder:SetTexture(PROF_TEX .. "slot_neutral.tga")
+        slot.iconBorder:SetTexCoord(12/64, 51/64, 12/64, 51/64)
+        slot.iconBorder:SetWidth(ICON_SIZE + 6)
+        slot.iconBorder:SetHeight(ICON_SIZE + 6)
+        slot.iconBorder:SetPoint("CENTER", slot.iconFrame, "CENTER", 0, 0)
 
         slot.icon = slot.iconFrame:CreateTexture(nil, "ARTWORK")
         slot.icon:SetTexCoord(.07, .93, .07, .93)
@@ -204,13 +205,11 @@ DFUI:NewMod("Loot", 1, function()
     end
 
     local function ApplySlotQuality(slot, quality, showBorder, showGlow, glowThreshold)
-        local color = SafeQualityColor(quality)
-        if showBorder and quality and quality > 1 then
-            slot.iconFrame:SetBackdropBorderColor(color.r, color.g, color.b, 1)
-        else
-            slot.iconFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
-        end
+        local q = (showBorder and quality and quality >= 0) and quality or 1
+        slot.iconBorder:SetTexture(SLOT_TEX_BY_QUALITY[q] or SLOT_TEX_BY_QUALITY[1])
+
         if showGlow and quality and quality >= glowThreshold then
+            local color = SafeQualityColor(quality)
             slot.rarity:SetVertexColor(color.r, color.g, color.b)
             slot.rarity:Show()
         else
@@ -307,17 +306,18 @@ DFUI:NewMod("Loot", 1, function()
     ---------------------------------------------------------------------------
     local function ResizeFrame(visibleCount, maxWidth, maxQuality, slotH)
         local frameW = math.max(FRAME_MIN_WIDTH, math.min(maxWidth, FRAME_MAX_WIDTH))
-        local frameH = PADDING * 2 + visibleCount * slotH
+        local frameH = TITLE_BAR_HEIGHT + PADDING * 2 + visibleCount * slotH
             + math.max(0, visibleCount - 1) * SLOT_SPACING
-        frameH = math.max(frameH, 40)
+        frameH = math.max(frameH, 60)
         lootFrame:SetWidth(frameW)
         lootFrame:SetHeight(frameH)
 
-        if maxQuality > 1 then
+        -- 标题随最高品质染色（替代原"backdrop 边框染色"，新框体边框为纹理拼接）
+        if maxQuality and maxQuality > 1 then
             local c = SafeQualityColor(maxQuality)
-            lootFrame:SetBackdropBorderColor(c.r, c.g, c.b, 0.6)
+            lootFrame.title:SetTextColor(c.r, c.g, c.b)
         else
-            lootFrame:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+            lootFrame.title:SetTextColor(0.96875, 0.8984375, 0.578125)
         end
     end
 
@@ -410,7 +410,7 @@ DFUI:NewMod("Loot", 1, function()
                 slot:Enable()
                 slot:ClearAllPoints()
                 slot:SetPoint("TOPLEFT", lootFrame, "TOPLEFT",
-                    PADDING, -(PADDING + (visibleCount - 1) * (slotH + SLOT_SPACING)))
+                    PADDING, -(TITLE_BAR_HEIGHT + PADDING + (visibleCount - 1) * (slotH + SLOT_SPACING)))
                 slot:SetPoint("RIGHT", lootFrame, "RIGHT", -PADDING, 0)
                 slot:SetHeight(slotH)
 
@@ -447,7 +447,7 @@ DFUI:NewMod("Loot", 1, function()
                 visibleCount = visibleCount + 1
                 slots[i]:ClearAllPoints()
                 slots[i]:SetPoint("TOPLEFT", lootFrame, "TOPLEFT",
-                    PADDING, -(PADDING + (visibleCount - 1) * (slotH + SLOT_SPACING)))
+                    PADDING, -(TITLE_BAR_HEIGHT + PADDING + (visibleCount - 1) * (slotH + SLOT_SPACING)))
                 slots[i]:SetPoint("RIGHT", lootFrame, "RIGHT", -PADDING, 0)
                 slots[i].divider:Show()
 
@@ -567,28 +567,28 @@ DFUI:NewMod("Loot", 1, function()
             if btn then btn:Hide() end
         end
 
-        lootFrame = CreateFrame("Frame", "DFUILootFrame", UIParent)
+        -- 使用 DFUI 通用窗体工厂（带金属边框 + 羊皮纸背景）
+        -- frameStyle=2 = 无头像金属框，适合小窗
+        lootFrame = DFUI.CreatePaperDollFrame("DFUILootFrame", UIParent,
+                                              FRAME_MIN_WIDTH, 60, 2)
         lootFrame:SetFrameStrata("DIALOG")
         lootFrame:SetFrameLevel(10)
         lootFrame:SetClampedToScreen(true)
         lootFrame:Hide()
 
-        lootFrame:SetBackdrop(BACKDROP_MAIN)
-        lootFrame:SetBackdropColor(0.04, 0.04, 0.04, 0.88)
-        lootFrame:SetBackdropBorderColor(0.35, 0.35, 0.35, 0.9)
+        -- 标题：物品
+        lootFrame.title = lootFrame:CreateFontString(nil, "OVERLAY")
+        lootFrame.title:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+        lootFrame.title:SetText("物品")
+        lootFrame.title:SetTextColor(0.96875, 0.8984375, 0.578125)
+        lootFrame.title:SetPoint("TOP", lootFrame, "TOP", 0, -4)
 
-        DFUI.tools.GradientLine(lootFrame, "TOP", -1, 3)
-        DFUI.tools.GradientLine(lootFrame, "BOTTOM", 1, 3)
+        -- 红色 X 关闭按钮
+        local closeBtn = DFUI.CreateRedButton(lootFrame, "close", function()
+            CloseLoot()
+        end)
+        closeBtn:SetPoint("TOPRIGHT", lootFrame, "TOPRIGHT", 0, -1)
 
-        local innerShadow = lootFrame:CreateTexture(nil, "ARTWORK")
-        innerShadow:SetTexture("Interface\\Buttons\\WHITE8X8")
-        innerShadow:SetPoint("TOPLEFT", lootFrame, "TOPLEFT", 4, -4)
-        innerShadow:SetPoint("TOPRIGHT", lootFrame, "TOPRIGHT", -4, -4)
-        innerShadow:SetHeight(10)
-        innerShadow:SetGradientAlpha("VERTICAL", 0, 0, 0, 0, 0, 0, 0, 0.3)
-
-        lootFrame:SetWidth(FRAME_MIN_WIDTH)
-        lootFrame:SetHeight(60)
         lootFrame:SetScale(GetDB("scale") or 1.0)
         lootFrame:SetPoint("TOP", UIParent, "CENTER", 0, 100)
 

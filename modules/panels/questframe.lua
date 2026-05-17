@@ -67,6 +67,24 @@ DFUI:NewMod("QuestDialog", 5, function()
         customBg:Show()
     end)
 
+    -- 奖励/进度物品 hover：retail 极简思路，hover 时不显示任何高亮（Hide 原生 layer=HIGHLIGHT region）
+    local itemPrefixes = {"QuestRewardItem", "QuestProgressItem", "QuestDetailItem"}
+    for _, prefix in ipairs(itemPrefixes) do
+        for i = 1, 10 do
+            local item = getglobal(prefix .. i)
+            if item then
+                for _, region in ipairs({item:GetRegions()}) do
+                    if region.GetDrawLayer and region:GetDrawLayer() == "HIGHLIGHT" then
+                        region:SetTexture(nil)
+                        region:Hide()
+                    end
+                end
+            end
+        end
+    end
+
+    -- 选中态保留原生 QuestRewardItemHighlight（宽黄但功能正确），后续再美化
+
     local callbacks = {}
     DFUI:NewCallbacks("QuestDialog", callbacks)
 end)

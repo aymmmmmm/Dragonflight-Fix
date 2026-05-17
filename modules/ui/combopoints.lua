@@ -76,16 +76,20 @@ DFUI:NewMod("ComboPoints", 1, function()
     updater:SetScript("OnEvent", UpdateComboPoints)
 
     -- 回调
+    -- key 不带 `_changed` 后缀，与其他模块统一；NewCallbacks 内部会拼。
     DFUI:NewCallbacks("ComboPoints", {
-        scale_changed = function(val)
+        scale = function(val)
+            if type(val) ~= "number" then return end
             container:SetScale(val)
         end,
-        color_changed = function(val)
+        color = function(val)
+            if type(val) ~= "table" then return end
             for i = 1, 5 do
                 frames[i].full:SetVertexColor(val[1], val[2], val[3])
             end
         end,
-        yOffset_changed = function(val)
+        yOffset = function(val)
+            if type(val) ~= "number" then return end
             container:ClearAllPoints()
             container:SetPoint("CENTER", UIParent, "CENTER", 0, val)
         end,

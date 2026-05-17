@@ -67,19 +67,15 @@ DFUI:NewMod("QuestLog", 5, function()
     closeButton:SetHeight(20)
     closeButton:SetFrameLevel(customBg:GetFrameLevel() + 3)
 
-    -- 物品栏高亮
-    local highlightTex = TEX .. "actionbars\\uiactionbariconframehighlight.tga"
+    -- 物品栏 hover：retail 极简思路，hover 时不显示任何高亮（Hide 原生 layer=HIGHLIGHT region）
     for i = 1, 10 do
         local item = getglobal("QuestLogItem" .. i)
         if item then
-            local icon = getglobal("QuestLogItem" .. i .. "IconTexture")
-            if icon then
-                local hl = item:CreateTexture(nil, "HIGHLIGHT")
-                hl:SetPoint("TOPLEFT", icon, "TOPLEFT", -6, 6)
-                hl:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 6, -6)
-                hl:SetTexture(highlightTex)
-                hl:SetBlendMode("ADD")
-                item:SetHighlightTexture(hl)
+            for _, region in ipairs({item:GetRegions()}) do
+                if region.GetDrawLayer and region:GetDrawLayer() == "HIGHLIGHT" then
+                    region:SetTexture(nil)
+                    region:Hide()
+                end
             end
         end
     end

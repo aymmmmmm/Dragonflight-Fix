@@ -86,6 +86,7 @@ DFUI:NewMod("Gui-base", 2, function()
             [13] = "小地图",
             [14] = "单位框架",
             [15] = "经验/声望",
+            [16] = "诊断",
         }
     }
 
@@ -438,6 +439,8 @@ DFUI:NewMod("Gui-base", 2, function()
                     scrollChild:SetHeight(1800)
                 elseif i == 6 then
                     scrollChild:SetHeight(3500)
+                elseif i == 16 then
+                    scrollChild:SetHeight(1500)
                 else
                     scrollChild:SetHeight(1000)
                 end

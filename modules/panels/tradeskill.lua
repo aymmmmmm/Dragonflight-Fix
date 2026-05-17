@@ -1,23 +1,85 @@
 -- tradeskill.lua — 统一专业技能面板 (TradeSkill + Craft)
--- 全新自建 UI，书本风格，与 SpellBook 视觉统一
+-- DF 风格，右侧专业背景画（DF retail 10.1 素材），1069x658 大框体
 -- 核心策略: 原生面板 SetAlpha(0)+EnableMouse(false) 保持 API 连接，自建面板覆盖其上
 
 setfenv(1, DFUI:GetEnv())
 
 local TEX = DFUI:GetInfoOrCons("tex")
+local PROF_TEX = TEX .. "panels\\df\\professions\\"
 
 local CLASS_ICON_COORDS = DFUI_CLASS_ICON_COORDS
 
--- 难度颜色 (针对金色羊皮纸背景优化对比度)
+-- API 专业名/法术名 → 背景画 key（PROF_BG_KEY）
+local PROF_BG_KEY = {
+    ["Alchemy"]="alchemy", ["炼金术"]="alchemy",
+    ["Blacksmithing"]="blacksmithing", ["锻造"]="blacksmithing",
+    ["Cooking"]="cooking", ["烹饪"]="cooking",
+    ["Enchanting"]="enchanting", ["附魔"]="enchanting",
+    ["Engineering"]="engineering", ["工程学"]="engineering",
+    ["First Aid"]="default", ["急救"]="default",
+    ["Fishing"]="fishing", ["钓鱼"]="fishing",
+    ["Herbalism"]="herbalism", ["草药学"]="herbalism",
+    ["Leatherworking"]="leatherworking", ["制皮"]="leatherworking",
+    ["Mining"]="mining", ["采矿"]="mining",
+    ["Smelting"]="mining", ["熔炼"]="mining",
+    ["Skinning"]="skinning", ["剥皮"]="skinning",
+    ["Tailoring"]="tailoring", ["裁缝"]="tailoring",
+    ["Beast Training"]="default", ["宠物训练"]="default",
+    ["野兽训练"]="default", ["宠物技能"]="default", ["训练野兽"]="default",
+}
+
+-- ============================================================
+-- DF retail Atlas 切片表 (来自 _references/dragonflight_ui/db2_csv 三表 join)
+-- 用法: ApplyAtlas(tex, "icon-skill-high") → SetTexture + SetTexCoord
+-- TGA 资源: atlas_main.tga ← interface/professions/professions.blp (2048×1024 ARGB8888)
+-- 经 _tools/blp2_to_tga_512.js 解码，WoW 1.12 原生支持 BGRA32 TGA
+-- ============================================================
+local ATLAS_MAIN = PROF_TEX .. "atlas_main.tga"  -- 2048×1024 (retail professions.blp)
+
+local ATLAS_SIZE = {
+    [ATLAS_MAIN] = {2048, 1024},
+}
+
+local ATLAS = {
+    -- key = {left, right, top, bottom, file, width, height}  (px on retail atlas)
+    ["recipe-active"]          = {1614, 1881,  39,  58, ATLAS_MAIN, 267, 19 },  -- 选中行全宽 overlay (金色)
+    ["recipe-hover"]           = {1275, 1584,  39,  60, ATLAS_MAIN, 309, 21 },  -- 悬停行全宽 overlay (暖色)
+    ["icon-skill-high"]        = { 539,  552,  55,  70, ATLAS_MAIN,  13, 15 },
+    ["icon-skill-medium"]      = { 604,  617,  55,  70, ATLAS_MAIN,  13, 15 },
+    ["icon-skill-low"]         = { 524,  537,  55,  70, ATLAS_MAIN,  13, 15 },
+}
+
+-- ApplyAtlas: 把 atlas 元素切片到 tex 上
+--   tex       Texture 对象
+--   key       ATLAS 表的 key
+--   applySize false 跳过 SetWidth/SetHeight (调用方手动控制尺寸时用)
+local function ApplyAtlas(tex, key, applySize)
+    local a = ATLAS[key]
+    if not a then return end
+    local l, r, t, b, file = a[1], a[2], a[3], a[4], a[5]
+    local sz = ATLAS_SIZE[file] or {2048, 1024}
+    local aw, ah = sz[1], sz[2]
+    if tex.atlasFile ~= file then
+        tex:SetTexture(file)
+        tex.atlasFile = file
+    end
+    tex:SetTexCoord(l / aw, r / aw, t / ah, b / ah)
+    if applySize ~= false then
+        tex:SetWidth(a[6])
+        tex:SetHeight(a[7])
+    end
+end
+
+-- 难度颜色 (针对 DF 深色背景画优化对比度，文字全部加 OUTLINE 保证可读)
 local DIFFICULTY_COLORS = {
-    optimal  = {0.70, 0.28, 0.05},   -- 深赭橙
-    medium   = {0.65, 0.50, 0.08},   -- 琥珀
-    easy     = {0.18, 0.48, 0.18},   -- 森林绿
-    trivial  = {0.42, 0.38, 0.33},   -- 暖灰褐
-    header   = {0.15, 0.10, 0.05},   -- 深黑棕（与右页标题统一）
-    none     = {0.18, 0.48, 0.18},   -- 森林绿（未学）
-    used     = {0.42, 0.38, 0.33},   -- 暖灰褐（已学，同 trivial）
-    default  = {0.42, 0.38, 0.33},   -- 暖灰褐
+    optimal  = {1.00, 0.50, 0.25},   -- 橙（最高收益）
+    medium   = {1.00, 0.82, 0.00},   -- 金黄
+    easy     = {0.40, 0.90, 0.40},   -- 亮绿
+    trivial  = {0.75, 0.75, 0.75},   -- 银灰
+    header   = {0.98, 0.91, 0.58},   -- 暖金（header 分组色）
+    none     = {0.40, 0.90, 0.40},   -- 亮绿（未学）
+    used     = {0.75, 0.75, 0.75},   -- 银灰（已学，同 trivial）
+    default  = {0.90, 0.86, 0.76},   -- 亮米色
 }
 
 local CreateCheckbox = CreatePanelCheckbox
@@ -35,7 +97,7 @@ DFUI:NewMod("TradeSkill", 5, function()
     local selectedIndex = nil      -- 当前选中的配方 index
     local recipeButtons = {}       -- 配方按钮池
     local reagentSlots = {}        -- 材料格池
-    local MAX_RECIPE_BUTTONS = 13
+    local MAX_RECIPE_BUTTONS = 20
     local MAX_REAGENTS = 8
     local scrollOffset = 0
     local filterHasMats = false
@@ -65,10 +127,35 @@ DFUI:NewMod("TradeSkill", 5, function()
         ["Pet Training"] = "Beast Training",
     }
 
+    -- 收藏机制：持久化到 DFUI_CUR_PROFILE.TradeSkillFavorites[专业名][配方名] = true
+    local filterFavOnly = false
+    local function GetFavTable()
+        if not DFUI_CUR_PROFILE then return nil end
+        if not DFUI_CUR_PROFILE.TradeSkillFavorites then
+            DFUI_CUR_PROFILE.TradeSkillFavorites = {}
+        end
+        return DFUI_CUR_PROFILE.TradeSkillFavorites
+    end
+    local function IsFavorite(recipeName)
+        if not activeProfName or not recipeName then return false end
+        local t = GetFavTable(); if not t then return false end
+        return t[activeProfName] and t[activeProfName][recipeName] or false
+    end
+    local function ToggleFavorite(recipeName)
+        if not activeProfName or not recipeName then return end
+        local t = GetFavTable(); if not t then return end
+        if not t[activeProfName] then t[activeProfName] = {} end
+        if t[activeProfName][recipeName] then
+            t[activeProfName][recipeName] = nil
+        else
+            t[activeProfName][recipeName] = true
+        end
+    end
+
     -- ============================================================
-    -- 1. 面板框架
+    -- 1. 面板框架 (1069x658，DF retail Professions 等比)
     -- ============================================================
-    local panel = DFUI.CreatePaperDollFrame("DFUI_ProfessionFrame", UIParent, 750, 530, 1)
+    local panel = DFUI.CreatePaperDollFrame("DFUI_ProfessionFrame", UIParent, 1069, 658, 1)
     panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 30, -104)
     panel:SetFrameStrata("MEDIUM")
     panel:SetFrameLevel(25)
@@ -77,38 +164,43 @@ DFUI:NewMod("TradeSkill", 5, function()
     panel:RegisterForDrag("LeftButton")
     panel:SetScript("OnDragStart", function() panel:StartMoving() end)
     panel:SetScript("OnDragStop", function() panel:StopMovingOrSizing() end)
-    panel:SetScale(0.9)
+    panel:SetScale(0.85)
 
     -- ============================================================
-    -- 2. 页面纹理
+    -- 2. 左右分栏容器 + 右侧专业背景画
+    --    leftColumn: 274 宽，放配方列表
+    --    rightColumn: 763 宽，放详情，底图是专业背景画
     -- ============================================================
-    local leftPage = panel:CreateTexture(nil, "ARTWORK")
-    leftPage:SetTexture(TEX .. "panels\\spellbook_right_page.blp")
-    leftPage:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -60)
-    leftPage:SetPoint("BOTTOM", panel, "BOTTOM", -5, 10)
-    leftPage:SetWidth(365)
+    local leftColumn = CreateFrame("Frame", nil, panel)
+    leftColumn:SetWidth(274)
+    leftColumn:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -68)
+    leftColumn:SetPoint("BOTTOM", panel, "BOTTOM", 0, 16)
+    leftColumn:SetFrameLevel(panel:GetFrameLevel() + 1)
+    -- 左栏暗底 (无边框)，分隔配方列表与右侧背景画
+    local leftColumnBg = leftColumn:CreateTexture(nil, "BACKGROUND")
+    leftColumnBg:SetTexture("Interface\\Buttons\\WHITE8X8")
+    leftColumnBg:SetAllPoints(leftColumn)
+    leftColumnBg:SetVertexColor(0.10, 0.07, 0.04, 0.92)
 
-    local rightPage = panel:CreateTexture(nil, "ARTWORK")
-    rightPage:SetTexture(TEX .. "panels\\spellbook_left_page.blp")
-    rightPage:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -10, -60)
-    rightPage:SetPoint("BOTTOM", panel, "BOTTOM", 5, 10)
-    rightPage:SetWidth(365)
+    local rightColumn = CreateFrame("Frame", nil, panel)
+    rightColumn:SetPoint("TOPLEFT", leftColumn, "TOPRIGHT", 8, 0)
+    rightColumn:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -16, 16)
+    rightColumn:SetFrameLevel(panel:GetFrameLevel() + 1)
+    -- 右栏裸 Frame，由内部 detailBg 专业背景画填充
 
-    local topWood = panel:CreateTexture(nil, "BORDER")
-    topWood:SetTexture(TEX .. "panels\\spellbook_top_wood.blp")
-    topWood:SetPoint("TOP", panel, "TOP", 0, -20)
-    topWood:SetWidth(730)
-    topWood:SetHeight(64)
-
-    local bookmark = panel:CreateTexture(nil, "OVERLAY")
-    bookmark:SetTexture(TEX .. "panels\\spellbook_bookmark.blp")
-    bookmark:SetPoint("TOPRIGHT", leftPage, "TOPRIGHT", 45, 0)
-    bookmark:SetWidth(50)
-    bookmark:SetHeight(500)
+    -- 右侧专业背景画（占满 rightColumn 内部）
+    -- retail BLP 1024×1024 实际内容只在左上 676×549 (= recipe-background atlas region)，
+    -- 降采样到 512×512 后内容 339×275。用 SetTexCoord 裁出有效区域再拉伸填满
+    local detailBg = rightColumn:CreateTexture(nil, "BACKGROUND")
+    detailBg:SetPoint("TOPLEFT", rightColumn, "TOPLEFT", 4, -4)
+    detailBg:SetPoint("BOTTOMRIGHT", rightColumn, "BOTTOMRIGHT", -4, 4)
+    detailBg:SetTexture(PROF_TEX .. "bg_default.tga")
+    detailBg:SetTexCoord(0, 339/512, 0, 275/512)
 
     -- ============================================================
     -- 3. 专业图标 + 标题 + 关闭按钮
     -- ============================================================
+    -- 左上角职业图标 (圆形 UI-Classes-Circles atlas)
     local profIcon = panel:CreateTexture(nil, "ARTWORK")
     profIcon:SetTexture(TEX .. "ui\\UI-Classes-Circles.tga")
     local _, playerClass = UnitClass("player")
@@ -120,63 +212,70 @@ DFUI:NewMod("TradeSkill", 5, function()
     profIcon:SetWidth(52)
     profIcon:SetHeight(52)
 
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local title = panel:CreateFontString(nil, "OVERLAY")
+    title:SetFont("Fonts\\FRIZQT__.TTF", 16)
     title:SetText("专业技能")
-    title:SetTextColor(0.95, 0.90, 0.80)
-    title:SetPoint("TOP", panel, "TOP", 0, -6)
+    title:SetTextColor(1.00, 0.82, 0.00)
+    title:SetPoint("TOP", panel, "TOP", 0, -10)
 
     local closeBtn = DFUI.CreateRedButton(panel, "close", function() panel:Hide() end)
-    closeBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, -1)
+    closeBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -4, -4)
 
     -- ============================================================
     -- 4. 熟练度进度条
     -- ============================================================
+    -- 熟练度条: StatusBar + retail atlas 切片 recipe-active (267×19 金色横条)
+    -- 替代之前的项目自制 rankbar_fill.tga, 全 retail 数据
     local rankBarBg = CreateFrame("Frame", nil, panel)
-    rankBarBg:SetPoint("TOPLEFT", leftPage, "TOPLEFT", 30, -12)
-    rankBarBg:SetPoint("RIGHT", leftPage, "RIGHT", -30, 0)
+    rankBarBg:SetPoint("TOPLEFT", panel, "TOPLEFT", 60, -38)
+    rankBarBg:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -60, -38)
     rankBarBg:SetHeight(18)
-    rankBarBg:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    rankBarBg:SetBackdropColor(0.10, 0.08, 0.05, 0.75)
-    rankBarBg:SetBackdropBorderColor(0.55, 0.42, 0.20, 0.70)
     rankBarBg:SetFrameLevel(panel:GetFrameLevel() + 2)
+    local rankBarBgTex = rankBarBg:CreateTexture(nil, "BACKGROUND")
+    rankBarBgTex:SetTexture("Interface\\Buttons\\WHITE8X8")
+    rankBarBgTex:SetAllPoints(rankBarBg)
+    rankBarBgTex:SetVertexColor(0.10, 0.07, 0.04, 0.92)
 
     local rankBar = CreateFrame("StatusBar", nil, rankBarBg)
     rankBar:SetPoint("TOPLEFT", rankBarBg, "TOPLEFT", 3, -3)
     rankBar:SetPoint("BOTTOMRIGHT", rankBarBg, "BOTTOMRIGHT", -3, 3)
-    rankBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    rankBar:SetStatusBarColor(0.85, 0.65, 0.20)
+    -- StatusBar fill 用 atlas_main 切片 qualitybar-bg (186×26 实心 mask, alpha avg 212)
+    -- retail atlas 元素是黑色 alpha mask，VertexColor 染金色得到 retail 金条效果
+    local rankFillTex = rankBar:CreateTexture(nil, "ARTWORK")
+    rankFillTex:SetTexture(ATLAS_MAIN)
+    rankFillTex:SetTexCoord(717/2048, 902/2048, 1/1024, 26/1024)
+    rankFillTex:SetVertexColor(1.00, 0.78, 0.20)  -- retail 金色
+    rankBar:SetStatusBarTexture(rankFillTex)
     rankBar:SetMinMaxValues(0, 300)
     rankBar:SetValue(0)
 
     local rankText = rankBar:CreateFontString(nil, "OVERLAY")
     rankText:SetFont("Fonts\\FRIZQT__.TTF", 12)
     rankText:SetPoint("CENTER", rankBar, "CENTER", 0, 0)
-    rankText:SetTextColor(0.10, 0.08, 0.05)
+    rankText:SetTextColor(0.98, 0.91, 0.58)
 
 
     -- ============================================================
     -- 5. 左页 — 配方列表
     -- ============================================================
     local listFrame = CreateFrame("Frame", nil, panel)
-    listFrame:SetPoint("TOPLEFT", leftPage, "TOPLEFT", 30, -10)
-    listFrame:SetPoint("BOTTOMRIGHT", leftPage, "BOTTOMRIGHT", -30, 45)
+    -- listFrame 顶移 28px 让出顶部 checkbox 区域 (-10 → -38)
+    -- bottom 也调整 (原 72 = checkbox 14px + 下间距 58, 现 checkbox 上移后底部不需要 = 14)
+    listFrame:SetPoint("TOPLEFT", leftColumn, "TOPLEFT", 12, -38)
+    listFrame:SetPoint("BOTTOMRIGHT", leftColumn, "BOTTOMRIGHT", -12, 14)
     listFrame:SetFrameLevel(panel:GetFrameLevel() + 3)
 
     -- 折叠全部按钮（模拟原版 "全部" header 行）
     local collapseAllBtn = CreateFrame("Button", nil, listFrame)
     collapseAllBtn:SetHeight(16)
-    collapseAllBtn:SetPoint("TOPLEFT", rankBarBg, "BOTTOMLEFT", 0, -12)
+    -- collapseAllBtn 锚到 listFrame 顶部 (在 checkbox 下方, listFrame TOPLEFT 已下移到 -38)
+    collapseAllBtn:SetPoint("TOPLEFT", listFrame, "TOPLEFT", 0, 0)
     collapseAllBtn:SetPoint("RIGHT", listFrame, "RIGHT", -10, 0)
     local collapseAllText = collapseAllBtn:CreateFontString(nil, "OVERLAY")
     collapseAllText:SetFont("Fonts\\FRIZQT__.TTF", 10)
     collapseAllText:SetPoint("LEFT", collapseAllBtn, "LEFT", 2, 0)
     collapseAllText:SetWidth(14)
-    collapseAllText:SetTextColor(0.15, 0.10, 0.05)
+    collapseAllText:SetTextColor(0.98, 0.91, 0.58)
     collapseAllText:SetText("-")
     local collapseAllLabel = collapseAllBtn:CreateFontString(nil, "OVERLAY")
     collapseAllLabel:SetFont("Fonts\\FRIZQT__.TTF", 13)
@@ -191,58 +290,41 @@ DFUI:NewMod("TradeSkill", 5, function()
     local function CreateRecipeButton(parent)
         local btn = CreateFrame("Button", nil, parent)
         btn:SetHeight(16)
+        btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
-        -- 悬停: 柔和全行金色亮光
-        local highlight = btn:CreateTexture(nil, "HIGHLIGHT")
-        highlight:SetTexture("Interface\\Buttons\\WHITE8X8")
-        highlight:SetAllPoints(btn)
-        highlight:SetVertexColor(0.85, 0.70, 0.20, 0.15)
-        highlight:SetBlendMode("ADD")
+        -- 收藏星标（左上角 8x8，普通行才显示）
+        local favStar = btn:CreateTexture(nil, "OVERLAY")
+        favStar:SetTexture("Interface\\COMMON\\ReputationStar")
+        favStar:SetTexCoord(0, 0.25, 0, 0.5)
+        favStar:SetWidth(10)
+        favStar:SetHeight(10)
+        favStar:SetPoint("LEFT", btn, "LEFT", -1, 4)
+        favStar:SetVertexColor(1.0, 0.82, 0.0)
+        favStar:Hide()
+        btn.favStar = favStar
 
-        -- 选中: 三层结构
-        local selectedBg = btn:CreateTexture(nil, "BACKGROUND")
-        selectedBg:SetTexture("Interface\\Buttons\\WHITE8X8")
-        selectedBg:SetAllPoints(btn)
-        selectedBg:SetVertexColor(0.60, 0.45, 0.15, 0.25)
-        selectedBg:Hide()
-        btn.selectedBg = selectedBg
+        -- Header 行深灰底色 (替代 1px 分隔线，retail 风格)
+        local headerBg = btn:CreateTexture(nil, "BACKGROUND")
+        headerBg:SetTexture("Interface\\Buttons\\WHITE8X8")
+        headerBg:SetAllPoints(btn)
+        headerBg:SetVertexColor(0.14, 0.09, 0.05, 0.85)
+        headerBg:Hide()
+        btn.headerBg = headerBg
 
-        local selectedBar = btn:CreateTexture(nil, "ARTWORK")
-        selectedBar:SetTexture("Interface\\Buttons\\WHITE8X8")
-        selectedBar:SetWidth(3)
-        selectedBar:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
-        selectedBar:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
-        selectedBar:SetVertexColor(0.85, 0.70, 0.20, 1.0)
-        selectedBar:Hide()
-        btn.selectedBar = selectedBar
+        -- 悬停: retail recipe-hover atlas (HIGHLIGHT 层 WoW 自动管理)
+        -- atlas 是稀疏光晕设计 (alpha avg 29), ADD blend 让金色像素叠加到暗底上更显著
+        local hoverOverlay = btn:CreateTexture(nil, "HIGHLIGHT")
+        ApplyAtlas(hoverOverlay, "recipe-hover", false)
+        hoverOverlay:SetAllPoints(btn)
+        hoverOverlay:SetBlendMode("ADD")
 
-        local selectedTop = btn:CreateTexture(nil, "ARTWORK")
-        selectedTop:SetTexture("Interface\\Buttons\\WHITE8X8")
-        selectedTop:SetHeight(1)
-        selectedTop:SetPoint("TOPLEFT", btn, "TOPLEFT", 3, 0)
-        selectedTop:SetPoint("TOPRIGHT", btn, "TOPRIGHT", 0, 0)
-        selectedTop:SetVertexColor(0.85, 0.70, 0.20, 0.40)
-        selectedTop:Hide()
-        btn.selectedTop = selectedTop
-
-        local selectedBot = btn:CreateTexture(nil, "ARTWORK")
-        selectedBot:SetTexture("Interface\\Buttons\\WHITE8X8")
-        selectedBot:SetHeight(1)
-        selectedBot:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 3, 0)
-        selectedBot:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
-        selectedBot:SetVertexColor(0.85, 0.70, 0.20, 0.40)
-        selectedBot:Hide()
-        btn.selectedBot = selectedBot
-
-        -- Header 分隔线
-        local headerSep = btn:CreateTexture(nil, "ARTWORK")
-        headerSep:SetTexture("Interface\\Buttons\\WHITE8X8")
-        headerSep:SetHeight(1)
-        headerSep:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 2)
-        headerSep:SetPoint("TOPRIGHT", btn, "TOPRIGHT", 0, 2)
-        headerSep:SetVertexColor(0.55, 0.42, 0.20, 0.50)
-        headerSep:Hide()
-        btn.headerSep = headerSep
+        -- 选中: retail recipe-active atlas (alpha avg 38, ADD blend 增强视觉)
+        local selectedOverlay = btn:CreateTexture(nil, "BORDER")
+        ApplyAtlas(selectedOverlay, "recipe-active", false)
+        selectedOverlay:SetAllPoints(btn)
+        selectedOverlay:SetBlendMode("ADD")
+        selectedOverlay:Hide()
+        btn.selectedOverlay = selectedOverlay
 
         -- 配方产物图标
         local recipeIcon = btn:CreateTexture(nil, "ARTWORK")
@@ -253,15 +335,22 @@ DFUI:NewMod("TradeSkill", 5, function()
         recipeIcon:Hide()
         btn.recipeIcon = recipeIcon
 
+        -- 难度图标 (DF retail icon-skill-high/medium/low, 仅 tradeskill 模式)
+        local skillIcon = btn:CreateTexture(nil, "ARTWORK")
+        skillIcon:SetWidth(13)
+        skillIcon:SetHeight(15)
+        skillIcon:Hide()
+        btn.skillIcon = skillIcon
+
         local collapseIcon = btn:CreateFontString(nil, "OVERLAY")
         collapseIcon:SetFont("Fonts\\FRIZQT__.TTF", 10)
         collapseIcon:SetPoint("LEFT", btn, "LEFT", 2, 0)
         collapseIcon:SetWidth(14)
-        collapseIcon:SetTextColor(0.15, 0.10, 0.05)
+        collapseIcon:SetTextColor(0.98, 0.91, 0.58)
         btn.collapseIcon = collapseIcon
 
         local nameText = btn:CreateFontString(nil, "OVERLAY")
-        nameText:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+        nameText:SetFont("Fonts\\FRIZQT__.TTF", 12)
         nameText:SetPoint("LEFT", btn, "LEFT", 18, 0)
         nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
         nameText:SetJustifyH("LEFT")
@@ -273,17 +362,7 @@ DFUI:NewMod("TradeSkill", 5, function()
     end
 
     local function SetButtonSelected(btn, isSelected)
-        if isSelected then
-            btn.selectedBg:Show()
-            btn.selectedBar:Show()
-            btn.selectedTop:Show()
-            btn.selectedBot:Show()
-        else
-            btn.selectedBg:Hide()
-            btn.selectedBar:Hide()
-            btn.selectedTop:Hide()
-            btn.selectedBot:Hide()
-        end
+        if isSelected then btn.selectedOverlay:Show() else btn.selectedOverlay:Hide() end
     end
 
     for i = 1, MAX_RECIPE_BUTTONS do
@@ -302,101 +381,139 @@ DFUI:NewMod("TradeSkill", 5, function()
     -- 6. 右页 — 配方详情
     -- ============================================================
     local detailFrame = CreateFrame("Frame", nil, panel)
-    detailFrame:SetPoint("TOPLEFT", rightPage, "TOPLEFT", 40, -55)
-    detailFrame:SetPoint("BOTTOMRIGHT", rightPage, "BOTTOMRIGHT", -20, 45)
+    detailFrame:SetPoint("TOPLEFT", rightColumn, "TOPLEFT", 20, -18)
+    detailFrame:SetPoint("BOTTOMRIGHT", rightColumn, "BOTTOMRIGHT", -18, 48)
     detailFrame:SetFrameLevel(panel:GetFrameLevel() + 3)
 
+    -- 局部 text panel 暗底 (retail QualityPane / InsetFrame 风格)
+    -- 覆盖左上文字+3列材料网格区 (596×380), 右侧露 ~120px 让专业画显出，避免全屏画中画
+    local textPanel = detailFrame:CreateTexture(nil, "BACKGROUND")
+    textPanel:SetTexture("Interface\\Buttons\\WHITE8X8")
+    textPanel:SetPoint("TOPLEFT", detailFrame, "TOPLEFT", 16, -16)
+    textPanel:SetWidth(596)
+    textPanel:SetHeight(380)
+    textPanel:SetVertexColor(0.08, 0.05, 0.03, 0.60)
+
+    -- 主产物图标 (retail OutputIcon 规格: 47×47 at TOPLEFT 28,-33)
     local detailIconBtn = CreateFrame("Button", nil, detailFrame)
-    detailIconBtn:SetWidth(35)
-    detailIconBtn:SetHeight(35)
-    detailIconBtn:SetPoint("TOPLEFT", detailFrame, "TOPLEFT", 5, -15)
+    detailIconBtn:SetWidth(47)
+    detailIconBtn:SetHeight(47)
+    detailIconBtn:SetPoint("TOPLEFT", detailFrame, "TOPLEFT", 28, -33)
 
     local detailIcon = detailIconBtn:CreateTexture(nil, "BACKGROUND")
     detailIcon:SetAllPoints(detailIconBtn)
     detailIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    local detailIconBorder = detailIconBtn:CreateTexture(nil, "ARTWORK")
-    detailIconBorder:SetTexture(TEX .. "panels\\spellbook_actives_border.blp")
-    detailIconBorder:SetWidth(48)
-    detailIconBorder:SetHeight(48)
-    detailIconBorder:SetPoint("CENTER", detailIconBtn, "CENTER", -2, -1)
+    -- Count 徽章 (retail OutputButton.Count, 多产物配方右下角数量)
+    local detailIconCount = detailIconBtn:CreateFontString(nil, "OVERLAY")
+    detailIconCount:SetFont("Fonts\\FRIZQT__.TTF", 13, "OUTLINE")
+    detailIconCount:SetPoint("BOTTOMRIGHT", detailIconBtn, "BOTTOMRIGHT", -3, 2)
+    detailIconCount:SetTextColor(1, 1, 1)
+    detailIconCount:Hide()
 
+    -- 主图标边框 (retail Slot-Frame-Blue, 严丝合缝包住图标)
+    -- TGA 64×64 但实际边框内容在 (12,12)-(50,50)，用 TexCoord 裁掉外围透明 padding
+    local detailIconBorder = detailIconBtn:CreateTexture(nil, "OVERLAY")
+    detailIconBorder:SetTexture(PROF_TEX .. "slot_blue.tga")
+    detailIconBorder:SetTexCoord(12/64, 51/64, 12/64, 51/64)
+    detailIconBorder:SetAllPoints(detailIconBtn)
+
+    -- detailName (retail GameFontHighlightMed2 ≈ 14pt, LEFT icon RIGHT +14,+17)
+    -- 加 OUTLINE 因为浮在专业背景画上 (无暗底)
     local detailName = detailFrame:CreateFontString(nil, "OVERLAY")
-    detailName:SetFont("Fonts\\FRIZQT__.TTF", 13)
-    detailName:SetPoint("TOPLEFT", detailIconBtn, "TOPRIGHT", 8, -2)
-    detailName:SetPoint("RIGHT", detailFrame, "RIGHT", -10, 0)
+    detailName:SetFont("Fonts\\FRIZQT__.TTF", 14)
+    detailName:SetPoint("LEFT", detailIconBtn, "RIGHT", 14, 17)
+    detailName:SetWidth(400)
     detailName:SetJustifyH("LEFT")
-    detailName:SetTextColor(0.15, 0.10, 0.05)
+    detailName:SetTextColor(1.00, 0.82, 0.00)
 
+    -- detail ☆ 收藏指示 (retail OutputText 旁的 favorite 标记)
+    local detailFavStar = detailFrame:CreateTexture(nil, "OVERLAY")
+    detailFavStar:SetTexture("Interface\\COMMON\\ReputationStar")
+    detailFavStar:SetTexCoord(0, 0.25, 0, 0.5)
+    detailFavStar:SetWidth(14); detailFavStar:SetHeight(14)
+    detailFavStar:SetPoint("LEFT", detailName, "RIGHT", 4, 0)
+    detailFavStar:SetVertexColor(1.0, 0.82, 0.0)
+    detailFavStar:Hide()
+
+    -- detailSubText (12pt OUTLINE, -5 间距)
     local detailSubText = detailFrame:CreateFontString(nil, "OVERLAY")
-    detailSubText:SetFont("Fonts\\FRIZQT__.TTF", 10)
-    detailSubText:SetPoint("TOPLEFT", detailName, "BOTTOMLEFT", 0, -4)
-    detailSubText:SetPoint("RIGHT", detailFrame, "RIGHT", -10, 0)
+    detailSubText:SetFont("Fonts\\FRIZQT__.TTF", 12)
+    detailSubText:SetPoint("TOPLEFT", detailName, "BOTTOMLEFT", 0, -5)
+    detailSubText:SetWidth(400)
     detailSubText:SetJustifyH("LEFT")
-    detailSubText:SetTextColor(0.85, 0.70, 0.20)
+    detailSubText:SetTextColor(0.98, 0.91, 0.58)
 
+    -- detailCooldown / Require / Points: -3 间距统一, OUTLINE 保可读
     local detailCooldown = detailFrame:CreateFontString(nil, "OVERLAY")
-    detailCooldown:SetFont("Fonts\\FRIZQT__.TTF", 10)
-    detailCooldown:SetPoint("TOPLEFT", detailSubText, "BOTTOMLEFT", 0, -8)
-    detailCooldown:SetPoint("RIGHT", detailFrame, "RIGHT", -10, 0)
-    detailCooldown:SetTextColor(0.85, 0.70, 0.20)
+    detailCooldown:SetFont("Fonts\\FRIZQT__.TTF", 12)
+    detailCooldown:SetPoint("TOPLEFT", detailSubText, "BOTTOMLEFT", 0, -3)
+    detailCooldown:SetWidth(400)
+    detailCooldown:SetTextColor(0.95, 0.90, 0.80)
 
     local detailRequire = detailFrame:CreateFontString(nil, "OVERLAY")
-    detailRequire:SetFont("Fonts\\FRIZQT__.TTF", 10)
-    detailRequire:SetPoint("TOPLEFT", detailCooldown, "BOTTOMLEFT", 0, -4)
-    detailRequire:SetPoint("RIGHT", detailFrame, "RIGHT", -10, 0)
-    detailRequire:SetTextColor(0.85, 0.70, 0.20)
+    detailRequire:SetFont("Fonts\\FRIZQT__.TTF", 12)
+    detailRequire:SetPoint("TOPLEFT", detailCooldown, "BOTTOMLEFT", 0, -3)
+    detailRequire:SetWidth(400)
+    detailRequire:SetTextColor(0.95, 0.90, 0.80)
 
     local detailPoints = detailFrame:CreateFontString(nil, "OVERLAY")
-    detailPoints:SetFont("Fonts\\FRIZQT__.TTF", 10)
-    detailPoints:SetPoint("TOPLEFT", detailRequire, "BOTTOMLEFT", 0, -4)
-    detailPoints:SetPoint("RIGHT", detailFrame, "RIGHT", -10, 0)
-    detailPoints:SetTextColor(0.85, 0.70, 0.20)
+    detailPoints:SetFont("Fonts\\FRIZQT__.TTF", 12)
+    detailPoints:SetPoint("TOPLEFT", detailRequire, "BOTTOMLEFT", 0, -3)
+    detailPoints:SetWidth(400)
+    detailPoints:SetTextColor(0.98, 0.91, 0.58)
 
+    -- detailDesc (12pt OUTLINE, 宽度 460)
     local detailDesc = detailFrame:CreateFontString(nil, "OVERLAY")
-    detailDesc:SetFont("Fonts\\FRIZQT__.TTF", 10)
-    detailDesc:SetPoint("TOPLEFT", detailPoints, "BOTTOMLEFT", 0, -8)
-    detailDesc:SetPoint("RIGHT", detailFrame, "RIGHT", -10, 0)
+    detailDesc:SetFont("Fonts\\FRIZQT__.TTF", 12)
+    detailDesc:SetPoint("TOPLEFT", detailPoints, "BOTTOMLEFT", 0, -3)
+    detailDesc:SetWidth(460)
     detailDesc:SetJustifyH("LEFT")
-    detailDesc:SetTextColor(0.20, 0.15, 0.10)
+    detailDesc:SetTextColor(0.90, 0.86, 0.72)
 
+    -- reagentLabel (retail Reagents container Label, OUTLINE 保浮在背景画上可读)
     local reagentLabel = detailFrame:CreateFontString(nil, "OVERLAY")
-    reagentLabel:SetFont("Fonts\\FRIZQT__.TTF", 11)
+    reagentLabel:SetFont("Fonts\\FRIZQT__.TTF", 13)
     reagentLabel:SetText("材料:")
-    reagentLabel:SetTextColor(0.15, 0.10, 0.05)
+    reagentLabel:SetTextColor(0.98, 0.91, 0.58)
 
-    -- 材料格工厂
+    -- 材料格工厂 (retail ProfessionsReagentSlotBaseTemplate: 180×50 容器 + 39×39 按钮)
     local function CreateReagentSlot(parent)
         local slot = CreateFrame("Frame", nil, parent)
-        slot:SetWidth(155)
-        slot:SetHeight(40)
+        slot:SetWidth(180)
+        slot:SetHeight(50)
 
         local iconFrame = CreateFrame("Button", nil, slot)
-        iconFrame:SetWidth(32)
-        iconFrame:SetHeight(32)
-        iconFrame:SetPoint("LEFT", slot, "LEFT", 4, 0)
+        iconFrame:SetWidth(39)
+        iconFrame:SetHeight(39)
+        iconFrame:SetPoint("LEFT", slot, "LEFT", 0, 0)
 
-        local icon = iconFrame:CreateTexture(nil, "BACKGROUND")
+        -- 仅图标 + 透明边框，无 slot-bg 暗底 (避免 8 个"独立小方块"散落感)
+        local icon = iconFrame:CreateTexture(nil, "ARTWORK")
         icon:SetAllPoints(iconFrame)
         icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         slot.icon = icon
 
-        local border = iconFrame:CreateTexture(nil, "ARTWORK")
-        border:SetTexture(TEX .. "panels\\spellbook_actives_border.blp")
-        border:SetWidth(42)
-        border:SetHeight(42)
-        border:SetPoint("CENTER", iconFrame, "CENTER", -2, -1)
+        -- 材料槽边框 (retail Professions-Slot-Frame, OVERLAY 覆盖 icon)
+        -- TGA 外围有 12px 透明 padding，TexCoord 裁掉
+        local border = iconFrame:CreateTexture(nil, "OVERLAY")
+        border:SetTexture(PROF_TEX .. "slot_neutral.tga")
+        border:SetTexCoord(12/64, 51/64, 12/64, 51/64)
+        border:SetAllPoints(iconFrame)
+        slot.border = border
 
+        -- nameText (retail LEFT x=46 from slot LEFT, i.e. iconFrame RIGHT +7, 无 OUTLINE)
         local nameText = slot:CreateFontString(nil, "OVERLAY")
-        nameText:SetFont("Fonts\\FRIZQT__.TTF", 10)
-        nameText:SetPoint("TOPLEFT", iconFrame, "TOPRIGHT", 5, -2)
-        nameText:SetPoint("RIGHT", slot, "RIGHT", -3, 0)
+        nameText:SetFont("Fonts\\FRIZQT__.TTF", 12)
+        nameText:SetPoint("TOPLEFT", iconFrame, "TOPRIGHT", 7, 0)
+        nameText:SetPoint("RIGHT", slot, "RIGHT", -5, 0)
         nameText:SetJustifyH("LEFT")
         slot.nameText = nameText
 
+        -- countText (retail BOTTOMRIGHT 小字, 我们用 TOPLEFT 下方 -2 间距)
         local countText = slot:CreateFontString(nil, "OVERLAY")
-        countText:SetFont("Fonts\\FRIZQT__.TTF", 9)
-        countText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -1)
+        countText:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+        countText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -2)
         slot.countText = countText
 
         slot.iconFrame = iconFrame
@@ -423,13 +540,6 @@ DFUI:NewMod("TradeSkill", 5, function()
         bg:SetTexture("Interface\\Buttons\\WHITE8X8")
         bg:SetAllPoints(btn)
         bg:SetVertexColor(0.12, 0.10, 0.08, 0.80)
-        local border = CreateFrame("Frame", nil, btn)
-        border:SetAllPoints(btn)
-        border:SetBackdrop({
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            edgeSize = 10,
-        })
-        border:SetBackdropBorderColor(0.55, 0.42, 0.20, 0.80)
         local label = btn:CreateFontString(nil, "OVERLAY")
         label:SetFont("Fonts\\FRIZQT__.TTF", 11)
         label:SetPoint("CENTER", btn, "CENTER", 0, 0)
@@ -439,25 +549,25 @@ DFUI:NewMod("TradeSkill", 5, function()
         local hl = btn:CreateTexture(nil, "HIGHLIGHT")
         hl:SetTexture("Interface\\Buttons\\WHITE8X8")
         hl:SetAllPoints(btn)
-        hl:SetVertexColor(0.40, 0.30, 0.10, 0.3)
+        hl:SetVertexColor(0.98, 0.91, 0.58, 0.18)
         hl:SetBlendMode("ADD")
         return btn
     end
 
-    local createBtn = CreateSimpleButton(panel, 70, "制作")
-    createBtn:SetPoint("BOTTOMRIGHT", rightPage, "BOTTOMRIGHT", -20, 15)
+    local createBtn = CreateSimpleButton(panel, 160, "制作")
+    createBtn:SetPoint("BOTTOMRIGHT", rightColumn, "BOTTOMRIGHT", -20, 12)
 
-    local cancelBtn = CreateSimpleButton(panel, 55, "取消")
+    local cancelBtn = CreateSimpleButton(panel, 70, "取消")
     cancelBtn:SetPoint("RIGHT", createBtn, "LEFT", -6, 0)
 
     -- 训练点数显示（仅宠物训练模式，在取消按钮左侧）
     local trainingPointsText = panel:CreateFontString(nil, "OVERLAY")
     trainingPointsText:SetFont("Fonts\\FRIZQT__.TTF", 12)
     trainingPointsText:SetPoint("RIGHT", cancelBtn, "LEFT", -12, 0)
-    trainingPointsText:SetTextColor(0.15, 0.10, 0.05)
+    trainingPointsText:SetTextColor(0.98, 0.91, 0.58)
     trainingPointsText:Hide()
 
-    local createAllBtn = CreateSimpleButton(panel, 55, "全部")
+    local createAllBtn = CreateSimpleButton(panel, 80, "全部")
     createAllBtn:SetPoint("RIGHT", cancelBtn, "LEFT", -6, 0)
 
     local incrementBtn = CreateSimpleButton(panel, 20, "+")
@@ -468,14 +578,10 @@ DFUI:NewMod("TradeSkill", 5, function()
     inputBoxBg:SetHeight(24)
     inputBoxBg:SetPoint("RIGHT", incrementBtn, "LEFT", -1, 0)
     inputBoxBg:SetFrameLevel(panel:GetFrameLevel() + 5)
-    inputBoxBg:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        edgeSize = 10,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
-    })
-    inputBoxBg:SetBackdropColor(0.08, 0.06, 0.04, 0.85)
-    inputBoxBg:SetBackdropBorderColor(0.45, 0.35, 0.20, 0.70)
+    local inputBoxBgTex = inputBoxBg:CreateTexture(nil, "BACKGROUND")
+    inputBoxBgTex:SetTexture("Interface\\Buttons\\WHITE8X8")
+    inputBoxBgTex:SetAllPoints(inputBoxBg)
+    inputBoxBgTex:SetVertexColor(0.10, 0.07, 0.04, 0.92)
 
     local inputBox = CreateFrame("EditBox", nil, inputBoxBg)
     inputBox:SetPoint("TOPLEFT", inputBoxBg, "TOPLEFT", 4, -3)
@@ -496,38 +602,48 @@ DFUI:NewMod("TradeSkill", 5, function()
 
     -- 搜索框 (Frame 容器承载 Backdrop + 裸 EditBox)
     local searchBg = CreateFrame("Frame", nil, panel)
-    searchBg:SetWidth(180)
-    searchBg:SetHeight(24)
-    searchBg:SetPoint("BOTTOMLEFT", leftPage, "BOTTOMLEFT", 20, 15)
+    searchBg:SetWidth(250)
+    searchBg:SetHeight(22)
+    searchBg:SetPoint("BOTTOMLEFT", leftColumn, "BOTTOMLEFT", 12, 36)
     searchBg:SetFrameLevel(panel:GetFrameLevel() + 5)
-    searchBg:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        edgeSize = 10,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
-    })
-    searchBg:SetBackdropColor(0.08, 0.06, 0.04, 0.85)
-    searchBg:SetBackdropBorderColor(0.45, 0.35, 0.20, 0.70)
+    local searchBgTex = searchBg:CreateTexture(nil, "BACKGROUND")
+    searchBgTex:SetTexture("Interface\\Buttons\\WHITE8X8")
+    searchBgTex:SetAllPoints(searchBg)
+    searchBgTex:SetVertexColor(0.10, 0.07, 0.04, 0.92)
+
+    -- 放大镜图标（Blizzard 内置的搜索框图标）
+    local searchIcon = searchBg:CreateTexture(nil, "OVERLAY")
+    searchIcon:SetTexture("Interface\\Common\\UI-Searchbox-Icon")
+    searchIcon:SetWidth(14)
+    searchIcon:SetHeight(14)
+    searchIcon:SetPoint("LEFT", searchBg, "LEFT", 5, 0)
+    searchIcon:SetVertexColor(0.98, 0.91, 0.58)
 
     local searchBox = CreateFrame("EditBox", nil, searchBg)
-    searchBox:SetPoint("TOPLEFT", searchBg, "TOPLEFT", 6, -4)
+    searchBox:SetPoint("TOPLEFT", searchBg, "TOPLEFT", 22, -4)
     searchBox:SetPoint("BOTTOMRIGHT", searchBg, "BOTTOMRIGHT", -6, 4)
     searchBox:SetAutoFocus(false)
-    searchBox:SetFont("Fonts\\FRIZQT__.TTF", 10)
+    searchBox:SetFont("Fonts\\FRIZQT__.TTF", 11)
     searchBox:SetTextColor(0.95, 0.90, 0.80)
     searchBox:SetFrameLevel(searchBg:GetFrameLevel() + 1)
     searchBox:SetTextInsets(2, 2, 0, 0)
 
     local searchPlaceholder = searchBg:CreateFontString(nil, "OVERLAY")
-    searchPlaceholder:SetFont("Fonts\\FRIZQT__.TTF", 10)
-    searchPlaceholder:SetPoint("LEFT", searchBg, "LEFT", 8, 0)
-    searchPlaceholder:SetText("搜索...")
+    searchPlaceholder:SetFont("Fonts\\FRIZQT__.TTF", 11)
+    searchPlaceholder:SetPoint("LEFT", searchBg, "LEFT", 24, 0)
+    searchPlaceholder:SetText("搜索配方...")
     searchPlaceholder:SetTextColor(0.55, 0.50, 0.40)
 
+    -- 过滤器移到 leftColumn 顶部 (retail 风格, "过滤器" 区在列表上方)
     local matsCheckbox = CreateCheckbox(panel, "有材料")
-    matsCheckbox:SetPoint("LEFT", searchBg, "RIGHT", 10, 0)
+    matsCheckbox:SetPoint("TOPLEFT", leftColumn, "TOPLEFT", 10, -8)
     matsCheckbox:SetFrameLevel(panel:GetFrameLevel() + 5)
     matsCheckbox:SetChecked(false)
+
+    local favOnlyCheckbox = CreateCheckbox(panel, "仅收藏")
+    favOnlyCheckbox:SetPoint("TOPLEFT", leftColumn, "TOPLEFT", 130, -8)
+    favOnlyCheckbox:SetFrameLevel(panel:GetFrameLevel() + 5)
+    favOnlyCheckbox:SetChecked(false)
 
 
     -- ============================================================
@@ -619,7 +735,8 @@ DFUI:NewMod("TradeSkill", 5, function()
                 else
                     local passSearch = not searchText or string.find(string.lower(name), searchText, 1, true)
                     local passMats = not filterHasMats or (numAvail and numAvail > 0)
-                    if passSearch and passMats then
+                    local passFav = not filterFavOnly or IsFavorite(name)
+                    if passSearch and passMats and passFav then
                         if not lastHeaderConfirmed and lastHeaderIndex then
                             local h = visibleItems[lastHeaderIndex]
                             if h and h.pending then h.pending = nil end
@@ -669,6 +786,7 @@ DFUI:NewMod("TradeSkill", 5, function()
             local item = cleanItems[scrollOffset + i]
             if item then
                 btn.recipeIndex = item.index
+                btn.recipeName = item.name
                 btn.isHeader = item.isHeader
                 btn.isExpanded = item.isExpanded
                 if item.isHeader then
@@ -676,6 +794,8 @@ DFUI:NewMod("TradeSkill", 5, function()
                     btn.collapseIcon:SetText(item.isExpanded and "-" or "+")
                     btn.collapseIcon:Show()
                     btn.recipeIcon:Hide()
+                    btn.skillIcon:Hide()
+                    btn.favStar:Hide()
                     -- 锚定到按钮本身 (避免 FontString→FontString 锚定在 1.12 中边界计算不可靠)
                     btn.nameText:ClearAllPoints()
                     btn.nameText:SetPoint("LEFT", btn, "LEFT", 18, 0)
@@ -684,30 +804,62 @@ DFUI:NewMod("TradeSkill", 5, function()
                     local hc = DIFFICULTY_COLORS.header
                     btn.nameText:SetTextColor(hc[1], hc[2], hc[3])
                     btn.nameText:SetFont("Fonts\\FRIZQT__.TTF", 13)
-                    -- 非首行 header 显示分隔线
-                    if i > 1 then btn.headerSep:Show() else btn.headerSep:Hide() end
+                    -- Header 行深灰背景 (retail 风格，全行显示)
+                    btn.headerBg:Show()
                 else
                     -- 配方行: 产物图标 + 名称
                     btn.collapseIcon:SetText("")
                     btn.collapseIcon:Hide()
-                    btn.headerSep:Hide()
+                    btn.headerBg:Hide()
                     local texture
                     if currentMode == "tradeskill" then
                         texture = GetTradeSkillIcon(item.index)
                     elseif currentMode == "craft" then
                         texture = GetCraftIcon(item.index)
                     end
+                    -- 难度图标: 仅 tradeskill 模式 + 已知 skillType 才显示
+                    local skillKey = nil
+                    if currentMode == "tradeskill" then
+                        if item.skillType == "optimal" then skillKey = "icon-skill-high"
+                        elseif item.skillType == "medium" then skillKey = "icon-skill-medium"
+                        elseif item.skillType == "easy" or item.skillType == "trivial" then skillKey = "icon-skill-low"
+                        end
+                    end
+                    if skillKey then
+                        ApplyAtlas(btn.skillIcon, skillKey, false)
+                        btn.skillIcon:SetWidth(13); btn.skillIcon:SetHeight(15)
+                        btn.skillIcon:Show()
+                    else
+                        btn.skillIcon:Hide()
+                    end
+
                     if texture then
                         btn.recipeIcon:SetTexture(texture)
                         btn.recipeIcon:Show()
-                        btn.nameText:ClearAllPoints()
-                        btn.nameText:SetPoint("LEFT", btn.recipeIcon, "RIGHT", 4, 0)
-                        btn.nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
+                        if skillKey then
+                            btn.skillIcon:ClearAllPoints()
+                            btn.skillIcon:SetPoint("LEFT", btn.recipeIcon, "RIGHT", 2, 0)
+                            btn.nameText:ClearAllPoints()
+                            btn.nameText:SetPoint("LEFT", btn.skillIcon, "RIGHT", 2, 0)
+                            btn.nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
+                        else
+                            btn.nameText:ClearAllPoints()
+                            btn.nameText:SetPoint("LEFT", btn.recipeIcon, "RIGHT", 4, 0)
+                            btn.nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
+                        end
                     else
                         btn.recipeIcon:Hide()
-                        btn.nameText:ClearAllPoints()
-                        btn.nameText:SetPoint("LEFT", btn, "LEFT", 20, 0)
-                        btn.nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
+                        if skillKey then
+                            btn.skillIcon:ClearAllPoints()
+                            btn.skillIcon:SetPoint("LEFT", btn, "LEFT", 4, 0)
+                            btn.nameText:ClearAllPoints()
+                            btn.nameText:SetPoint("LEFT", btn.skillIcon, "RIGHT", 3, 0)
+                            btn.nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
+                        else
+                            btn.nameText:ClearAllPoints()
+                            btn.nameText:SetPoint("LEFT", btn, "LEFT", 20, 0)
+                            btn.nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
+                        end
                     end
                     local displayName = item.name
                     if item.subName and item.subName ~= "" then
@@ -717,18 +869,30 @@ DFUI:NewMod("TradeSkill", 5, function()
                     if item.numAvail and item.numAvail > 0 then
                         displayName = displayName .. " [" .. item.numAvail .. "]"
                     end
+                    -- SkillUps 数字 (retail 风格, 1.12 用 skillType 映射推断)
+                    if currentMode == "tradeskill" then
+                        if item.skillType == "optimal" then displayName = displayName .. " (+1~3)"
+                        elseif item.skillType == "medium" then displayName = displayName .. " (+1~2)"
+                        elseif item.skillType == "easy" then displayName = displayName .. " (+1)"
+                        end
+                    end
                     btn.nameText:SetText(displayName)
                     local dc = DIFFICULTY_COLORS[item.skillType] or DIFFICULTY_COLORS.default
                     btn.nameText:SetTextColor(dc[1], dc[2], dc[3])
-                    btn.nameText:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+                    btn.nameText:SetFont("Fonts\\FRIZQT__.TTF", 12)
+                    -- 收藏星标
+                    if IsFavorite(item.name) then btn.favStar:Show() else btn.favStar:Hide() end
                 end
                 SetButtonSelected(btn, not item.isHeader and item.index == selectedIndex)
                 btn:Show()
             else
                 btn.recipeIndex = nil
+                btn.recipeName = nil
                 btn.isHeader = false
                 btn.recipeIcon:Hide()
-                btn.headerSep:Hide()
+                btn.skillIcon:Hide()
+                btn.headerBg:Hide()
+                btn.favStar:Hide()
                 btn:Hide()
             end
         end
@@ -787,7 +951,34 @@ DFUI:NewMod("TradeSkill", 5, function()
 
         detailIcon:SetTexture(texture)
         detailName:SetText(name)
-        detailSubText:SetText("")
+        detailSubText:SetText(""); detailSubText:Hide()
+
+        -- ☆ 收藏指示 (跟随 IsFavorite 状态)
+        -- 必须用 GetStringWidth 重锚: detailName SetWidth(400) 让 RIGHT 锚固定在 400px 远而非文本末
+        if name and IsFavorite(name) then
+            detailFavStar:ClearAllPoints()
+            detailFavStar:SetPoint("LEFT", detailName, "LEFT", (detailName:GetStringWidth() or 0) + 6, 0)
+            detailFavStar:Show()
+        else
+            detailFavStar:Hide()
+        end
+
+        -- Count 徽章 (retail OutputIcon Count)
+        local minMade, maxMade
+        if currentMode == "tradeskill" and GetTradeSkillNumMade then
+            local nmOk, mn, mx = pcall(GetTradeSkillNumMade, selectedIndex)
+            if nmOk then minMade, maxMade = mn, mx end
+        end
+        if minMade and maxMade and (minMade > 1 or maxMade > 1) then
+            if minMade == maxMade then
+                detailIconCount:SetText(minMade)
+            else
+                detailIconCount:SetText(minMade .. "-" .. maxMade)
+            end
+            detailIconCount:Show()
+        else
+            detailIconCount:Hide()
+        end
 
         -- 冷却
         if cooldown and cooldown > 0 then
@@ -813,14 +1004,16 @@ DFUI:NewMod("TradeSkill", 5, function()
             detailDesc:SetText(""); detailDesc:Hide()
         end
 
-        -- 材料标签动态锚点
-        local anchor = detailSubText
+        -- 材料标签动态锚点 (跟随最末显示的文字行下方 18px, 避免与 desc 重叠)
+        -- 默认 anchor 为 detailName (detailSubText 当前是死字段总隐藏)
+        local anchor = detailName
         if detailCooldown:IsShown() then anchor = detailCooldown end
         if detailRequire:IsShown() then anchor = detailRequire end
         if detailPoints:IsShown() then anchor = detailPoints end
         if detailDesc:IsShown() then anchor = detailDesc end
+        -- anchor.x = detailIconBtn.RIGHT + 14 = 28+47+14 = 89, 目标 x = 28, offsetX = -61
         reagentLabel:ClearAllPoints()
-        reagentLabel:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -43, -30)
+        reagentLabel:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -61, -18)
 
         numReagents = numReagents or 0
         if numReagents > 0 then reagentLabel:Show() else reagentLabel:Hide() end
@@ -840,15 +1033,21 @@ DFUI:NewMod("TradeSkill", 5, function()
                     pCount = pCount or 0
                     slot.countText:SetText("(" .. pCount .. "/" .. rCount .. ")")
                     local enough = pCount >= rCount
-                    local r, g, b = 0.20, 0.15, 0.10
-                    if not enough then r, g, b = 0.80, 0.10, 0.10 end
+                    local r, g, b = 0.95, 0.90, 0.78
+                    if not enough then r, g, b = 1.00, 0.30, 0.30 end
                     slot.nameText:SetTextColor(r, g, b)
                     slot.countText:SetTextColor(r, g, b)
+                    -- DF Slot-Frame 按足量/不足动态切色 (保 TexCoord 裁透明 padding)
+                    if slot.border then
+                        slot.border:SetTexture(PROF_TEX .. (enough and "slot_green.tga" or "slot_epic.tga"))
+                        slot.border:SetTexCoord(12/64, 51/64, 12/64, 51/64)
+                    end
                     slot.reagentIndex = i
                     slot:ClearAllPoints()
-                    local col = math.mod(i - 1, 2)
-                    local row = math.floor((i - 1) / 2)
-                    slot:SetPoint("TOPLEFT", reagentLabel, "BOTTOMLEFT", col * 160, -5 - row * 42)
+                    -- retail 网格: 3 列 × 3 行 (适配 detailFrame 717 宽), spacing 5px
+                    local col = math.mod(i - 1, 3)
+                    local row = math.floor((i - 1) / 3)
+                    slot:SetPoint("TOPLEFT", reagentLabel, "BOTTOMLEFT", col * 185, -8 - row * 55)
                     slot:Show()
                 else
                     slot:Hide()
@@ -903,11 +1102,24 @@ DFUI:NewMod("TradeSkill", 5, function()
                         ExpandTradeSkillSubClass(this.recipeIndex)
                     end
                     UpdateRecipeList()
+                elseif currentMode == "craft" then
+                    if this.isExpanded then
+                        CollapseCraftSkillLine(this.recipeIndex)
+                    else
+                        ExpandCraftSkillLine(this.recipeIndex)
+                    end
+                    UpdateRecipeList()
                 end
             else
-                selectedIndex = this.recipeIndex
-                UpdateDetail()
-                UpdateRecipeList()
+                if arg1 == "RightButton" then
+                    -- 右键切换收藏
+                    ToggleFavorite(this.recipeName)
+                    UpdateRecipeList()
+                else
+                    selectedIndex = this.recipeIndex
+                    UpdateDetail()
+                    UpdateRecipeList()
+                end
             end
         end)
         btn:SetScript("OnEnter", function()
@@ -971,6 +1183,19 @@ DFUI:NewMod("TradeSkill", 5, function()
                 CollapseTradeSkillSubClass(0)
             end
             UpdateRecipeList()
+        elseif currentMode == "craft" then
+            local anyCollapsed = false
+            local num = GetNumCrafts() or 0
+            for i = 1, num do
+                local _, _, st, _, ie = GetCraftInfo(i)
+                if st == "header" and not ie then anyCollapsed = true; break end
+            end
+            if anyCollapsed then
+                ExpandCraftSkillLine(0)
+            else
+                CollapseCraftSkillLine(0)
+            end
+            UpdateRecipeList()
         end
     end)
 
@@ -1013,6 +1238,12 @@ DFUI:NewMod("TradeSkill", 5, function()
     matsCheckbox:SetScript("OnClick", function()
         filterHasMats = not filterHasMats
         matsCheckbox:SetChecked(filterHasMats)
+        UpdateRecipeList()
+    end)
+
+    favOnlyCheckbox:SetScript("OnClick", function()
+        filterFavOnly = not filterFavOnly
+        favOnlyCheckbox:SetChecked(filterFavOnly)
         UpdateRecipeList()
     end)
 
@@ -1136,6 +1367,10 @@ DFUI:NewMod("TradeSkill", 5, function()
         selectedIndex = nil
         scrollOffset = 0
         searchBox:SetText("")
+        filterHasMats = false
+        filterFavOnly = false
+        matsCheckbox:SetChecked(false)
+        favOnlyCheckbox:SetChecked(false)
 
         -- 不 Hide 原生面板! 用 SetAlpha(0) 保持 API 连接
         -- ADDON_LOADED hook 已处理原生面板透明化
@@ -1146,12 +1381,22 @@ DFUI:NewMod("TradeSkill", 5, function()
         elseif mode == "craft" then apiName = GetCraftName and GetCraftName() or nil end
         activeProfName = PROF_API_TO_SPELL[apiName] or apiName
 
-        UpdateRankBar()
+        -- 切换右侧专业背景画（按需加载：只在 Open 时切一次，OnHide 释放）
+        -- SetTexCoord 重设保险 (1.12 SetTexture 通常不重置 TexCoord, 但保险起见)
+        local bgKey = PROF_BG_KEY[apiName] or PROF_BG_KEY[activeProfName] or "default"
+        detailBg:SetTexture(PROF_TEX .. "bg_" .. bgKey .. ".tga")
+        detailBg:SetTexCoord(0, 339/512, 0, 275/512)
+
+        -- 扫描法术书专业（需在设置图标前完成，避免首次打开没 texture）
         if not profScanned then
             ScanSpellbookForProfessions()
             if table.getn(knownProfessions) > 0 then profScanned = true end
-            CreateProfessionTabs()
-        elseif table.getn(panel.Tabs) == 0 then
+        end
+
+        -- 左上角图标保持玩家职业图标（不随专业切换）
+
+        UpdateRankBar()
+        if table.getn(panel.Tabs) == 0 then
             CreateProfessionTabs()
         else
             -- Tab 已存在，只更新选中状态（保留点击动画）
@@ -1195,6 +1440,8 @@ DFUI:NewMod("TradeSkill", 5, function()
         elseif currentMode == "craft" then CloseCraft() end
         currentMode = nil
         activeProfName = nil
+        -- 释放背景画显存引用
+        detailBg:SetTexture("")
         isClosing = false
     end)
 

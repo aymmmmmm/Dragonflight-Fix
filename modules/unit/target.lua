@@ -92,8 +92,14 @@ DFUI:NewMod("Target", 1, function()
         self.healthBar:SetFrameLevel(TargetFrame:GetFrameLevel())
         self.healthBar:SetTextures(self.texpath .. 'healthDF2.tga')
         if UnitExists('target') then
-            self.healthBar.max = UnitHealthMax('target')
-            self.healthBar:SetValue(UnitHealth('target'))
+            local cur, max, status = GetUnitRealHealth('target')
+            if status == "none" then
+                self.healthBar:Hide()
+            else
+                self.healthBar:Show()
+                self.healthBar.max = max
+                self.healthBar:SetValue(cur)
+            end
         end
         local cutoutColor = DFUI:GetTempDB('Target', 'cutoutColor')
         local pulseColor = DFUI:GetTempDB('Target', 'pulseColor')
@@ -207,10 +213,24 @@ DFUI:NewMod("Target", 1, function()
     function Setup:UpdateTexts()
         if not UnitExists("target") then return end
 
-        local health = UnitHealth("target")
-        local maxHealth = UnitHealthMax("target")
+        local health, maxHealth, status = GetUnitRealHealth("target")
         local healthPercent = maxHealth > 0 and health / maxHealth or 0
         local healthPercentInt = math.floor(healthPercent * 100)
+
+        -- 按数据状态决定文本:
+        --   real    → "1500/5000" + "30%"
+        --   percent → 只显示 "30%" 避免假装绝对值
+        --   none    → 完全清空(友善 NPC)
+        local healthText, percentText
+        if status == "none" then
+            healthText, percentText = "", ""
+        elseif status == "percent" then
+            healthText = healthPercentInt .. "%"
+            percentText = healthPercentInt .. "%"
+        else
+            healthText = FormatNumber(health) .. (configCache.textMaxShow and "/" .. FormatNumber(maxHealth) or "")
+            percentText = healthPercentInt .. "%"
+        end
 
         local mana = UnitMana("target")
         local maxMana = UnitManaMax("target")
@@ -250,11 +270,7 @@ DFUI:NewMod("Target", 1, function()
 
         if noPercentEnabled then
             self.texts.healthPercent:SetText("")
-            if isDead then
-                self.texts.healthValue:SetText("")
-            else
-                self.texts.healthValue:SetText(FormatNumber(health) .. (configCache.textMaxShow and "/" .. FormatNumber(maxHealth) or ""))
-            end
+            self.texts.healthValue:SetText(isDead and "" or healthText)
 
             self.texts.manaPercent:SetText("")
             if maxMana > 0 then
@@ -267,8 +283,8 @@ DFUI:NewMod("Target", 1, function()
                 self.texts.healthPercent:SetText("")
                 self.texts.healthValue:SetText("")
             else
-                self.texts.healthPercent:SetText(healthPercentInt .. "%")
-                self.texts.healthValue:SetText(FormatNumber(health) .. (configCache.textMaxShow and "/" .. FormatNumber(maxHealth) or ""))
+                self.texts.healthPercent:SetText(percentText)
+                self.texts.healthValue:SetText(healthText)
             end
 
             if maxMana > 0 then
@@ -572,10 +588,14 @@ DFUI:NewMod("Target", 1, function()
 
         if event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
             if Setup.healthBar and UnitExists('target') then
-                local health = UnitHealth('target')
-                local maxHealth = UnitHealthMax('target')
-                Setup.healthBar.max = maxHealth
-                Setup.healthBar:SetValue(health > 0 and health or 0.001)
+                local health, maxHealth, status = GetUnitRealHealth('target')
+                if status == "none" then
+                    Setup.healthBar:Hide()
+                else
+                    Setup.healthBar:Show()
+                    Setup.healthBar.max = maxHealth
+                    Setup.healthBar:SetValue(health > 0 and health or 0.001)
+                end
             end
             if Setup.manaBar and UnitExists('target') then
                 local maxMana = UnitManaMax('target')
@@ -595,10 +615,14 @@ DFUI:NewMod("Target", 1, function()
             Setup:UpdateBarColor()
         elseif arg1 == "target" then
             if Setup.healthBar and UnitExists('target') then
-                local health = UnitHealth('target')
-                local maxHealth = UnitHealthMax('target')
-                Setup.healthBar.max = maxHealth
-                Setup.healthBar:SetValue(health > 0 and health or 0.001)
+                local health, maxHealth, status = GetUnitRealHealth('target')
+                if status == "none" then
+                    Setup.healthBar:Hide()
+                else
+                    Setup.healthBar:Show()
+                    Setup.healthBar.max = maxHealth
+                    Setup.healthBar:SetValue(health > 0 and health or 0.001)
+                end
             end
             if Setup.manaBar and UnitExists('target') then
                 local maxMana = UnitManaMax('target')

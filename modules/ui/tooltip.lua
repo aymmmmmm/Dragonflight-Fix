@@ -89,9 +89,10 @@ DFUI:NewMod("Tooltip", 1, function()
         end
 
         -- 显示距离（需要 UnitXP 扩展）
+        -- 1.17 后 UnitXP_SP3 不再支持 'distanceBetween' 命令；用 pcall 静默兜底。
         if hasUnitXP and setup.showDistance and unit ~= 'player' then
-            local dist = UnitXP('distanceBetween', 'player', unit)
-            if dist and type(dist) == 'number' then
+            local ok, dist = pcall(UnitXP, 'distanceBetween', 'player', unit)
+            if ok and type(dist) == 'number' then
                 GameTooltip:AddLine(string.format('距离: %.1f 码', dist), 0.6, 0.8, 1.0)
             end
         end

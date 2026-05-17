@@ -5,12 +5,12 @@
 ## Notes-zhCN: 巨龙时代UI - 汉化修复版 (Turtle WoW 1.18.1)
 ## Version: 2.0.0
 ## Author: Guzruul - Reforged by Stormhand - Fix by Claude
-## SavedVariables: DFUI_PROFILES, DFUI_DB_SETUP
+## SavedVariables: DFUI_PROFILES, DFUI_DB_SETUP, DFUI_BUGS
 ## SavedVariablesPerCharacter: DFUI_CUR_PROFILE, DFUI_FRAMEPOS
 
 # CORE
-core\error.lua
 core\core.lua
+core\error.lua
 core\tools.lua
 core\statusbar.lua
 core\compat.lua
@@ -89,6 +89,7 @@ modules\gui\elem.lua
 modules\gui\home.lua
 modules\gui\homeb.lua
 modules\gui\info.lua
+modules\gui\bugs.lua
 modules\gui\prof.lua
 modules\gui\mods.lua
 modules\gui\shag.lua

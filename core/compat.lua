@@ -74,10 +74,15 @@ function Setup:ShaguBagBorders()
 end
 
 function Setup:ShaguGUI()
-    GameMenuButtonAdvancedOptions:Hide()
-    GameMenuButtonAdvancedOptions:SetScript("OnClick", nil)
-    AdvancedSettingsGUI:Hide()
-    AdvancedSettingsGUI.Show = function() end
+    -- These globals come from ShaguTweaks "Advanced Options"; absent if disabled or on 1.17.
+    if GameMenuButtonAdvancedOptions then
+        GameMenuButtonAdvancedOptions:Hide()
+        GameMenuButtonAdvancedOptions:SetScript("OnClick", nil)
+    end
+    if AdvancedSettingsGUI then
+        AdvancedSettingsGUI:Hide()
+        AdvancedSettingsGUI.Show = function() end
+    end
 end
 
 function Setup:ShaguMetaData()
@@ -228,3 +233,74 @@ function Setup:Init()
 end
 
 Setup:Init()
+
+--=================
+-- VANILLA 1.17 FRAMEXML PATCHES
+-- 1.17 客户端降级后部分 FrameXML 全局未初始化 / 内置 addon 行为异常。
+-- DFUI.env 的 metatable 没有 __newindex，必须显式 _G.XXX 写全局。
+--=================
+do
+    -- (1) UIDROPDOWNMENU_OPEN_MENU 1.17 vanilla 未预设。
+    -- 不依赖 PLAYER_LOGIN，立即 hook UIDropDownMenu_Initialize：
+    -- 每次任何 dropdown 初始化前都确保该全局非 nil。
+    if type(_G.UIDropDownMenu_Initialize) == "function" then
+        local _origInit = _G.UIDropDownMenu_Initialize
+        _G.UIDropDownMenu_Initialize = function(frame, initFunc, displayMode, level)
+            if _G.UIDROPDOWNMENU_OPEN_MENU == nil then
+                _G.UIDROPDOWNMENU_OPEN_MENU = ""
+            end
+            return _origInit(frame, initFunc, displayMode, level)
+        end
+    end
+    -- 顺便立即设上一个，覆盖 hook 之前的访问路径
+    if _G.UIDROPDOWNMENU_OPEN_MENU == nil then
+        _G.UIDROPDOWNMENU_OPEN_MENU = ""
+    end
+
+    -- (2) 内置 HardcoreTooltips (patch-7.mpq) 在 1.17 下:
+    -- TargetFrameDebuff17+ 的 OnEnter 调用 HardcoreTooltips:SetUnitDebuff(命名空间方法)，
+    -- 进而触发 vanilla TargetFrame.lua:56 nil 比较。
+    -- 多时机 hook 按钮 OnEnter，防止被后加载的 addon 覆盖。
+    local function patchAuraButtons()
+        for i = 1, 32 do
+            local debuffBtn = _G["TargetFrameDebuff" .. i]
+            if debuffBtn and not debuffBtn._dfui_patched then
+                local oldScript = debuffBtn:GetScript("OnEnter")
+                debuffBtn:SetScript("OnEnter", function()
+                    local idx = this and this:GetID()
+                    if not idx or not UnitDebuff("target", idx) then return end
+                    if oldScript then oldScript() end
+                end)
+                debuffBtn._dfui_patched = true
+            end
+            local buffBtn = _G["TargetFrameBuff" .. i]
+            if buffBtn and not buffBtn._dfui_patched then
+                local oldScript = buffBtn:GetScript("OnEnter")
+                buffBtn:SetScript("OnEnter", function()
+                    local idx = this and this:GetID()
+                    if not idx or not UnitBuff("target", idx) then return end
+                    if oldScript then oldScript() end
+                end)
+                buffBtn._dfui_patched = true
+            end
+        end
+    end
+
+    local vc = CreateFrame("Frame")
+    vc:RegisterEvent("PLAYER_LOGIN")
+    vc:RegisterEvent("PLAYER_ENTERING_WORLD")
+    vc:RegisterEvent("PLAYER_TARGET_CHANGED")
+    vc:SetScript("OnEvent", patchAuraButtons)
+    -- 立即尝试一次（按钮在 FrameXML 加载阶段就已创建）
+    patchAuraButtons()
+
+    -- (3) 兜底：全局 SetUnitDebuff 加 nil 守卫
+    if type(_G.SetUnitDebuff) == "function" then
+        local _orig = _G.SetUnitDebuff
+        _G.SetUnitDebuff = function(unit, index)
+            if not unit or not index then return end
+            if not UnitDebuff(unit, index) then return end
+            return _orig(unit, index)
+        end
+    end
+end

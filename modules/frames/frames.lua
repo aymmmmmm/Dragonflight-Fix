@@ -37,7 +37,7 @@ DFUI:NewMod("Frames", 2, function()
             BuffButton8,
             TempEnchant1,
             BuffButton16,
-            BuffButton32,
+            -- BuffButton32 conditionally appended below (Turtle 1.18 only).
             QuestTimerFrame,
 
             -- 3rd party
@@ -55,6 +55,8 @@ DFUI:NewMod("Frames", 2, function()
         if orbHP then table.insert(framesToMakeMovable, orbHP) end
         if orbMP then table.insert(framesToMakeMovable, orbMP) end
         if trackBtn then table.insert(framesToMakeMovable, trackBtn) end
+        -- BuffButton32 is a Turtle 1.18 extension (扩展 buff 槽); absent on 1.17.
+        if BuffButton32 then table.insert(framesToMakeMovable, BuffButton32) end
 
 
         local function SaveFramePosition(frame)

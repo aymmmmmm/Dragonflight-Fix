@@ -77,6 +77,11 @@ function CreateStatusBar(parent, width, height, animConfig)
     bar.enableCutout = animConfig.cutout ~= false
 
     function bar:Update()
+        if self.max <= 0 then
+            self.fill:SetWidth(0)
+            self.fill:SetHeight(self:GetHeight())
+            return
+        end
         local pct = self.val_ / self.max
         if pct <= 0.001 then
             pct = 0.001

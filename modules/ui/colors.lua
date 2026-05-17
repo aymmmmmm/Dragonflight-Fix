@@ -120,9 +120,13 @@ DFUI:NewMod("Colors", 1, function()
     end
 
     -- 各职业颜色单独修改的回调
+    -- Lua 5.0 (WoW 1.12) for-in 循环里所有 closure 共享同一个 upvalue slot；
+    -- 用本地变量保证每个 closure 捕获到自己的 className。
     for key, className in pairs(keyToClass) do
+        local _cn = className
         callbacks[key] = function(value)
-            DFUI.classColors[className] = {r = value[1], g = value[2], b = value[3]}
+            if not _cn or type(value) ~= "table" then return end
+            DFUI.classColors[_cn] = {r = value[1], g = value[2], b = value[3]}
             NotifyColorChange()
         end
     end

@@ -63,6 +63,20 @@ end
 
 local CreateCheckbox = CreatePanelCheckbox
 
+-- 右侧 Tab 名称匹配（坐骑/小伙伴/玩具）—— 全是 Turtle 服务端 SpellTab，内容由服务端提供
+local RIGHT_TAB_KINDS = { "MOUNT", "COMPANION", "TOY" }
+local function IsRightTabKind(name, kind)
+    if not name then return false end
+    if kind == "MOUNT"     then return string.find(name, "坐骑") or string.find(name, "坐騎") or string.find(name, "[Mm]ount") end
+    if kind == "COMPANION" then return string.find(name, "小伙伴") or string.find(name, "小夥伴") or string.find(name, "[Cc]ompanion") end
+    if kind == "TOY"       then return string.find(name, "玩具") or string.find(name, "[Tt]oy") end
+end
+local function IsRightSideTabName(name)
+    for _, k in ipairs(RIGHT_TAB_KINDS) do
+        if IsRightTabKind(name, k) then return true end
+    end
+end
+
 DFUI:NewDefaults("SpellBook", {
     enabled = {true},
     showPassive = {true},
@@ -85,14 +99,14 @@ DFUI:NewMod("SpellBook", 5, function()
     if SpellBookTitleText then SpellBookTitleText:Hide() end
     if SpellBookPageText then SpellBookPageText:Hide() end
 
-    local BUTTONS_PER_PAGE = 28
-    local COLUMN_SPACING = 165
-    local ROW_SPACING = 58
+    local BUTTONS_PER_PAGE = 12          -- 单页 6 行 × 2 列
+    local COLUMN_SPACING = 220           -- 两列间距，容纳 200 宽容器
+    local ROW_SPACING = 72               -- 行间距，需 ≥ 容器高 60 防止重叠
 
     local spellData = {}
 
     -- 2. 创建 PaperDollFrame 外框
-    local spellbook = DFUI.CreatePaperDollFrame("DFUI_SpellBookFrame", UIParent, 750, 530, 1)
+    local spellbook = DFUI.CreatePaperDollFrame("DFUI_SpellBookFrame", UIParent, 550, 580, 1)
     spellbook:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
     spellbook:SetFrameStrata("MEDIUM")
     spellbook:SetFrameLevel(25)
@@ -103,27 +117,22 @@ DFUI:NewMod("SpellBook", 5, function()
     spellbook:SetScript("OnDragStop", function() spellbook:StopMovingOrSizing() end)
     spellbook:SetScale(.9)
 
-    -- 3. 页面纹理
-    local leftPage = spellbook:CreateTexture(nil, "ARTWORK")
-    leftPage:SetTexture(TEX .. "panels\\spellbook_right_page.blp")
-    leftPage:SetPoint("TOPLEFT", spellbook, "TOPLEFT", 10, -60)
-    leftPage:SetPoint("BOTTOM", spellbook, "BOTTOM", -5, 10)
-    leftPage:SetWidth(365)
+    -- 3. 页面纹理（retail DF 10.1 原版，两张拼接：Page1 主羊皮纸 + Page2 右侧条）
+    -- retail spellbookframe.xml:669-678 精确锚点
+    local mainPage = spellbook:CreateTexture(nil, "ARTWORK")
+    mainPage:SetTexture(TEX .. "panels\\spellbook_retail_page1.tga")
+    mainPage:SetPoint("TOPLEFT", spellbook, "TOPLEFT", 3, -25)  -- 7 → 3，往左拉伸 4
+    mainPage:SetWidth(514)  -- 510 + 4，左缘左移 4，右缘不动
+    mainPage:SetHeight(571)
 
-    local rightPage = spellbook:CreateTexture(nil, "ARTWORK")
-    rightPage:SetTexture(TEX .. "panels\\spellbook_left_page.blp")
-    rightPage:SetPoint("TOPRIGHT", spellbook, "TOPRIGHT", -10, -60)
-    rightPage:SetPoint("BOTTOM", spellbook, "BOTTOM", 5, 10)
-    rightPage:SetWidth(365)
-
-    local topWood = spellbook:CreateTexture(nil, "BORDER")
-    topWood:SetTexture(TEX .. "panels\\spellbook_top_wood.blp")
-    topWood:SetPoint("TOP", spellbook, "TOP", 0, -20)
-    topWood:SetWidth(730)
-    topWood:SetHeight(64)
+    local rightStrip = spellbook:CreateTexture(nil, "ARTWORK")
+    rightStrip:SetTexture(TEX .. "panels\\spellbook_retail_page2.tga")
+    rightStrip:SetPoint("TOPLEFT", mainPage, "TOPRIGHT", 0, 0)  -- retail 精确：紧贴 page1 右侧
+    rightStrip:SetWidth(45)  -- 47 - 2
+    rightStrip:SetHeight(571)  -- 同步 mainPage 高度
 
     -- 4. 职业图标 + 标题
-    local classIcon = spellbook:CreateTexture(nil, "ARTWORK")
+    local classIcon = spellbook:CreateTexture(nil, "OVERLAY")
     classIcon:SetTexture(TEX .. "ui\\UI-Classes-Circles.tga")
     local _, playerClass = UnitClass("player")
     local coords = CLASS_ICON_COORDS[playerClass]
@@ -136,7 +145,7 @@ DFUI:NewMod("SpellBook", 5, function()
 
     local title = spellbook:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetText("法术书")
-    title:SetTextColor(0.95, 0.90, 0.80)
+    title:SetTextColor(0.96875, 0.8984375, 0.578125)
     title:SetPoint("TOP", spellbook, "TOP", 0, -6)
 
     -- 5. 关闭按钮
@@ -176,13 +185,6 @@ DFUI:NewMod("SpellBook", 5, function()
     local filterShowRanks = DFUI:GetTempDB("SpellBook", "showRanks")
     if filterShowRanks == nil then filterShowRanks = false end
 
-    -- 书签
-    local bookmark = spellbook:CreateTexture(nil, "OVERLAY")
-    bookmark:SetTexture(TEX .. "panels\\spellbook_bookmark.blp")
-    bookmark:SetPoint("TOPRIGHT", leftPage, "TOPRIGHT", 45, 0)
-    bookmark:SetWidth(50)
-    bookmark:SetHeight(500)
-
     -- 状态初始化
     spellbook.selectedTabIndex = 1
     spellbook.currentPage = 1
@@ -190,6 +192,20 @@ DFUI:NewMod("SpellBook", 5, function()
     spellbook.spellButtons = {}
     spellbook.bookType = BOOKTYPE_SPELL
     spellbook.petTab = nil
+
+    -- IsSpellPassive：1.12 无原生 API，用 tooltip 扫描
+    local function IsSpellPassive(spellIndex, bookType)
+        if not spellIndex then return false end
+        local scanner = DFUI_Libs.libtipscan:GetScanner("SpellPassive")
+        if bookType == BOOKTYPE_PET then
+            scanner:SetPetAction(spellIndex)
+        else
+            scanner:SetSpell(spellIndex, bookType or BOOKTYPE_SPELL)
+        end
+        if scanner:FindText("被动") then return true end
+        if scanner:FindText("Passive") then return true end
+        return false
+    end
 
     -- 收集技能数据
     function spellbook:CollectSpells(tabIndex, bookType)
@@ -261,12 +277,12 @@ DFUI:NewMod("SpellBook", 5, function()
     -- 7. 创建技能按钮
     function spellbook:CreateSpellButton(parent)
         local container = CreateFrame("Frame", nil, parent)
-        container:SetWidth(160)
-        container:SetHeight(42)
+        container:SetWidth(200)
+        container:SetHeight(60)
 
         local iconBtn = CreateFrame("Button", nil, container)
-        iconBtn:SetWidth(35)
-        iconBtn:SetHeight(35)
+        iconBtn:SetWidth(50)
+        iconBtn:SetHeight(50)
         iconBtn:SetPoint("LEFT", container, "LEFT", 5, 0)
         container.iconBtn = iconBtn
 
@@ -279,23 +295,23 @@ DFUI:NewMod("SpellBook", 5, function()
         container.icon = icon
 
         local border = iconBtn:CreateTexture(nil, "ARTWORK")
-        border:SetWidth(48)
-        border:SetHeight(48)
+        border:SetWidth(67)
+        border:SetHeight(67)
         border:SetPoint("CENTER", iconBtn, "CENTER", -2, -1)
         container.border = border
 
         local highlight = iconBtn:CreateTexture(nil, "HIGHLIGHT")
         highlight:SetTexture(TEX .. "panels\\spellbook_highlight.blp")
-        highlight:SetWidth(47)
-        highlight:SetHeight(47)
+        highlight:SetWidth(67)
+        highlight:SetHeight(67)
         highlight:SetPoint("CENTER", iconBtn, "CENTER", 0, 0)
         highlight:SetBlendMode("ADD")
         container.highlight = highlight
 
         local maxRankHighlight = iconBtn:CreateTexture(nil, "OVERLAY")
         maxRankHighlight:SetTexture(TEX .. "panels\\spellbook_highlight.blp")
-        maxRankHighlight:SetWidth(57)
-        maxRankHighlight:SetHeight(57)
+        maxRankHighlight:SetWidth(80)
+        maxRankHighlight:SetHeight(80)
         maxRankHighlight:SetPoint("CENTER", iconBtn, "CENTER", 0, 0)
         maxRankHighlight:SetBlendMode("ADD")
         maxRankHighlight:SetAlpha(.3)
@@ -307,36 +323,36 @@ DFUI:NewMod("SpellBook", 5, function()
         name:SetPoint("LEFT", iconBtn, "RIGHT", 5, 0)
         name:SetPoint("RIGHT", container, "RIGHT", -5, 0)
         name:SetJustifyH("LEFT")
-        name:SetTextColor(0.15, 0.10, 0.05)
+        name:SetTextColor(0.25, 0.12, 0)
         container.name = name
 
         local passive = container:CreateFontString(nil, "OVERLAY")
         passive:SetFont("Fonts\\FRIZQT__.TTF", 9)
         passive:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, 0)
         passive:SetText("被动")
-        passive:SetTextColor(0.15, 0.10, 0.05)
+        passive:SetTextColor(0.25, 0.12, 0)
         passive:Hide()
         container.passive = passive
 
         local racial = container:CreateFontString(nil, "OVERLAY")
         racial:SetFont("Fonts\\FRIZQT__.TTF", 9)
         racial:SetText("种族技能")
-        racial:SetTextColor(0.15, 0.10, 0.05)
+        racial:SetTextColor(0.25, 0.12, 0)
         racial:Hide()
         container.racial = racial
 
         local rank = container:CreateFontString(nil, "OVERLAY")
         rank:SetFont("Fonts\\FRIZQT__.TTF", 9)
         rank:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, 0)
-        rank:SetTextColor(0.15, 0.10, 0.05)
+        rank:SetTextColor(0.25, 0.12, 0)
         rank:Hide()
         container.rank = rank
 
         iconBtn:SetScript("OnMouseDown", function()
             if container.isPassive then return end
             icon:ClearAllPoints()
-            icon:SetWidth(36)
-            icon:SetHeight(36)
+            icon:SetWidth(51)
+            icon:SetHeight(51)
             icon:SetPoint("CENTER", iconBtn, "CENTER", 2, -2)
             border:ClearAllPoints()
             border:SetPoint("CENTER", iconBtn, "CENTER", -1, -4)
@@ -345,8 +361,8 @@ DFUI:NewMod("SpellBook", 5, function()
         iconBtn:SetScript("OnMouseUp", function()
             -- 无条件重置，防止翻页/切过滤后 isPassive 改变导致卡住
             icon:ClearAllPoints()
-            icon:SetWidth(36)
-            icon:SetHeight(36)
+            icon:SetWidth(50)
+            icon:SetHeight(50)
             icon:SetPoint("CENTER", iconBtn, "CENTER", 0, 0)
             border:ClearAllPoints()
             border:SetPoint("CENTER", iconBtn, "CENTER", -3, -2)
@@ -386,26 +402,19 @@ DFUI:NewMod("SpellBook", 5, function()
 
     for i = 1, BUTTONS_PER_PAGE do
         local btn = spellbook:CreateSpellButton(spellbook)
-
-        if i <= 14 then
-            local leftRow = math.floor((i - 1) / 2)
-            local leftCol = math.mod(i - 1, 2)
-            btn:SetPoint("TOPLEFT", leftPage, "TOPLEFT", 50 + leftCol * COLUMN_SPACING, -20 - leftRow * ROW_SPACING)
-        else
-            local rightRow = math.floor((i - 15) / 2)
-            local rightCol = math.mod(i - 15, 2)
-            btn:SetPoint("TOPLEFT", rightPage, "TOPLEFT", 50 + rightCol * COLUMN_SPACING, -20 - rightRow * ROW_SPACING)
-        end
-
+        local row = math.floor((i - 1) / 2)
+        local col = math.mod(i - 1, 2)
+        -- col 0 at x=115, col 1 at x=335（COLUMN_SPACING=220）；首行 y=-75
+        btn:SetPoint("TOPLEFT", spellbook, "TOPLEFT", 115 + col * COLUMN_SPACING, -75 - row * ROW_SPACING)
         table.insert(spellbook.spellButtons, btn)
     end
 
     -- 8. 翻页系统
     local pageText = spellbook:CreateFontString(nil, "OVERLAY")
     pageText:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
-    pageText:SetTextColor(0.78, 0.57, 0.16)
+    pageText:SetTextColor(1, 0.82, 0)
     pageText:SetJustifyH("RIGHT")
-    pageText:SetPoint("BOTTOMRIGHT", rightPage, "BOTTOMRIGHT", -100, 18)
+    pageText:SetPoint("BOTTOMRIGHT", spellbook, "BOTTOMRIGHT", -110, 38)  -- retail 精确
     spellbook.pageText = pageText
 
     local prevBtn, nextBtn
@@ -448,7 +457,7 @@ DFUI:NewMod("SpellBook", 5, function()
             local spell = filteredSpells[startIndex + i - 1]
             if spell then
                 if spell.texture then btn.icon:SetTexture(spell.texture) end
-                btn.name:SetText(spell.name)
+                btn.name:SetText(spell.name or "")
                 btn.spellIndex = spell.index
                 btn.bookType = spellbook.bookType
 
@@ -584,25 +593,50 @@ DFUI:NewMod("SpellBook", 5, function()
 
         ReleaseAllTabs()
 
+        -- 重新构建右侧 Tab 索引映射（坐骑/小伙伴/玩具 → SpellTab index）
+        spellbook.rightTabIndices = { MOUNT = nil, COMPANION = nil, TOY = nil }
+
         local numTabs = GetNumSpellTabs()
         local tabMapping = {}
         for tabIndex = 1, numTabs do
             local name, texture, offset, numSpells = GetSpellTabInfo(tabIndex)
-            if numSpells > 0 then
-                name = CleanTurtleTabName(name)
-                name = string.gsub(name, " Combat", "")
-                local capturedIndex = tabIndex
-                local spacing = 2
-                if tabIndex == 2 then
-                    spacing = 10
+            if numSpells and numSpells > 0 and name then
+                -- 检查是否是右侧 Tab（坐骑/小伙伴/玩具）
+                local rightKind = nil
+                for _, k in ipairs(RIGHT_TAB_KINDS) do
+                    if IsRightTabKind(name, k) then rightKind = k; break end
                 end
-                local tab = AcquireTab(name, function()
-                    spellbook.bookType = BOOKTYPE_SPELL
-                    spellbook.selectedTabIndex = capturedIndex
-                    spellbook.currentPage = 1
-                    spellbook:UpdateSpellDisplay()
-                end, 90, spacing)
-                tabMapping[capturedIndex] = tab
+                if rightKind then
+                    spellbook.rightTabIndices[rightKind] = tabIndex
+                else
+                    -- 普通底部 Tab
+                    name = CleanTurtleTabName(name)
+                    name = string.gsub(name, " Combat", "")
+                    local capturedIndex = tabIndex
+                    local spacing = 2
+                    if tabIndex == 2 then
+                        spacing = 10
+                    end
+                    local tab = AcquireTab(name, function()
+                        if spellbook.SelectRightTab then spellbook:SelectRightTab(nil) end
+                        spellbook.bookType = BOOKTYPE_SPELL
+                        spellbook.selectedTabIndex = capturedIndex
+                        spellbook.currentPage = 1
+                        spellbook:UpdateSpellDisplay()
+                    end, 90, spacing)
+                    tabMapping[capturedIndex] = tab
+                end
+            end
+        end
+
+        -- 隐藏没有数据的右侧 Tab
+        if spellbook.rightTabs then
+            for i, t in ipairs(spellbook.rightTabs) do
+                if spellbook.rightTabIndices[t.dfuiKind] then
+                    t:Show()
+                else
+                    t:Hide()
+                end
             end
         end
 
@@ -616,6 +650,7 @@ DFUI:NewMod("SpellBook", 5, function()
         end
 
         spellbook.petTab = AcquireTab(petTabText, function()
+            if spellbook.SelectRightTab then spellbook:SelectRightTab(nil) end
             spellbook.bookType = BOOKTYPE_PET
             spellbook.selectedTabIndex = "pet"
             spellbook.currentPage = 1
@@ -638,6 +673,26 @@ DFUI:NewMod("SpellBook", 5, function()
             spellbook.bookType = BOOKTYPE_SPELL
             spellbook.selectedTabIndex = prevSelectedIndex
             restored = true
+        elseif (prevBookType == BOOKTYPE_SPELL) and type(prevSelectedIndex) == "number" and not tabMapping[prevSelectedIndex] then
+            -- 之前停在右侧 Tab（已被过滤出底部 Tab），bookType 仍是 BOOKTYPE_SPELL
+            -- 检查 prevSelectedIndex 是否对应某个右侧 kind，并恢复右侧 Tab 视觉
+            local prevName = GetSpellTabInfo(prevSelectedIndex)
+            if prevName and spellbook.rightTabs then
+                for _, k in ipairs(RIGHT_TAB_KINDS) do
+                    if IsRightTabKind(prevName, k) and spellbook.rightTabIndices[k] then
+                        spellbook.bookType = BOOKTYPE_SPELL
+                        spellbook.selectedTabIndex = spellbook.rightTabIndices[k]
+                        for ridx, rtab in ipairs(spellbook.rightTabs) do
+                            if rtab.dfuiKind == k then
+                                spellbook:SelectRightTab(ridx)
+                                break
+                            end
+                        end
+                        restored = true
+                        break
+                    end
+                end
+            end
         end
 
         if not restored and spellbook.Tabs[1] then
@@ -672,8 +727,8 @@ DFUI:NewMod("SpellBook", 5, function()
         end
     end
 
-    prevBtn = CreatePageButton(spellbook, 27, 27, "west")
-    prevBtn:SetPoint("BOTTOMRIGHT", rightPage, "BOTTOMRIGHT", -60, 10)
+    prevBtn = CreatePageButton(spellbook, 32, 32, "west")        -- retail 32x32
+    prevBtn:SetPoint("BOTTOMRIGHT", spellbook, "BOTTOMRIGHT", -66, 26)  -- retail 精确
     prevBtn:SetScript("OnClick", function()
         if spellbook.currentPage > 1 then
             spellbook.currentPage = spellbook.currentPage - 1
@@ -681,8 +736,8 @@ DFUI:NewMod("SpellBook", 5, function()
         end
     end)
 
-    nextBtn = CreatePageButton(spellbook, 27, 27, "east")
-    nextBtn:SetPoint("BOTTOMRIGHT", rightPage, "BOTTOMRIGHT", -20, 10)
+    nextBtn = CreatePageButton(spellbook, 32, 32, "east")        -- retail 32x32
+    nextBtn:SetPoint("BOTTOMRIGHT", spellbook, "BOTTOMRIGHT", -31, 26)  -- retail 精确
     nextBtn:SetScript("OnClick", function()
         if spellbook.currentPage < spellbook.maxPages then
             spellbook.currentPage = spellbook.currentPage + 1
@@ -716,6 +771,168 @@ DFUI:NewMod("SpellBook", 5, function()
         spellbook.currentPage = 1
         spellbook:UpdateSpellDisplay()
     end)
+
+    -- 9b. 右侧收藏 Tab（坐骑/小伙伴/玩具）—— 复用底部金属 Tab 素材，旋转 90° 做成竖向
+    spellbook.rightTabs = {}
+    spellbook.selectedRightTab = nil
+
+    function spellbook:SelectRightTab(idx)
+        for i, t in ipairs(spellbook.rightTabs) do
+            t:SetSelected(i == idx)
+        end
+        if idx then
+            spellbook.selectedRightTab = spellbook.rightTabs[idx]
+        else
+            spellbook.selectedRightTab = nil
+        end
+    end
+
+    -- 复用底部金属 Tab 素材，用 8-arg SetTexCoord 做 90° 旋转
+    local tabsPath = TEX .. "interface\\uiframetabs.blp"
+
+    local function CreateVerticalSideTab(text, kind)
+        local tab = CreateFrame("Button", nil, spellbook)
+        local TAB_W, TAB_H = 36, 90
+        tab:SetWidth(TAB_W); tab:SetHeight(TAB_H)
+        tab.dfuiKind = kind
+
+        -- top-cap：横向 right 素材 + 90° CW + 180° = 90° CCW（用户调试结论）
+        local topCap = tab:CreateTexture(nil, "BACKGROUND")
+        topCap:SetTexture(tabsPath); topCap:SetWidth(TAB_W); topCap:SetHeight(36)
+        topCap:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, 0)
+        topCap:SetTexCoord(0.59375, 0.667969,  0.015625, 0.667969,  0.59375, 0.808594,  0.015625, 0.808594)
+
+        -- bot-cap：横向 left 素材（圆角 BL）+ 90° CCW → 圆角落在 BR
+        -- 8-arg: ULx ULy LLx LLy URx URy LRx LRy = uMax,vMin  uMin,vMin  uMax,vMax  uMin,vMax
+        local botCap = tab:CreateTexture(nil, "BACKGROUND")
+        botCap:SetTexture(tabsPath); botCap:SetWidth(TAB_W); botCap:SetHeight(36)
+        botCap:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 0, 0)
+        botCap:SetTexCoord(0.5625, 0.816406,  0.015625, 0.816406,  0.5625, 0.957031,  0.015625, 0.957031)
+
+        -- middle：竖向拉伸的中段（+ 180°）
+        local midSeg = tab:CreateTexture(nil, "BACKGROUND")
+        midSeg:SetTexture(tabsPath); midSeg:SetWidth(TAB_W)
+        midSeg:SetPoint("TOPLEFT", topCap, "BOTTOMLEFT", 0, 0)
+        midSeg:SetPoint("BOTTOMRIGHT", botCap, "TOPRIGHT", 0, 0)
+        midSeg:SetTexCoord(0.015625, 0.175781,  0, 0.175781,  0.015625, 0.316406,  0, 0.316406)
+
+        -- 选中态：宽度 +3 表现为右侧伸出（动画效果），相当于横向 Tab 的高度 +3
+        local topCapSel = tab:CreateTexture(nil, "BACKGROUND")
+        topCapSel:SetTexture(tabsPath); topCapSel:SetWidth(TAB_W + 3); topCapSel:SetHeight(36)
+        topCapSel:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, 0)
+        topCapSel:SetTexCoord(0.59375, 0.324219,  0.015625, 0.324219,  0.59375, 0.488281,  0.015625, 0.488281)
+        topCapSel:Hide()
+
+        local botCapSel = tab:CreateTexture(nil, "BACKGROUND")
+        botCapSel:SetTexture(tabsPath); botCapSel:SetWidth(TAB_W + 3); botCapSel:SetHeight(36)
+        botCapSel:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 0, 0)
+        botCapSel:SetTexCoord(0.5625, 0.496094,  0.015625, 0.496094,  0.5625, 0.660156,  0.015625, 0.660156)
+        botCapSel:Hide()
+
+        local midSegSel = tab:CreateTexture(nil, "BACKGROUND")
+        midSegSel:SetTexture(tabsPath); midSegSel:SetWidth(TAB_W)
+        midSegSel:SetPoint("TOPLEFT", topCapSel, "BOTTOMLEFT", 0, 0)
+        midSegSel:SetPoint("BOTTOMRIGHT", botCapSel, "TOPRIGHT", 0, 0)
+        midSegSel:SetTexCoord(0.015625, 0.00390625,  0, 0.00390625,  0.015625, 0.167969,  0, 0.167969)
+        midSegSel:Hide()
+
+        -- Hover 高亮（叠加同款顶/底 cap）
+        local hlTop = tab:CreateTexture(nil, "HIGHLIGHT")
+        hlTop:SetTexture(tabsPath); hlTop:SetWidth(TAB_W); hlTop:SetHeight(36)
+        hlTop:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, 0)
+        hlTop:SetTexCoord(0.59375, 0.667969,  0.015625, 0.667969,  0.59375, 0.808594,  0.015625, 0.808594)
+        hlTop:SetBlendMode("ADD"); hlTop:SetAlpha(0.4)
+
+        local hlBot = tab:CreateTexture(nil, "HIGHLIGHT")
+        hlBot:SetTexture(tabsPath); hlBot:SetWidth(TAB_W); hlBot:SetHeight(36)
+        hlBot:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 0, 0)
+        hlBot:SetTexCoord(0.5625, 0.816406,  0.015625, 0.816406,  0.5625, 0.957031,  0.015625, 0.957031)
+        hlBot:SetBlendMode("ADD"); hlBot:SetAlpha(0.4)
+
+        local hlMid = tab:CreateTexture(nil, "HIGHLIGHT")
+        hlMid:SetTexture(tabsPath); hlMid:SetWidth(TAB_W)
+        hlMid:SetPoint("TOPLEFT", hlTop, "BOTTOMLEFT", 0, 0)
+        hlMid:SetPoint("BOTTOMRIGHT", hlBot, "TOPRIGHT", 0, 0)
+        hlMid:SetTexCoord(0.015625, 0.175781,  0, 0.175781,  0.015625, 0.316406,  0, 0.316406)
+        hlMid:SetBlendMode("ADD"); hlMid:SetAlpha(0.4)
+
+        -- 竖排文字（按 UTF-8 切字符，加 \n 排成竖列）
+        local label = tab:CreateFontString(nil, "BORDER", "GameFontNormalSmall")
+        label:SetPoint("CENTER", tab, "CENTER", -3, 0)
+        label:SetWidth(28)
+        label:SetJustifyH("CENTER")
+
+        local stacked = ""
+        local i = 1
+        while i <= string.len(text) do
+            local b = string.byte(text, i)
+            local clen = 1
+            if b >= 240 then clen = 4
+            elseif b >= 224 then clen = 3
+            elseif b >= 192 then clen = 2
+            end
+            local ch = string.sub(text, i, i + clen - 1)
+            if stacked == "" then stacked = ch else stacked = stacked .. "\n" .. ch end
+            i = i + clen
+        end
+        label:SetText(stacked)
+        label:SetTextColor(1, 0.82, 0)
+        tab.Text = label
+
+        function tab:SetSelected(selected)
+            if selected then
+                topCap:Hide(); midSeg:Hide(); botCap:Hide()
+                topCapSel:Show(); midSegSel:Show(); botCapSel:Show()
+                label:SetTextColor(1, 1, 1)
+            else
+                topCap:Show(); midSeg:Show(); botCap:Show()
+                topCapSel:Hide(); midSegSel:Hide(); botCapSel:Hide()
+                label:SetTextColor(1, 0.82, 0)
+            end
+        end
+        tab:SetSelected(false)
+
+        return tab
+    end
+
+    -- 右侧 Tab 创建包 pcall，万一某个 API 在 1.12 不可用，至少法术书本体能加载
+    local ok, err = pcall(function()
+        local rightTabSpecs = {
+            { text = "坐骑",   kind = "MOUNT",     y = -90  },
+            { text = "小伙伴", kind = "COMPANION", y = -180 },
+            { text = "玩具",   kind = "TOY",       y = -270 },
+        }
+        for i, spec in ipairs(rightTabSpecs) do
+            local tab = CreateVerticalSideTab(spec.text, spec.kind)
+            tab:SetPoint("TOPLEFT", spellbook, "TOPRIGHT", 0, spec.y)
+
+            local capturedIndex = i
+            local capturedKind = spec.kind
+            tab:SetScript("OnClick", function()
+                local tabIdx = spellbook.rightTabIndices and spellbook.rightTabIndices[capturedKind]
+                if not tabIdx then
+                    if DEFAULT_CHAT_FRAME then
+                        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[DFUI 法术书]|r 服务端没有 " .. spec.text .. " SpellTab")
+                    end
+                    return
+                end
+                PlaySound("igCharacterInfoTab")
+                if spellbook.selectedTab then
+                    spellbook.selectedTab:SetSelected(false)
+                    spellbook.selectedTab = nil
+                end
+                spellbook:SelectRightTab(capturedIndex)
+                spellbook.bookType = BOOKTYPE_SPELL
+                spellbook.selectedTabIndex = tabIdx
+                spellbook.currentPage = 1
+                spellbook:UpdateSpellDisplay()
+            end)
+            table.insert(spellbook.rightTabs, tab)
+        end
+    end)
+    if not ok and DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[DFUI 法术书]|r 右侧 Tab 创建失败：" .. tostring(err))
+    end
 
     spellbook:CreateDynamicTabs()
     spellbook:UpdateSpellDisplay()
@@ -772,6 +989,16 @@ DFUI:NewMod("SpellBook", 5, function()
 
     -- 12. ESC 关闭
     table.insert(UISpecialFrames, spellbook:GetName())
+
+    -- 13. 调试 slash 命令：列出所有 SpellTab 名称，方便确认坐骑/小伙伴/玩具的实际 tab 名
+    SLASH_DFSBTABS1 = "/dfsbtabs"
+    SlashCmdList["DFSBTABS"] = function()
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[DFUI]|r SpellTabs (" .. GetNumSpellTabs() .. "):")
+        for i = 1, GetNumSpellTabs() do
+            local n, _, off, ns = GetSpellTabInfo(i)
+            DEFAULT_CHAT_FRAME:AddMessage("  " .. i .. ": '" .. (n or "?") .. "' offset=" .. (off or 0) .. " count=" .. (ns or 0))
+        end
+    end
 
     local callbacks = {}
     DFUI:NewCallbacks("SpellBook", callbacks)

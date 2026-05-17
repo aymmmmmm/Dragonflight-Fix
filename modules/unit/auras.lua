@@ -871,7 +871,9 @@ DFUI:NewMod("Auras", 2, function()
     -------------------------------------------------------------------
 
     local function HideBlizzardTargetAuras()
-        for i = 1, 16 do
+        -- Turtle 客户端把 TargetFrameBuff/Debuff 扩展到了 32 个槽（vanilla 只有 16）。
+        -- 不隐藏 17-32 会在目标框下方留下 8+ 个空白框。
+        for i = 1, 32 do
             local buff = _G["TargetFrameBuff" .. i]
             if buff then
                 buff:Hide()
