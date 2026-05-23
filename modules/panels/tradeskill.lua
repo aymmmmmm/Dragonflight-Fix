@@ -42,6 +42,7 @@ local PROF_BG_KEY = {
 -- 经 _tools/blp2_to_tga_512.js 解码，WoW 1.12 原生支持 BGRA32 TGA
 -- ============================================================
 local ATLAS_MAIN       = PROF_TEX .. "atlas_main.tga"          -- 2048×1024 (retail professions.blp)
+local RANKBAR_FILL     = PROF_TEX .. "rankbar_fill_blue.tga"   -- 256×16 POT (retail uiframebars.blp ui-frame-bar-fill-blue 切片, T88-B103 蓝色 gradient)
 local SCROLL_THUMB_TB  = PROF_TEX .. "scroll_thumb_tb.tga"     -- 64×64  (DF minimal-scrollbar-small thumb top/bot)
 local SCROLL_THUMB_MID = PROF_TEX .. "scroll_thumb_mid.tga"    -- 64×1024 (thumb middle 段)
 local SCROLL_TRACK_TB  = PROF_TEX .. "scroll_track_tb.tga"     -- 128×64 (track top/bot)
@@ -377,11 +378,23 @@ DFUI:NewMod("TradeSkill", 5, function()
     local craftHooked = false
 
     -- 透明化原生面板（保持 API 连接，移出视野）
+    -- 1.12 ScrollFrame 子 scrollbar 首次 OnShow 走 UpdateScrollChildRect 初始化时, alpha cascade
+    -- 可能失效, 导致 scrollbar 在面板首开时短暂可见。显式 Hide 兜底, 关闭重开后状态稳定。
+    local NATIVE_SCROLLBARS = {
+        "TradeSkillListScrollFrameScrollBar",
+        "TradeSkillDetailScrollFrameScrollBar",
+        "CraftListScrollFrameScrollBar",
+        "CraftDetailScrollFrameScrollBar",
+    }
     local function HideNativeFrame(frame)
         frame:SetAlpha(0)
         frame:EnableMouse(false)
         frame:ClearAllPoints()
         frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -10000, 10000)
+        for i = 1, table.getn(NATIVE_SCROLLBARS) do
+            local sb = getglobal(NATIVE_SCROLLBARS[i])
+            if sb then sb:Hide() end
+        end
     end
 
     -- API 专业名 → 法术名 映射（GetTradeSkillLine 返回名与法术名不同时，仅采矿需要）
@@ -513,20 +526,20 @@ DFUI:NewMod("TradeSkill", 5, function()
     local rankBar = CreateFrame("StatusBar", nil, rankBarBg)
     rankBar:SetPoint("TOPLEFT", rankBarBg, "TOPLEFT", 3, -3)
     rankBar:SetPoint("BOTTOMRIGHT", rankBarBg, "BOTTOMRIGHT", -3, 3)
-    -- StatusBar fill 用 atlas_main 切片 qualitybar-bg (186×26 实心 mask, alpha avg 212)
-    -- retail atlas 元素是黑色 alpha mask，VertexColor 染金色得到 retail 金条效果
-    local rankFillTex = rankBar:CreateTexture(nil, "ARTWORK")
-    rankFillTex:SetTexture(ATLAS_MAIN)
-    rankFillTex:SetTexCoord(717/2048, 902/2048, 1/1024, 26/1024)
-    rankFillTex:SetVertexColor(1.00, 0.78, 0.20)  -- retail 金色
-    rankBar:SetStatusBarTexture(rankFillTex)
+    -- StatusBar fill 用独立 TGA 文件路径而非 Texture 对象。
+    -- Why: 1.12 StatusBar 引擎接管 Texture 对象后, SetValue 会重写 SetTexCoord 做横向 mask, 同时
+    -- 覆盖预设 VertexColor; 因此 atlas 子区域切片 + SetStatusBarTexture(texObj) 组合在 1.12 不显示填充。
+    -- 解法: 从 retail uiframebars.blp atlas 取 ui-frame-bar-fill-blue 区域 (L0 R256 T88 B103, 截到 16
+    -- 行满足 1.12 POT 要求) 预切为独立 256×16 蓝色 TGA, 用文件路径 SetStatusBarTexture 让引擎当整张图吃。
+    rankBar:SetStatusBarTexture(RANKBAR_FILL)
+    rankBar:SetStatusBarColor(1, 1, 1, 0.6)  -- alpha 0.6 让暗底透出, 稀释饱和蓝
     rankBar:SetMinMaxValues(0, 300)
     rankBar:SetValue(0)
 
     local rankText = rankBar:CreateFontString(nil, "OVERLAY")
     rankText:SetFont("Fonts\\FRIZQT__.TTF", 16)
     rankText:SetPoint("CENTER", rankBar, "CENTER", 0, 0)
-    rankText:SetTextColor(0.98, 0.91, 0.58)
+    rankText:SetTextColor(1, 1, 1)
 
 
     -- ============================================================
@@ -608,18 +621,21 @@ DFUI:NewMod("TradeSkill", 5, function()
         headerMid:Hide()
         btn.headerMid = headerMid
 
-        -- 悬停: retail recipe-hover atlas (HIGHLIGHT 层 WoW 自动管理)
-        -- atlas 是稀疏光晕设计 (alpha avg 29), ADD blend 让金色像素叠加到暗底上更显著
+        -- 悬停: vanilla UI-QuestLogTitleHighlight 是灰色 alpha mask, SetVertexColor 染金
         local hoverOverlay = btn:CreateTexture(nil, "HIGHLIGHT")
-        ApplyAtlas(hoverOverlay, "recipe-hover", false)
+        hoverOverlay:SetTexture("Interface\\QuestFrame\\UI-QuestLogTitleHighlight")
+        hoverOverlay:SetTexCoord(0, 1, 0, 1)
         hoverOverlay:SetAllPoints(btn)
         hoverOverlay:SetBlendMode("ADD")
+        hoverOverlay:SetVertexColor(1.00, 0.82, 0.00)
 
-        -- 选中: retail recipe-active atlas (alpha avg 38, ADD blend 增强视觉)
+        -- 选中: 同源金色 bar, Show/Hide 由 SetButtonSelected 切换
         local selectedOverlay = btn:CreateTexture(nil, "BORDER")
-        ApplyAtlas(selectedOverlay, "recipe-active", false)
+        selectedOverlay:SetTexture("Interface\\QuestFrame\\UI-QuestLogTitleHighlight")
+        selectedOverlay:SetTexCoord(0, 1, 0, 1)
         selectedOverlay:SetAllPoints(btn)
         selectedOverlay:SetBlendMode("ADD")
+        selectedOverlay:SetVertexColor(1.00, 0.82, 0.00)
         selectedOverlay:Hide()
         btn.selectedOverlay = selectedOverlay
 

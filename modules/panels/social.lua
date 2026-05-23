@@ -50,7 +50,7 @@ DFUI:NewMod("Social", 5, function()
     -- followFrames 同时跟随两者；IgnoreListFrame 若不存在则只跟 FriendsListFrame（nil 守卫）
     local friendsInset = DFUI.CreateRetailInset(customBg, {
         name         = "DFUI_FriendsInset",
-        anchors      = {3, -78, -6, 6},     -- 顶部再下移让出 ToggleTab1/2 子切换按钮空间
+        anchors      = {3, -78, -6, 80},    -- 底部留 80px 与 查找/公会 tab 的 inset 底对齐
         followFrames = IgnoreListFrame and {FriendsListFrame, IgnoreListFrame} or {FriendsListFrame},
     })
 
@@ -200,7 +200,44 @@ DFUI:NewMod("Social", 5, function()
     IgnoreFrameToggleTab1:SetFrameLevel(customBg:GetFrameLevel() + 2)
     IgnoreFrameToggleTab2:SetFrameLevel(customBg:GetFrameLevel() + 2)
 
-    -- 好友 tab 底部 4 个按钮（添加好友/发送消息/删除好友/组队邀请）上移 5px
+    -- 好友/屏蔽 ScrollFrame + 第一行 Button 重锚到 inset 内部
+    -- vanilla 1.12 FriendButton1/IgnoreButton1 直接锚 FriendsFrame.TOPLEFT (23, -76)，不是 ScrollFrame 的子
+    -- 后续 ButtonN 锚 Button(N-1)，重锚 Button1 即整列跟随
+    -- 函数化，OnShow hook 里反复调用，防 vanilla FriendsFrame_Update 还原
+    -- 1.12 ScrollFrame 不会因 SetPoint 双锚自动重算 size，必须显式 SetHeight
+    -- SF.h 动态 = inset.h - 8（顶 4 + 底 4 padding），9 行 × (SF.h/9) 铺满 SF
+    local MAX_ROWS = 9
+    local function getSFHeight()
+        local ih = friendsInset and friendsInset:GetHeight() or 0
+        if ih > 8 then return ih - 8 end
+        return 200
+    end
+    local function reanchorScrollFrames()
+        local sfH = getSFHeight()
+        if FriendsFrameFriendsScrollFrame then
+            FriendsFrameFriendsScrollFrame:ClearAllPoints()
+            FriendsFrameFriendsScrollFrame:SetPoint("TOPLEFT",  friendsInset, "TOPLEFT",  6,  -4)
+            FriendsFrameFriendsScrollFrame:SetPoint("TOPRIGHT", friendsInset, "TOPRIGHT", -24, -4)
+            FriendsFrameFriendsScrollFrame:SetHeight(sfH)
+        end
+        if FriendsFrameIgnoreScrollFrame then
+            FriendsFrameIgnoreScrollFrame:ClearAllPoints()
+            FriendsFrameIgnoreScrollFrame:SetPoint("TOPLEFT",  friendsInset, "TOPLEFT",  6,  -4)
+            FriendsFrameIgnoreScrollFrame:SetPoint("TOPRIGHT", friendsInset, "TOPRIGHT", -24, -4)
+            FriendsFrameIgnoreScrollFrame:SetHeight(sfH)
+        end
+        if FriendsFrameFriendButton1 then
+            FriendsFrameFriendButton1:ClearAllPoints()
+            FriendsFrameFriendButton1:SetPoint("TOPLEFT", FriendsFrameFriendsScrollFrame, "TOPLEFT", 0, 0)
+        end
+        if FriendsFrameIgnoreButton1 then
+            FriendsFrameIgnoreButton1:ClearAllPoints()
+            FriendsFrameIgnoreButton1:SetPoint("TOPLEFT", FriendsFrameIgnoreScrollFrame, "TOPLEFT", 0, 0)
+        end
+    end
+    reanchorScrollFrames()
+
+    -- 好友 tab 底部 4 个按钮（添加好友/发送消息/删除好友/组队邀请）位置偏移
     local function shiftFrameUp(frame, dy)
         if not frame or not frame.GetNumPoints then return end
         local pts = {}
@@ -213,10 +250,65 @@ DFUI:NewMod("Social", 5, function()
             frame:SetPoint(p[1], p[2], p[3], p[4] or 0, (p[5] or 0) + dy)
         end
     end
-    shiftFrameUp(FriendsFrameAddFriendButton,    5)
-    shiftFrameUp(FriendsFrameSendMessageButton,  5)
+    local function shiftFrameRight(frame, dx)
+        if not frame or not frame.GetNumPoints then return end
+        local pts = {}
+        for i = 1, frame:GetNumPoints() do
+            pts[i] = {frame:GetPoint(i)}
+        end
+        frame:ClearAllPoints()
+        for i = 1, table.getn(pts) do
+            local p = pts[i]
+            frame:SetPoint(p[1], p[2], p[3], (p[4] or 0) + dx, p[5] or 0)
+        end
+    end
+    -- 4 个按钮缩到 88%（vanilla 模板 9-slice 横向被拉伸严重），字体缩 90%
+    local fourBtns = {
+        FriendsFrameAddFriendButton, FriendsFrameRemoveFriendButton,
+        FriendsFrameSendMessageButton, FriendsFrameGroupInviteButton,
+    }
+    for i = 1, table.getn(fourBtns) do
+        local b = fourBtns[i]
+        if b then
+            b:SetWidth(b:GetWidth() * 0.88)
+            b:SetHeight(b:GetHeight() * 0.88)
+            local fs = b:GetFontString()
+            if fs then
+                local fpath, fsize, fflags = fs:GetFont()
+                if fsize then fs:SetFont(fpath, fsize * 0.9, fflags) end
+            end
+        end
+    end
+
+    -- 整组右移 15px：AddFriend 加 X；vanilla 锚链让 RemoveFriend/SendMessage/GroupInvite 都跟随
+    -- detachRightColumn 在 OnShow 锁定时已含此偏移，AddFriend 后续若再动 X 不会影响右列
+    shiftFrameRight(FriendsFrameAddFriendButton, 15)
+
+    -- 左列：AddFriend 独立锚 FriendsFrame，RemoveFriend 锚 AddFriend.BOTTOM 自动跟随
+    shiftFrameUp(FriendsFrameAddFriendButton,    8)
     shiftFrameUp(FriendsFrameRemoveFriendButton, 5)
+    -- 右列：vanilla 锚 SendMessage -> AddFriend.RIGHT (66, 5)，SendMessage 顶比 AddFriend 顶高 5px
+    -- 净 dy = 1：SendMessage 顶 = AddFriend 顶 - 2（比左列下 2px）
+    shiftFrameUp(FriendsFrameSendMessageButton,  1)
     shiftFrameUp(FriendsFrameGroupInviteButton,  5)
+
+    -- 右列与 AddFriend 解耦：once，第一次 OnShow 时把 SendMessage 锚链打散
+    -- SendMessage 改锚 FriendsFrame.TOPLEFT 绝对坐标，GroupInvite 仍锚 SendMessage.BOTTOM 跟随
+    -- 解耦后调 shiftFrameUp(FriendsFrameSendMessageButton, dy) 即可独立控制右列
+    -- 锁定的相对 FriendsFrame 坐标（once 计算，后续反复 set 同值确保 vanilla 还原也被覆盖）
+    local lockedSendX, lockedSendY
+    local function detachRightColumn()
+        local btn = FriendsFrameSendMessageButton
+        if not btn then return end
+        if not lockedSendX then
+            local L, T = btn:GetLeft(), btn:GetTop()
+            local fL, fT = FriendsFrame:GetLeft(), FriendsFrame:GetTop()
+            if not (L and T and fL and fT) then return end
+            lockedSendX, lockedSendY = L - fL, T - fT
+        end
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", FriendsFrame, "TOPLEFT", lockedSendX, lockedSendY)
+    end
 
     -- 屏蔽 tab 底部 2 按钮（屏蔽玩家/取消屏蔽）：第一个 shiftFrameUp，第二个强制锚到它确保水平对齐
     shiftFrameUp(FriendsFrameIgnorePlayerButton, 5)
@@ -242,12 +334,37 @@ DFUI:NewMod("Social", 5, function()
             nukeScrollBar(children[i])
         end
     end
-    if GuildListScrollFrameScrollBar then
-        nukeScrollBar(GuildListScrollFrameScrollBar)
-        HookScript(GuildListScrollFrameScrollBar, "OnShow", function()
-            GuildListScrollFrameScrollBar:Hide()
-        end)
+    -- 公会/好友/屏蔽/查找 tab 全部清掉 vanilla 滚动条（鼠标滚轮仍可滚动）
+    local scrollBarsToNuke = {
+        GuildListScrollFrameScrollBar,
+        FriendsFrameFriendsScrollFrameScrollBar,
+        FriendsFrameIgnoreScrollFrameScrollBar,
+        WhoListScrollFrameScrollBar,
+    }
+    for i = 1, table.getn(scrollBarsToNuke) do
+        local sb = scrollBarsToNuke[i]
+        if sb then
+            nukeScrollBar(sb)
+            HookScript(sb, "OnShow", function()
+                sb:Hide()
+            end)
+        end
     end
+
+    -- ScrollFrame 自身的边框/凹槽纹理（不在 ScrollBar 子树中），单独清掉
+    local function nukeScrollFrameRegions(sf)
+        if not sf then return end
+        local regions = {sf:GetRegions()}
+        for j = 1, table.getn(regions) do
+            local r = regions[j]
+            if r.SetTexture then r:SetTexture(nil) end
+            if r.Hide then r:Hide() end
+        end
+    end
+    nukeScrollFrameRegions(FriendsFrameFriendsScrollFrame)
+    nukeScrollFrameRegions(FriendsFrameIgnoreScrollFrame)
+    nukeScrollFrameRegions(WhoListScrollFrame)
+    nukeScrollFrameRegions(GuildListScrollFrame)
 
 
     -- 不主动管理 ToggleTab 显隐，让 vanilla 自己处理（pfUI 简单模式）
@@ -297,11 +414,62 @@ DFUI:NewMod("Social", 5, function()
     guildEventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
     guildEventFrame:SetScript("OnEvent", UpdateGuildTab)
 
+    -- 让 9 行 FriendButton/IgnoreButton 总高 = ScrollFrame 高度（铺满 inset 且不超出）
+    -- vanilla 链锚 B(i)->B(i-1).BOTTOM 在 1.12 中段有未知 spacing 偏差（dump 实测 14px 累计漂移）
+    -- 解法：每个 button 独立锚 SF.TOPLEFT 偏 (0, -(i-1)*rowH)，彻底绕开 vanilla 链锚行为
+    local function fitButtons(sf, prefix, maxDisplay)
+        if not sf then return end
+        local h = sf:GetHeight()
+        if not h or h <= 0 then return end
+        local rowH = h / MAX_ROWS
+        local w = sf:GetWidth()
+        for i = 1, MAX_ROWS do
+            local b = _G[prefix..i]
+            if b then
+                b:ClearAllPoints()
+                b:SetPoint("TOPLEFT", sf, "TOPLEFT", 0, -(i - 1) * rowH)
+                if w and w > 0 then b:SetWidth(w) end
+                b:SetHeight(rowH)
+            end
+        end
+        for i = MAX_ROWS + 1, (maxDisplay or 15) do
+            local b = _G[prefix..i]
+            if b then b:Hide() end
+        end
+    end
+    local function fitButtonHeights()
+        fitButtons(FriendsFrameFriendsScrollFrame, "FriendsFrameFriendButton", FRIENDS_TO_DISPLAY)
+        fitButtons(FriendsFrameIgnoreScrollFrame,  "FriendsFrameIgnoreButton",  IGNORES_TO_DISPLAY)
+    end
+    -- 用事件驱动 fitButtonHeights，避开 hook _G.FriendsFrame_Update
+    -- prior addon 可能已 hook 该函数且写法依赖 self 在 1.12 是 nil 报错，无法控制
+    local fitEventFrame = CreateFrame("Frame")
+    fitEventFrame:RegisterEvent("FRIENDLIST_UPDATE")
+    fitEventFrame:RegisterEvent("IGNORELIST_UPDATE")
+    fitEventFrame:SetScript("OnEvent", function()
+        fitButtonHeights()
+    end)
+
+
+    -- /reload 后首次 OnShow 时 inset/SF size 未 settle，需延迟一帧再 fit
+    -- 1.12 OnUpdate handler 第一参是 elapsed 不是 self，用闭包引用 deferFitFrame
+    local deferFitFrame = CreateFrame("Frame")
+    local function deferFit()
+        deferFitFrame:SetScript("OnUpdate", function()
+            deferFitFrame:SetScript("OnUpdate", nil)
+            reanchorScrollFrames()
+            fitButtonHeights()
+        end)
+    end
+
     CenterFrame(FriendsFrame)
     HookScript(FriendsFrame, "OnShow", function()
         customBg:Show()
         UpdateGuildTab()
         safeTabClick(FriendsFrame.selectedTab or 1)
+        reanchorScrollFrames()
+        detachRightColumn()
+        deferFit()
     end)
 
     customBg:AddTab("团队", function()

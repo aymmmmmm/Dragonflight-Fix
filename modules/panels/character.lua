@@ -339,6 +339,11 @@ DFUI:NewMod("Character", 5, function()
         followFrames = {HonorFrame, ArenaFrame},
     })
 
+    -- 提升 HonorFrame / ArenaFrame FrameLevel 跨过 honorInset
+    -- 让 vanilla 数据 FontString 浮在 honorInset (marble) 之上
+    if HonorFrame then HonorFrame:SetFrameLevel(honorInset:GetFrameLevel() + 1) end
+    if ArenaFrame then ArenaFrame:SetFrameLevel(honorInset:GetFrameLevel() + 1) end
+
     -- 声望 tab / 技能 tab：仅 NukeScrollBar 隐藏 vanilla 原生（不创建 retail 滚动条）
     -- 鼠标滚轮仍能滚动列表（FauxScrollFrame 自带 OnMouseWheel）
     if ReputationListScrollFrame and ReputationListScrollFrameScrollBar then
