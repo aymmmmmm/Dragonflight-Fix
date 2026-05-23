@@ -66,6 +66,121 @@ DFUI:NewMod("Character", 5, function()
     HideBlizzardTextures(SkillFrame)
     HideBlizzardTextures(ReputationFrame)
 
+    -- 彻底清掉 SkillFrame 原生滚动条（含轨道/边框/底纹/箭头/滑块），鼠标滚轮仍可滚
+    local function NukeScrollBar(f)
+        if not f then return end
+        f:Hide()
+        f:SetAlpha(0)
+        local regions = {f:GetRegions()}
+        for i = 1, table.getn(regions) do
+            local r = regions[i]
+            if r.SetTexture then r:SetTexture(nil) end
+            if r.Hide then r:Hide() end
+        end
+        local children = {f:GetChildren()}
+        for i = 1, table.getn(children) do
+            NukeScrollBar(children[i])
+        end
+    end
+    NukeScrollBar(SkillListScrollFrameScrollBar)
+
+    -- 再扫一遍 SkillListScrollFrame 自身的装饰纹理（残留竖条/边框/小箭头来源）
+    if SkillListScrollFrame then
+        local regions = {SkillListScrollFrame:GetRegions()}
+        for i = 1, table.getn(regions) do
+            local r = regions[i]
+            if r.GetObjectType and r:GetObjectType() == "Texture" then
+                r:SetTexture(nil); r:Hide()
+            end
+        end
+        -- nuke SkillListScrollFrame 上所有 child frame（除内容承载 ScrollChildFrame）
+        local scrollChild = SkillListScrollFrame:GetScrollChild()
+        local children = {SkillListScrollFrame:GetChildren()}
+        for i = 1, table.getn(children) do
+            if children[i] ~= scrollChild then
+                NukeScrollBar(children[i])
+            end
+        end
+    end
+
+    -- 强清 SkillFrame 自身所有 texture（绕过 HideBlizzardTextures 的过滤白名单）
+    if SkillFrame then
+        local regions = {SkillFrame:GetRegions()}
+        for i = 1, table.getn(regions) do
+            local r = regions[i]
+            if r.GetObjectType and r:GetObjectType() == "Texture" then
+                r:SetTexture(nil); r:Hide()
+            end
+        end
+    end
+
+    -- 清掉 SkillFrame 右侧另一个 ScrollFrame：SkillDetailScrollFrame（技能详情区）
+    -- pfUI 已验证（_dev/pfUI-master/skins/blizzard/character.lua:301-303）
+    if SkillDetailScrollFrame then
+        local regions = {SkillDetailScrollFrame:GetRegions()}
+        for i = 1, table.getn(regions) do
+            local r = regions[i]
+            if r.GetObjectType and r:GetObjectType() == "Texture" then
+                r:SetTexture(nil); r:Hide()
+            end
+        end
+        NukeScrollBar(SkillDetailScrollFrameScrollBar)
+        if SkillDetailScrollChildFrame then
+            SkillDetailScrollChildFrame:Hide()
+        end
+    end
+
+    -- 声望 tab 对应：清掉 ReputationDetailFrame 装饰（pfUI character.lua:254 实证）
+    if ReputationDetailFrame then
+        local regions = {ReputationDetailFrame:GetRegions()}
+        for i = 1, table.getn(regions) do
+            local r = regions[i]
+            if r.GetObjectType and r:GetObjectType() == "Texture" then
+                r:SetTexture(nil); r:Hide()
+            end
+        end
+        if not ReputationDetailFrame._dfSkinned then
+            ReputationDetailFrame:SetBackdrop({
+                bgFile = "Interface\\Buttons\\WHITE8X8",
+                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                edgeSize = 14,
+                insets = {left = 4, right = 4, top = 4, bottom = 4},
+            })
+            ReputationDetailFrame:SetBackdropColor(0.06, 0.06, 0.06, 0.92)
+            ReputationDetailFrame:SetBackdropBorderColor(0.45, 0.38, 0.28, 1)
+            ReputationDetailFrame._dfSkinned = true
+        end
+    end
+
+    -- 声望 tab 跟技能 tab 同等处理：清 ReputationListScrollFrame regions/children
+    if ReputationListScrollFrame then
+        local regions = {ReputationListScrollFrame:GetRegions()}
+        for i = 1, table.getn(regions) do
+            local r = regions[i]
+            if r.GetObjectType and r:GetObjectType() == "Texture" then
+                r:SetTexture(nil); r:Hide()
+            end
+        end
+        local scrollChild = ReputationListScrollFrame:GetScrollChild()
+        local children = {ReputationListScrollFrame:GetChildren()}
+        for i = 1, table.getn(children) do
+            if children[i] ~= scrollChild then
+                NukeScrollBar(children[i])
+            end
+        end
+    end
+
+    -- 声望 tab 强清 ReputationFrame regions（绕过 HideBlizzardTextures 白名单过滤）
+    if ReputationFrame then
+        local regions = {ReputationFrame:GetRegions()}
+        for i = 1, table.getn(regions) do
+            local r = regions[i]
+            if r.GetObjectType and r:GetObjectType() == "Texture" then
+                r:SetTexture(nil); r:Hide()
+            end
+        end
+    end
+
     CharacterFrameTab1:Hide()
     CharacterFrameTab2:Hide()
     CharacterFrameTab3:Hide()
@@ -201,6 +316,44 @@ DFUI:NewMod("Character", 5, function()
     closeButton:SetWidth(20)
     closeButton:SetHeight(20)
     closeButton:SetFrameLevel(customBg:GetFrameLevel() + 3)
+
+    -- 声望 Tab 凹陷容器（retail-style 9-slice + marble 底）
+    local reputationInset = DFUI.CreateRetailInset(customBg, {
+        name        = "DFUI_ReputationInset",
+        anchors     = {3, -65, -6, 6},
+        followFrame = ReputationFrame,
+    })
+
+    -- 技能 Tab 凹陷容器（留出顶部"全部"金属按钮 + 列标签）
+    local skillInset = DFUI.CreateRetailInset(customBg, {
+        name        = "DFUI_SkillInset",
+        anchors     = {3, -65, -6, 6},
+        followFrame = SkillFrame,
+    })
+
+    -- 荣誉 Tab 凹陷容器（留出子 Tab 区，跟随 HonorFrame 和 ArenaFrame 任一显示）
+    -- 上边界 -55 → -85（向下挪 30px），给子 tab 区让出更多空间
+    local honorInset = DFUI.CreateRetailInset(customBg, {
+        name         = "DFUI_HonorInset",
+        anchors      = {3, -85, -6, 6},
+        followFrames = {HonorFrame, ArenaFrame},
+    })
+
+    -- 声望 tab / 技能 tab：仅 NukeScrollBar 隐藏 vanilla 原生（不创建 retail 滚动条）
+    -- 鼠标滚轮仍能滚动列表（FauxScrollFrame 自带 OnMouseWheel）
+    if ReputationListScrollFrame and ReputationListScrollFrameScrollBar then
+        NukeScrollBar(ReputationListScrollFrameScrollBar)
+        -- 持续压住（NukeScrollBar 静态隐藏一次不够，引擎在 ScrollFrame OnShow 时会重 Show）
+        HookScript(ReputationListScrollFrameScrollBar, "OnShow", function()
+            ReputationListScrollFrameScrollBar:Hide()
+        end)
+    end
+    -- 技能 tab：SkillListScrollFrameScrollBar 已在 line 85 NukeScrollBar 处理
+    if SkillListScrollFrameScrollBar then
+        HookScript(SkillListScrollFrameScrollBar, "OnShow", function()
+            SkillListScrollFrameScrollBar:Hide()
+        end)
+    end
 
     -- 荣誉 Tab 状态 + 子 Tab 前向声明
     local honorTabActive = false
@@ -552,6 +705,73 @@ DFUI:NewMod("Character", 5, function()
             end
         end
     end)
+
+    -- ============================================================
+    -- Retail 进度条 + 折叠按钮（声望条 / 技能条 / SkillTypeLabel）
+    -- 素材：_html_dict atlas → media/tex/character/（A 方案独立切片 + B 方案 atlas 整图）
+    -- 字典 UV 坐标：uiframebars.png (256×256)
+    -- ============================================================
+    local CHAR_TEX = TEX .. "character\\"
+    -- A/B 切换：false=A 方案（独立 TGA 切片，SetTexture 直接引用）
+    --          true =B 方案（atlas 整图 + SetTexCoord 切片）
+    local BAR_USE_ATLAS = false
+
+    local function ApplyBarFill(bar)
+        if BAR_USE_ATLAS then
+            -- B 方案：tradeskill.lua:494-498 已验证模式
+            -- 先 CreateTexture 设 TexCoord 锁定 atlas 子区域，再 SetStatusBarTexture(obj)
+            local fill = bar:CreateTexture(nil, "ARTWORK")
+            fill:SetTexture(CHAR_TEX .. "atlas-uiframebars.tga")
+            fill:SetTexCoord(0, 1, 163/256, 180/256)  -- white 行 (y=163..180)
+            bar:SetStatusBarTexture(fill)
+        else
+            -- A 方案：独立切片 fill-white.tga（256×17）
+            bar:SetStatusBarTexture(CHAR_TEX .. "fill-white.tga")
+        end
+    end
+
+    -- 声望进度条（ReputationBar1..N，FauxScrollFrame 复用）
+    for i = 1, (NUM_FACTIONS_DISPLAYED or 15) do
+        local bar = getglobal("ReputationBar" .. i)
+        if bar and bar.SetStatusBarTexture then
+            ApplyBarFill(bar)
+            -- 保留 vanilla SetStatusBarColor —— ReputationFrame_Update 按好感度阶段染色
+        end
+    end
+
+    -- 技能进度条（SkillRankFrame1..N）
+    for i = 1, (SKILLS_TO_DISPLAY or 15) do
+        local bar = getglobal("SkillRankFrame" .. i)
+        if bar and bar.SetStatusBarTexture then
+            ApplyBarFill(bar)
+            -- SkillRankFrame{i}Border 在 1.12 vanilla 是 Frame（不是 Texture），无 SetTexture
+            local border = getglobal("SkillRankFrame" .. i .. "Border")
+            if border and border.Hide then border:Hide() end
+        end
+    end
+
+    -- SkillTypeLabel 折叠分组 header（清原生纹理 + 加 DF 深色底）
+    for i = 1, (SKILLS_TO_DISPLAY or 15) do
+        local header = getglobal("SkillTypeLabel" .. i)
+        if header and not header._dfSkinned then
+            local hr = {header:GetRegions()}
+            for j = 1, table.getn(hr) do
+                local r = hr[j]
+                if r.GetObjectType and r:GetObjectType() == "Texture" then
+                    local tex = r:GetTexture()
+                    if not (tex and (string.find(tex, "PlusButton") or string.find(tex, "MinusButton"))) then
+                        r:SetTexture(nil); r:Hide()
+                    end
+                end
+            end
+            local bg = header:CreateTexture(nil, "BACKGROUND")
+            bg:SetTexture("Interface\\Buttons\\WHITE8X8")
+            bg:SetVertexColor(0.10, 0.09, 0.07, 0.85)
+            bg:SetPoint("TOPLEFT", header, "TOPLEFT", 0, -1)
+            bg:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 1)
+            header._dfSkinned = true
+        end
+    end
 
     local callbacks = {}
     callbacks.showItemRarity = function(value)

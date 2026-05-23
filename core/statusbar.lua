@@ -4,11 +4,10 @@ local animations = setmetatable({}, { __mode = "k" })
 local pulses = setmetatable({}, { __mode = "k" })
 local cutouts = setmetatable({}, { __mode = "k" })
 
-local ANIMATION_SPEED = 0.1
+local ANIMATION_RATE = 6
 local PULSE_DURATION = 0.3
 local PULSE_FADE_IN = 0.1
 local PULSE_CURVE = 0.7
-local PULSE_SCALE = 1.05
 local CUTOUT_DURATION = .3
 local CUTOUT_ALPHA = 1
 
@@ -99,9 +98,10 @@ function CreateStatusBar(parent, width, height, animConfig)
         -- only process if value actually changed
         if self.val ~= val then
             local currentTime = GetTime()
-            if val < self.val and not instant and self.enableCutout and currentTime > self.cutoutSuppressed then
+            local oldVal = self.val
+            if val < oldVal and not instant and self.enableCutout and currentTime > self.cutoutSuppressed then
                 -- calculate old and new percentages
-                local oldPct = self.val / self.max
+                local oldPct = oldVal / self.max
                 local newPct = val / self.max
                 local cutWidth = self:GetWidth() * (oldPct - newPct)
 
@@ -144,8 +144,8 @@ function CreateStatusBar(parent, width, height, animConfig)
                 if self.enableBarAnim then
                     animations[self] = true
                 end
-                -- register for pulse color animation
-                if self.enablePulse then
+                -- register for pulse color animation (damage only — recovery should not flash)
+                if self.enablePulse and val < oldVal then
                     pulses[self] = GetTime() + PULSE_DURATION
                 end
                 -- if no bar animation, update display value immediately
@@ -225,7 +225,10 @@ function CreateStatusBar(parent, width, height, animConfig)
 end
 
 -- update functions
-local function UpdateBarAnimations()
+local function UpdateBarAnimations(dt)
+    -- frame-rate independent lerp factor; clamp so big dt still completes in one step
+    local factor = ANIMATION_RATE * dt
+    if factor > 1 then factor = 1 end
     for bar in pairs(animations) do
         if bar.enableBarAnim then
             -- check if animation is complete
@@ -236,7 +239,7 @@ local function UpdateBarAnimations()
                 animations[bar] = nil
             else
                 -- lerp current value toward target value
-                bar.val_ = bar.val_ + (bar.val - bar.val_) * ANIMATION_SPEED
+                bar.val_ = bar.val_ + (bar.val - bar.val_) * factor
             end
             -- update bar visual width
             bar:Update()
@@ -275,18 +278,10 @@ local function UpdatePulseAnimations(now)
             local b = bar.baseColor[3] + (bar.pulseColor[3] - bar.baseColor[3]) * progress
             -- apply interpolated color
             bar.fill:SetVertexColor(r, g, b, 1)
-
-            -- calculate pulse scale effect
-            local scale = 1 + (PULSE_SCALE - 1) * progress
-            local pct = bar.val_ / bar.max
-            -- apply scaled dimensions
-            if bar.fillDirection == 'RIGHT_TO_LEFT' then
-                bar.fill:SetTexCoord(1-pct, 1, 0, 1)
-            else
-                bar.fill:SetTexCoord(0, pct, 0, 1)
-            end
-            bar.fill:SetWidth(bar:GetWidth() * pct * scale)
-            bar.fill:SetHeight(bar:GetHeight() * scale)
+            -- keep fill width/height in sync with current animated value (no scale puff)
+            bar:Update()
+            -- restore pulse color (bar:Update doesn't touch VertexColor, but explicit for safety against future edits)
+            bar.fill:SetVertexColor(r, g, b, 1)
             end
         else
             -- remove disabled pulses
@@ -313,9 +308,12 @@ end
 
 -- handler (auto-disables when idle, re-enabled by SetValue)
 local animate = CreateFrame'Frame'
+local lastUpdate = GetTime()
 local function AnimateOnUpdate()
     local now = GetTime()
-    UpdateBarAnimations()
+    local dt = now - lastUpdate
+    lastUpdate = now
+    UpdateBarAnimations(dt)
     UpdatePulseAnimations(now)
     UpdateCutoutAnimations(now)
     -- disable when all tables are empty
@@ -326,6 +324,8 @@ end
 
 local function EnsureAnimating()
     if not animate:GetScript('OnUpdate') then
+        -- reset clock so the first frame after idle doesn't snap with a huge dt
+        lastUpdate = GetTime()
         animate:SetScript('OnUpdate', AnimateOnUpdate)
     end
 end

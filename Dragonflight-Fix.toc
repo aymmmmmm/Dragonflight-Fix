@@ -5,7 +5,7 @@
 ## Notes-zhCN: 巨龙时代UI - 汉化修复版 (Turtle WoW 1.18.1)
 ## Version: 2.0.0
 ## Author: Guzruul - Reforged by Stormhand - Fix by Claude
-## SavedVariables: DFUI_PROFILES, DFUI_DB_SETUP, DFUI_BUGS
+## SavedVariables: DFUI_PROFILES, DFUI_DB_SETUP, DFUI_BUGS, DFUI_HealthDB
 ## SavedVariablesPerCharacter: DFUI_CUR_PROFILE, DFUI_FRAMEPOS
 
 # CORE
@@ -27,6 +27,7 @@ libs\libspell.lua
 libs\libdebuff.lua
 libs\libguid.lua
 libs\libevents.lua
+libs\libhealth.lua
 
 # MODULES
 modules\bars\bars.lua

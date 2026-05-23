@@ -424,6 +424,277 @@ function DFUI.ApplyInnerFrame(frame, opts)
     return borderFrame
 end
 
+-- ============================================================
+-- DFUI.CreateRetailInset — retail-style 9-slice 内嵌凹陷容器
+-- 视觉：marble 大理石底 + 4 边凹陷描线（uiframe_h/v）+ 4 角圆角（generalframeinsetborders）
+-- 用于在 customBg (CreatePaperDollFrame) 内部某个子页面加凹陷感
+-- 已验证：声望 tab (character.lua reputationInset)
+--
+-- Usage:
+--   local inset = DFUI.CreateRetailInset(parent, {
+--       anchors     = {3, -65, -6, 6},   -- TL.x, TL.y, BR.x, BR.y 相对 parent
+--       followFrame = ReputationFrame,   -- 可选，跟随其 OnShow/OnHide 显示
+--       -- 以下均可选（有默认值）
+--       name        = "DFUI_XXX_Inset",
+--       bg          = "interface\\ui-background-marble.tga",  -- TEX 内相对路径
+--       edgeTop     = 5, edgeBot = 3, edgeLeft = 2, edgeRight = 2,
+--       cornerSize  = 5,
+--       levelOffset = 1,
+--   })
+--
+-- 返回：inset frame，挂 .bg / .edges = {top,bot,left,right} / .corners = {tl,tr,bl,br}
+-- ============================================================
+local RIT_TEX = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\"
+
+function DFUI.CreateRetailInset(parent, opts)
+    opts = opts or {}
+    local anchors = opts.anchors or {3, -65, -6, 6}
+    local eT  = opts.edgeTop    or 3
+    local eB  = opts.edgeBot    or 3
+    local eL  = opts.edgeLeft   or 2
+    local eR  = opts.edgeRight  or 2
+    local cz  = opts.cornerSize or 5
+    local lvl = opts.levelOffset or 1
+
+    local inset = CreateFrame("Frame", opts.name, parent)
+    inset:SetPoint("TOPLEFT",     parent, "TOPLEFT",     anchors[1], anchors[2])
+    inset:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", anchors[3], anchors[4])
+    inset:SetFrameLevel(parent:GetFrameLevel() + lvl)
+
+    -- 背景大理石底
+    local bg = inset:CreateTexture(nil, "BACKGROUND")
+    bg:SetTexture(RIT_TEX .. (opts.bg or "interface\\ui-background-marble.tga"))
+    bg:SetAllPoints(inset)
+    inset.bg = bg
+
+    -- 4 边纹理（来自 tradeskill 已验证 TGA）
+    local TEX_H = RIT_TEX .. "panels\\df\\professions\\uiframe_h.tga"
+    local TEX_V = RIT_TEX .. "panels\\df\\professions\\uiframe_v.tga"
+
+    local top = inset:CreateTexture(nil, "ARTWORK")
+    top:SetTexture(TEX_H)
+    top:SetTexCoord(0.0, 1.0, 0.9063, 0.9297)
+    top:SetPoint("TOPLEFT",  inset, "TOPLEFT",  0, 0)
+    top:SetPoint("TOPRIGHT", inset, "TOPRIGHT", 0, 0)
+    top:SetHeight(eT)
+
+    local bot = inset:CreateTexture(nil, "ARTWORK")
+    bot:SetTexture(TEX_H)
+    bot:SetTexCoord(0.0, 1.0, 0.8672, 0.8906)
+    bot:SetPoint("BOTTOMLEFT",  inset, "BOTTOMLEFT",  0, 0)
+    bot:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", 0, 0)
+    bot:SetHeight(eB)
+
+    local left = inset:CreateTexture(nil, "ARTWORK")
+    left:SetTexture(TEX_V)
+    left:SetTexCoord(0.4844, 0.5313, 0.0, 1.0)
+    left:SetPoint("TOPLEFT",    inset, "TOPLEFT",    0, 0)
+    left:SetPoint("BOTTOMLEFT", inset, "BOTTOMLEFT", 0, 0)
+    left:SetWidth(eL)
+
+    -- 右边复用左 UV 做 X 反转（保证左右镜像深浅一致）
+    local right = inset:CreateTexture(nil, "ARTWORK")
+    right:SetTexture(TEX_V)
+    right:SetTexCoord(0.5313, 0.4844, 0.0, 1.0)
+    right:SetPoint("TOPRIGHT",    inset, "TOPRIGHT",    0, 0)
+    right:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", 0, 0)
+    right:SetWidth(eR)
+
+    inset.edges = {top=top, bot=bot, left=left, right=right}
+
+    -- 4 角（generalframeinsetborders atlas）
+    local TEX_CORNER = RIT_TEX .. "interface\\generalframeinsetborders.tga"
+    local function makeCorner(point, l, r, t, b)
+        local c = inset:CreateTexture(nil, "OVERLAY")
+        c:SetTexture(TEX_CORNER)
+        c:SetTexCoord(l, r, t, b)
+        c:SetPoint(point, inset, point, 0, 0)
+        c:SetWidth(cz); c:SetHeight(cz)
+        return c
+    end
+
+    inset.corners = {
+        tl = makeCorner("TOPLEFT",     0.703125, 0.828125, 0.03125, 0.28125),
+        tr = makeCorner("TOPRIGHT",    0.859375, 0.984375, 0.03125, 0.28125),
+        bl = makeCorner("BOTTOMLEFT",  0.328125, 0.453125, 0.6875,  0.9375),
+        br = makeCorner("BOTTOMRIGHT", 0.515625, 0.640625, 0.6875,  0.9375),
+    }
+
+    inset:Hide()
+
+    -- 跟随显示状态（可选）—— 单个 frame 用 followFrame，多个互斥 frame 用 followFrames {f1, f2,...}
+    local follows = opts.followFrames or (opts.followFrame and {opts.followFrame})
+    if follows then
+        local function checkVisible()
+            for _, f in ipairs(follows) do
+                if f and f:IsVisible() then inset:Show(); return end
+            end
+            inset:Hide()
+        end
+        checkVisible()
+        for _, f in ipairs(follows) do
+            if f then
+                HookScript(f, "OnShow", checkVisible)
+                HookScript(f, "OnHide", checkVisible)
+            end
+        end
+    end
+
+    return inset
+end
+
+-- ============================================================
+-- DFUI.CreateRetailScrollbar — retail-style 滚动条套件
+-- 套装：箭头 3 态 + 滑轨 3-slice + 滑块 3-slice
+-- 素材：minimal-scrollbar-* atlas (retail) + ui-hud-actionbar 箭头
+-- 已验证：tradeskill.lua:198+ CreateMinimalScrollbar 的抽离版
+--
+-- Usage:
+--   local sb = DFUI.CreateRetailScrollbar(parent, listFrame, {
+--       onScrollDelta = function(d) ... end,  -- 上下箭头 -1/+1
+--       onScrollAbs   = function(r) ... end,  -- 拖动 thumb 0..1
+--       width         = 18,                   -- 可选
+--       xOffset       = 18,                   -- 可选，sb 锚到 listFrame 右外侧偏移
+--   })
+--   sb:UpdateThumb(scrollOffset, maxOffset, visibleRows, totalRows)
+-- ============================================================
+local RSB_TEX       = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\"
+local RSB_TRACK_TB  = RSB_TEX .. "panels\\df\\professions\\scroll_track_tb.tga"   -- 128×64
+local RSB_TRACK_MID = RSB_TEX .. "interface\\minimalscrollbarvertical.tga"        -- 64×1024 (NEW)
+local RSB_THUMB_TB  = RSB_TEX .. "panels\\df\\professions\\scroll_thumb_tb.tga"   -- 64×64
+local RSB_THUMB_MID = RSB_TEX .. "panels\\df\\professions\\scroll_thumb_mid.tga"  -- 64×1024
+local RSB_ARROW     = RSB_TEX .. "panels\\df\\professions\\uiactionbar_atlas.tga" -- 256×1024
+
+local RSB_ATLAS = {
+    ["track-top"]   = {21/128, 29/128, 39/64,    47/64,    RSB_TRACK_TB},
+    ["track-mid"]   = {1/64,   9/64,   0,        1/1024,   RSB_TRACK_MID},
+    ["track-bot"]   = {11/128, 19/128, 49/64,    57/64,    RSB_TRACK_TB},
+    ["thumb-top"]   = {20/64,  28/64,  54/64,    62/64,    RSB_THUMB_TB},
+    ["thumb-mid"]   = {31/64,  39/64,  100/1024, 600/1024, RSB_THUMB_MID}, -- 中间稳定段（避开 atlas 端部透明渐变）
+    ["thumb-bot"]   = {39/64,  47/64,  31/64,    39/64,    RSB_THUMB_TB},
+    -- normal 态用真 pageuparrow-up / pagedownarrow-up UV（disabled 态 alpha 仅 12% 几乎不可见）
+    ["up-normal"]   = {200/256,217/256,458/1024, 472/1024, RSB_ARROW},
+    ["up-hover"]    = {181/256,198/256,458/1024, 472/1024, RSB_ARROW},
+    ["up-down"]     = {234/256,251/256,390/1024, 404/1024, RSB_ARROW},
+    ["down-normal"] = {234/256,251/256,358/1024, 372/1024, RSB_ARROW},
+    ["down-hover"]  = {234/256,251/256,337/1024, 351/1024, RSB_ARROW},
+    ["down-down"]   = {234/256,251/256,321/1024, 335/1024, RSB_ARROW},
+}
+
+local function rsbApply(tex, key)
+    local a = RSB_ATLAS[key]
+    tex:SetTexture(a[5])
+    tex:SetTexCoord(a[1], a[2], a[3], a[4])
+end
+
+function DFUI.CreateRetailScrollbar(parent, listFrame, opts)
+    opts = opts or {}
+    local width   = opts.width   or 18
+    local xOff    = opts.xOffset or 18
+    local onDelta = opts.onScrollDelta or function() end
+    local onAbs   = opts.onScrollAbs   or function() end
+
+    local sb = CreateFrame("Frame", nil, parent)
+    sb:SetWidth(width)
+    sb:SetPoint("TOPRIGHT",    listFrame, "TOPRIGHT",    xOff, 0)
+    sb:SetPoint("BOTTOMRIGHT", listFrame, "BOTTOMRIGHT", xOff, 0)
+    sb:SetFrameLevel(parent:GetFrameLevel() + 5)
+
+    -- 箭头按钮（3 态：normal/hover/down，用 3 个 BACKGROUND texture 切换 Show/Hide）
+    local function makeArrowBtn(point, normKey, hovKey, dnKey)
+        local btn = CreateFrame("Button", nil, sb)
+        btn:SetWidth(width); btn:SetHeight(16)
+        btn:SetPoint(point, sb, point, 0, 0)
+        local function tex(key)
+            -- ARTWORK 层（紫色调试证明 Button 内 BACKGROUND 不渲染）
+            local t = btn:CreateTexture(nil, "ARTWORK")
+            rsbApply(t, key)
+            t:SetAllPoints(btn)
+            -- DEBUG 红色
+            t:SetVertexColor(1.0, 0.0, 0.0, 1.0)
+            return t
+        end
+        local norm = tex(normKey)
+        local hov  = tex(hovKey); hov:Hide()
+        local dn   = tex(dnKey);  dn:Hide()
+        btn:SetScript("OnEnter",     function() if not btn.pushed then norm:Hide(); hov:Show() end end)
+        btn:SetScript("OnLeave",     function() if not btn.pushed then hov:Hide();  norm:Show() end end)
+        btn:SetScript("OnMouseDown", function() btn.pushed = true;  norm:Hide(); hov:Hide(); dn:Show() end)
+        btn:SetScript("OnMouseUp",   function() btn.pushed = false; dn:Hide(); norm:Show() end)
+        return btn
+    end
+    local upBtn = makeArrowBtn("TOP",    "up-normal",   "up-hover",   "up-down")
+    local dnBtn = makeArrowBtn("BOTTOM", "down-normal", "down-hover", "down-down")
+    upBtn:SetScript("OnClick", function() onDelta(-1) end)
+    dnBtn:SetScript("OnClick", function() onDelta(1)  end)
+
+    -- track 容器
+    local track = CreateFrame("Frame", nil, sb)
+    track:SetWidth(12)
+    track:SetPoint("TOP",    upBtn, "BOTTOM", 0, -2)
+    track:SetPoint("BOTTOM", dnBtn, "TOP",    0,  2)
+    track:SetPoint("LEFT",  sb, "LEFT",  3, 0)
+    track:SetPoint("RIGHT", sb, "RIGHT", -3, 0)
+
+    -- track 3-slice：暂时去掉，先调通 thumb + 箭头
+
+    -- thumb 3-slice
+    local thumb = CreateFrame("Frame", nil, track)
+    thumb:EnableMouse(true)
+    thumb:SetWidth(12)
+    thumb:SetHeight(50)
+    thumb:SetPoint("TOP", track, "TOP", 0, 0)
+    -- thumb 只有上下两小块（atlas 真实 8×8，零拉伸保清晰），中间透出 inset 背景
+    local thTop = thumb:CreateTexture(nil, "BACKGROUND"); rsbApply(thTop, "thumb-top")
+    thTop:SetWidth(12); thTop:SetHeight(8); thTop:SetPoint("TOP", thumb, "TOP", 0, 0)
+    local thBot = thumb:CreateTexture(nil, "BACKGROUND"); rsbApply(thBot, "thumb-bot")
+    thBot:SetWidth(12); thBot:SetHeight(8); thBot:SetPoint("BOTTOM", thumb, "BOTTOM", 0, 0)
+
+    -- 拖动逻辑：OnMouseDown 启动 OnUpdate 跟随鼠标 y, OnMouseUp 停止
+    thumb.dragging = false
+    thumb:SetScript("OnMouseDown", function() thumb.dragging = true  end)
+    thumb:SetScript("OnMouseUp",   function() thumb.dragging = false end)
+    thumb:SetScript("OnUpdate", function()
+        if not thumb.dragging then return end
+        local _, cy = GetCursorPosition()
+        local scale = thumb:GetEffectiveScale()
+        local trackTop = track:GetTop()
+        local trackBot = track:GetBottom()
+        if not trackTop or not trackBot then return end
+        local trackH = (trackTop - trackBot) * scale
+        local cursorOnTrack = (trackTop * scale) - cy
+        local thumbH = thumb:GetHeight() * scale
+        local maxY = trackH - thumbH
+        if maxY <= 0 then return end
+        local ratio = cursorOnTrack / maxY
+        if ratio < 0 then ratio = 0 elseif ratio > 1 then ratio = 1 end
+        onAbs(ratio)
+    end)
+
+    sb.thumb = thumb
+    sb.track = track
+    sb.thTop = thTop
+    sb.thBot = thBot
+    sb.lastMaxOffset = 0
+
+    -- 由滚动逻辑调用：同步 thumb 几何 + 缓存 lastMaxOffset（拖动时算 ratio→scrollOff 用）
+    sb.UpdateThumb = function(scrollOff, maxOff, visRows, totalRows)
+        sb.lastMaxOffset = maxOff or 0
+        local trackH = track:GetHeight()
+        if not trackH or trackH <= 0 then return end
+        local thumbH = math.max(30, trackH * visRows / math.max(visRows, totalRows))
+        if thumbH > trackH then thumbH = trackH end
+        thumb:SetHeight(thumbH)
+        -- thTop/thBot 固定 8 高（atlas 真实，零拉伸保清晰），中间空
+        local thumbMaxY = trackH - thumbH
+        local thumbY = (maxOff and maxOff > 0) and (thumbMaxY * scrollOff / maxOff) or 0
+        thumb:ClearAllPoints()
+        thumb:SetPoint("TOP", track, "TOP", 0, -thumbY)
+    end
+
+    return sb
+end
+
 -- 获取单位真实血量
 -- 1.12 原生 UnitHealth/UnitHealthMax 行为:
 --   - 自己/宠物/小队/团队 token → 真实值
@@ -454,33 +725,6 @@ local function ResolveToTrueUnit(unit)
     return nil
 end
 
--- 直接读 libhealth 的 cache(绕过库 reqhit/reqdmg 阈值)
--- 库自己的 GetUnitHealth 要求 hit>2 且 diff>10 才返回估算,对一击秒杀小怪过严
--- mobdb 写入无门槛(只要 dmg>0 and diff>0),所以读 cache 用更宽松阈值即可
-local function GetEstimatedFromCache(unit, rawCur)
-    local mobdb
-    if ShaguTweaks_cache and ShaguTweaks_cache["libhealth"] then
-        mobdb = ShaguTweaks_cache["libhealth"]
-    elseif pfUI_cache and pfUI_cache["libhealth"] then
-        mobdb = pfUI_cache["libhealth"]
-    end
-    if not mobdb then return nil end
-
-    local name = UnitName(unit)
-    local level = UnitLevel(unit)
-    if not name or not level then return nil end
-
-    local key = string.format("%s:%d", name, level)
-    local entry = mobdb[key]
-    if not entry or not entry[1] or not entry[2] then return nil end
-
-    -- 3% 百分比降即认可,远低于库的 10%
-    if entry[2] < 3 then return nil end
-
-    local realMax = entry[1]
-    return math.ceil(realMax / 100 * rawCur), realMax
-end
-
 function GetUnitRealHealth(unit)
     unit = unit or "target"
 
@@ -497,85 +741,17 @@ function GetUnitRealHealth(unit)
         return 0, 0, "none"
     end
 
-    -- 3. max=100 (典型怪/友方玩家百分比模式) → 读 cache 估算
+    -- 3. max=100 (典型怪/友方玩家百分比模式) → 走 DFUI.libhealth 估算
     if rawMax == 100 then
-        local cur, max = GetEstimatedFromCache(unit, rawCur)
-        if cur and max then
-            return cur, max, "real"
+        if DFUI and DFUI.libhealth and DFUI.libhealth.GetUnitHealth then
+            local cur, max, found = DFUI.libhealth:GetUnitHealth(unit)
+            if found then
+                return cur, max, "real"
+            end
         end
         return rawCur, rawMax, "percent"
     end
 
     -- 4. max≠100 且≠0:别的插件接管了 API 返回真值,直接信任
     return rawCur, rawMax, "real"
-end
-
--- ═══════════════════════════════════════════════════════════════
--- Health Tracker
--- ShaguTweaks/pfUI libhealth 只监听 UNIT_COMBAT(主要近战物理),
--- 法术/远程伤害走 CHAT_MSG_SPELL_* 事件,libhealth 完全漏掉。
--- 后果:法师/术士/猎人/牧师等远程职业 → cache 永远是空的 → 怪物显示 100%
--- 本 tracker 补全法术伤害监听,直接写入 ShaguTweaks_cache["libhealth"](与库共享同表)
--- ═══════════════════════════════════════════════════════════════
-do
-    local tracker = CreateFrame("Frame")
-    tracker.dmg = 0
-    tracker.perc = 0
-    tracker.target = nil
-
-    -- 启发式:从战斗日志消息中提取最大数字作为伤害值
-    -- 战斗日志格式因本地化(zhCN/enUS)而异,模板匹配维护成本太高;用最大数字启发式
-    -- 误差来源:消息可能包含等级/技能ID等非伤害数字,但伤害通常是最大的那个
-    local function ExtractDamage(msg)
-        if not msg then return 0 end
-        local damage = 0
-        for n in string.gmatch(msg, "(%d+)") do
-            local num = tonumber(n)
-            if num and num > damage and num < 1000000 then
-                damage = num
-            end
-        end
-        return damage
-    end
-
-    tracker:RegisterEvent("PLAYER_TARGET_CHANGED")
-    tracker:RegisterEvent("UNIT_HEALTH")
-    -- 只监听法术/周期性伤害,UNIT_COMBAT 留给 libhealth 处理(避免重复计数)
-    tracker:RegisterEvent("CHAT_MSG_SPELL_SELF_DAMAGE")
-    tracker:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_DAMAGE")
-    tracker:RegisterEvent("CHAT_MSG_SPELL_PET_DAMAGE")
-    tracker:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_PET_DAMAGE")
-
-    tracker:SetScript("OnEvent", function()
-        if event == "PLAYER_TARGET_CHANGED" then
-            tracker.dmg = 0
-            tracker.perc = UnitHealth("target") or 0
-            if UnitName("target") and UnitLevel("target") and UnitHealthMax("target") == 100 then
-                tracker.target = string.format("%s:%d", UnitName("target"), UnitLevel("target"))
-            else
-                tracker.target = nil
-            end
-        elseif tracker.target and event == "UNIT_HEALTH" and arg1 == "target" then
-            local cur = UnitHealth("target")
-            local diff = tracker.perc - cur
-            if tracker.dmg > 0 and diff > 0 then
-                ShaguTweaks_cache = ShaguTweaks_cache or {}
-                ShaguTweaks_cache["libhealth"] = ShaguTweaks_cache["libhealth"] or {}
-                local mobdb = ShaguTweaks_cache["libhealth"]
-                mobdb[tracker.target] = mobdb[tracker.target] or {}
-                local entry = mobdb[tracker.target]
-                if not entry[2] or diff > entry[2] then
-                    entry[1] = math.ceil(tracker.dmg / diff * 100)
-                    entry[2] = diff
-                    entry[3] = (entry[3] or 0) + 1
-                end
-            end
-        elseif tracker.target then
-            -- 战斗日志事件:arg1 是消息内容
-            local damage = ExtractDamage(arg1)
-            if damage > 0 then
-                tracker.dmg = tracker.dmg + damage
-            end
-        end
-    end)
 end

@@ -243,18 +243,109 @@ do
     -- (1) UIDROPDOWNMENU_OPEN_MENU 1.17 vanilla 未预设。
     -- 不依赖 PLAYER_LOGIN，立即 hook UIDropDownMenu_Initialize：
     -- 每次任何 dropdown 初始化前都确保该全局非 nil。
+    -- 同时钳位 UIDROPDOWNMENU_MAXBUTTONS 到 listFrame 实际存在的按钮数：
+    -- Atlas（Atlas.lua:36）把全局 MAXBUTTONS 提到 48 以容纳 33 项副本菜单，
+    -- 但 patch-Z 的 UIDropDownMenu.xml 只静态创建了 8 个按钮，且 CreateFrames 在 1.17 客户端不工作，
+    -- vanilla Initialize 内部循环到第 9 个按钮时 getglobal 返回 nil → button:Hide() 炸 → dropdown 系统全死。
     if type(_G.UIDropDownMenu_Initialize) == "function" then
         local _origInit = _G.UIDropDownMenu_Initialize
         _G.UIDropDownMenu_Initialize = function(frame, initFunc, displayMode, level)
             if _G.UIDROPDOWNMENU_OPEN_MENU == nil then
                 _G.UIDROPDOWNMENU_OPEN_MENU = ""
             end
-            return _origInit(frame, initFunc, displayMode, level)
+            local lvl = level or 1
+            local savedMax = _G.UIDROPDOWNMENU_MAXBUTTONS
+            if type(savedMax) == "number" and savedMax > 1 then
+                local realCount = 0
+                for i = 1, savedMax do
+                    if _G["DropDownList" .. lvl .. "Button" .. i] then
+                        realCount = i
+                    else
+                        break
+                    end
+                end
+                if realCount > 0 and realCount < savedMax then
+                    _G.UIDROPDOWNMENU_MAXBUTTONS = realCount
+                end
+            end
+            local ok, err = pcall(_origInit, frame, initFunc, displayMode, level)
+            _G.UIDROPDOWNMENU_MAXBUTTONS = savedMax
+            if not ok then
+                return nil, err
+            end
         end
     end
     -- 顺便立即设上一个，覆盖 hook 之前的访问路径
     if _G.UIDROPDOWNMENU_OPEN_MENU == nil then
         _G.UIDROPDOWNMENU_OPEN_MENU = ""
+    end
+
+    -- 同样钳位 UIDropDownMenu_Refresh —— UIOptionsFrameTargetofTargetDropDown 的
+    -- OnLoad 触发 SetSelectedValue → Refresh，Refresh 内部也循环 1..MAXBUTTONS。
+    if type(_G.UIDropDownMenu_Refresh) == "function" then
+        local _origRefresh = _G.UIDropDownMenu_Refresh
+        _G.UIDropDownMenu_Refresh = function(frame, useValue)
+            local lvl = (_G.UIDROPDOWNMENU_MENU_LEVEL or 1)
+            local savedMax = _G.UIDROPDOWNMENU_MAXBUTTONS
+            if type(savedMax) == "number" and savedMax > 1 then
+                local realCount = 0
+                for i = 1, savedMax do
+                    if _G["DropDownList" .. lvl .. "Button" .. i] then
+                        realCount = i
+                    else
+                        break
+                    end
+                end
+                if realCount > 0 and realCount < savedMax then
+                    _G.UIDROPDOWNMENU_MAXBUTTONS = realCount
+                end
+            end
+            local ok, err = pcall(_origRefresh, frame, useValue)
+            _G.UIDROPDOWNMENU_MAXBUTTONS = savedMax
+            if not ok then return nil, err end
+        end
+    end
+
+    -- 主动补建 DropDownList<L>Button9..MAXBUTTONS 占位 button，
+    -- 让 vanilla 内部循环不再撞 nil（同时解决 OnShow 等内嵌脚本里读 buttons 索引的 nil 问题）。
+    local function ensureDropDownButtons()
+        local cap = type(_G.UIDROPDOWNMENU_MAXBUTTONS) == "number" and _G.UIDROPDOWNMENU_MAXBUTTONS or 8
+        if cap <= 8 then return end
+        for level = 1, (_G.UIDROPDOWNMENU_MAXLEVELS or 2) do
+            local listFrame = _G["DropDownList" .. level]
+            if listFrame then
+                for i = 9, cap do
+                    local btnName = "DropDownList" .. level .. "Button" .. i
+                    if not _G[btnName] then
+                        local ok = pcall(CreateFrame, "Button", btnName, listFrame, "UIDropDownMenuButtonTemplate")
+                        if not ok or not _G[btnName] then
+                            local btn = CreateFrame("Button", btnName, listFrame)
+                            btn:SetWidth(1); btn:SetHeight(1)
+                            btn:Hide()
+                        end
+                    end
+                end
+            end
+        end
+    end
+    ensureDropDownButtons()
+    local _dfui_ddl_btnfix = CreateFrame("Frame")
+    _dfui_ddl_btnfix:RegisterEvent("PLAYER_LOGIN")
+    _dfui_ddl_btnfix:RegisterEvent("PLAYER_ENTERING_WORLD")
+    _dfui_ddl_btnfix:RegisterEvent("ADDON_LOADED")
+    _dfui_ddl_btnfix:SetScript("OnEvent", ensureDropDownButtons)
+
+    -- (4) Turtle_ShopUI patch-Z 滞后服务器：
+    --   - Shop_ProcessEntries:285 调 SetHyperlink，但服务器返回了 patch-Z 不认识的新链接类型 → Unknown link type
+    --   - Shop_ProcessCategories:159 在某 nil 字段上做数字比较
+    -- pcall 包裹避免刷屏。商城功能本来就因为版本不匹配半残，这里只是止血。
+    for _, fn in pairs({"Shop_ProcessEntries", "Shop_ProcessCategories"}) do
+        if type(_G[fn]) == "function" then
+            local _orig = _G[fn]
+            _G[fn] = function(a, b, c, d, e, f, g, h)
+                pcall(_orig, a, b, c, d, e, f, g, h)
+            end
+        end
     end
 
     -- (2) 内置 HardcoreTooltips (patch-7.mpq) 在 1.17 下:

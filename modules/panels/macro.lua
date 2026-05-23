@@ -50,8 +50,8 @@ DFUI:NewMod("Macros", 5, function()
 
         local customBg = DFUI.CreatePaperDollFrame("DFUI_MacroBg", MacroFrame, 384, 512, 2)
         customBg:SetPoint("TOPLEFT", MacroFrame, "TOPLEFT", 12, -12)
-        -- 底部留 110px 给原生底部按钮带（New/Edit/Delete/Exit 在底部 79~101px）+ DFUI Tab 行
-        customBg:SetPoint("BOTTOMRIGHT", MacroFrame, "BOTTOMRIGHT", -32, 110)
+        -- 底部 75px 与 character/mail/dressup 等同插件面板一致：原生底部按钮带（New/Edit/Delete/Exit 在 y=79~101）落入纸面内；DFUI Tab 由 AddTab 默认悬挂在纸面下方 30px（即 y=45）
+        customBg:SetPoint("BOTTOMRIGHT", MacroFrame, "BOTTOMRIGHT", -32, 75)
         customBg:SetFrameLevel(MacroFrame:GetFrameLevel() - 1)
         customBg.Bg:SetDrawLayer("BACKGROUND", -5)
 
@@ -102,16 +102,6 @@ DFUI:NewMod("Macros", 5, function()
             if MacroFrameTab2 then MacroFrameTab2:Click() end
             PanelTemplates_SetTab(MacroFrame, 2)
         end, 70)
-
-        -- Fix B：把 Tab 锚到 MacroFrame 底部 45px（按钮带 79~101 下方），避免 customBg 让位后 Tab 撞按钮
-        if customBg.Tabs[1] then
-            customBg.Tabs[1]:ClearAllPoints()
-            customBg.Tabs[1]:SetPoint("BOTTOMLEFT", MacroFrame, "BOTTOMLEFT", 20, 45)
-        end
-        if customBg.Tabs[2] then
-            customBg.Tabs[2]:ClearAllPoints()
-            customBg.Tabs[2]:SetPoint("BOTTOMLEFT", customBg.Tabs[1], "BOTTOMRIGHT", 4, 0)
-        end
 
         -- Fix C：保险——显式把底部按钮 / 文本框 FrameLevel 拉到 customBg 之上，防止 Z 序问题挡住交互
         local boostLvl = MacroFrame:GetFrameLevel() + 5

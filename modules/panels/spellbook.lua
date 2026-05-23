@@ -4,6 +4,24 @@ local TEX = DFUI:GetInfoOrCons("tex")
 
 local CLASS_ICON_COORDS = DFUI_CLASS_ICON_COORDS
 
+-- 文案集中表（未来迁移到 locales/ 时按此 key 移植）
+local L = {
+    TITLE = "法术书",
+    PASSIVE = "被动",
+    RACIAL = "种族技能",
+    PET = "宠物",
+    SHOW_PASSIVE = "显示被动技能",
+    SHOW_RANKS = "显示法术等级",
+    MOUNT = "坐骑",
+    COMPANION = "小伙伴",
+    TOY = "玩具",
+    ERR_PREFIX = "|cFFFF8800[DFUI 法术书]|r",
+    ERR_PREFIX_RED = "|cFFFF0000[DFUI 法术书]|r",
+    ERR_NO_RIGHT_TAB = " 服务端没有 %s SpellTab",
+    ERR_RIGHT_TAB_FAIL = " 右侧 Tab 创建失败：",
+    PAGE_FMT = "第 %d / %d 页",
+}
+
 -- Turtle WoW Tab 名称清理
 local function CleanTurtleTabName(name)
     if not name then return name end
@@ -11,53 +29,23 @@ local function CleanTurtleTabName(name)
     return cleaned
 end
 
--- 翻页按钮工厂
-local function CreatePageButton(parent, width, height, direction)
-    width = width or 27
-    height = height or 27
-    direction = direction or "west"
-
-    local normalPath = TEX .. "bags\\expand.tga"
-    local bgPath = TEX .. "interface\\chat_btn_bg.blp"
-
-    local coords = {
-        east = {1, 0, 1, 1, 0, 0, 0, 1},
-        west = {0, 1, 0, 0, 1, 1, 1, 0}
-    }
-
+-- 翻页按钮工厂：vanilla 原生 UI-SpellbookIcon 三态贴图
+local function CreatePageButton(parent, direction)
+    -- direction: "prev" 或 "next"
     local btn = CreateFrame("Button", nil, parent)
-    btn:SetWidth(width)
-    btn:SetHeight(height)
-
+    btn:SetWidth(32)
+    btn:SetHeight(32)
+    -- 半透明深色底框，做"嵌进去"反差让箭头浮起来
     local bg = btn:CreateTexture(nil, "BACKGROUND")
+    bg:SetTexture(TEX .. "interface\\chat_btn_bg.blp")
     bg:SetAllPoints(btn)
-    bg:SetTexture(bgPath)
     bg:SetVertexColor(0, 0, 0, 0.5)
-
-    local icon = btn:CreateTexture(nil, "ARTWORK")
-    icon:SetPoint("CENTER", btn)
-    icon:SetWidth(width - 13)
-    icon:SetHeight(height - 13)
-    icon:SetTexture(normalPath)
-    local c = coords[direction]
-    icon:SetTexCoord(c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8])
-
-    local highlight = btn:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetTexture(normalPath)
-    highlight:SetPoint("CENTER", btn)
-    highlight:SetWidth(width - 13)
-    highlight:SetHeight(height - 13)
-    highlight:SetTexCoord(c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8])
-    highlight:SetBlendMode("ADD")
-    highlight:SetAlpha(0)
-
-    btn:SetScript("OnEnter", function()
-        highlight:SetAlpha(1)
-    end)
-    btn:SetScript("OnLeave", function()
-        highlight:SetAlpha(0)
-    end)
-
+    -- 1.12 vanilla 客户端原生带 UI-SpellbookIcon-{Prev,Next}Page-*.blp
+    local cap = direction == "prev" and "Prev" or "Next"
+    btn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-" .. cap .. "Page-Up")
+    btn:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-" .. cap .. "Page-Down")
+    btn:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-" .. cap .. "Page-Disabled")
+    btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
     return btn
 end
 
@@ -100,8 +88,8 @@ DFUI:NewMod("SpellBook", 5, function()
     if SpellBookPageText then SpellBookPageText:Hide() end
 
     local BUTTONS_PER_PAGE = 12          -- 单页 6 行 × 2 列
-    local COLUMN_SPACING = 220           -- 两列间距，容纳 200 宽容器
-    local ROW_SPACING = 72               -- 行间距，需 ≥ 容器高 60 防止重叠
+    local COLUMN_SPACING = 225           -- retail spellbookframe.xml: 第二列 x=225
+    local ROW_SPACING = 72               -- 容器 60 高 + 行间隙 12
 
     local spellData = {}
 
@@ -144,7 +132,7 @@ DFUI:NewMod("SpellBook", 5, function()
     classIcon:SetHeight(52)
 
     local title = spellbook:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetText("法术书")
+    title:SetText(L.TITLE)
     title:SetTextColor(0.96875, 0.8984375, 0.578125)
     title:SetPoint("TOP", spellbook, "TOP", 0, -6)
 
@@ -157,6 +145,7 @@ DFUI:NewMod("SpellBook", 5, function()
         spellbook:ClearAllPoints()
         spellbook:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
         PlaySound("igSpellBookOpen")
+        if spellbook.RebuildActionBindMap then spellbook:RebuildActionBindMap() end
         spellbook:UpdateSpellDisplay()
     end)
     spellbook:SetScript("OnHide", function()
@@ -193,6 +182,65 @@ DFUI:NewMod("SpellBook", 5, function()
     spellbook.bookType = BOOKTYPE_SPELL
     spellbook.petTab = nil
 
+    -- 新学法术高亮：跨会话持久化 known/new 集合。knownSpells 首次为 nil（防止 NewMod 早期 API 未就绪），
+    -- 由 UpdateSpellDisplay/SPELLS_CHANGED 首次触发时 lazy 建立 → 首次安装时所有 spell 都算"已知"不闪。
+    local function BuildKnownSpellSet()
+        local set = {}
+        for tab = 1, GetNumSpellTabs() do
+            local _, _, offset, num = GetSpellTabInfo(tab)
+            if offset and num then
+                for i = 1, num do
+                    local n = GetSpellName(offset + i, BOOKTYPE_SPELL)
+                    if n then set[n] = true end
+                end
+            end
+        end
+        return set
+    end
+
+    local knownSpells = DFUI:GetTempDB("SpellBook", "knownSpells")
+    local newSpells = DFUI:GetTempDB("SpellBook", "newSpells") or {}
+
+    local function ClearNewSpellMark(spellName)
+        if spellName and newSpells[spellName] then
+            newSpells[spellName] = nil
+            DFUI:SetTempDB("SpellBook", "newSpells", newSpells)
+        end
+    end
+
+    -- 法术键位绑定提示：反查 ActionBar 60 个 slot 建立 spellName → 绑定键映射
+    -- 性能策略：仅在法术书可见时响应 ACTIONBAR_SLOT_CHANGED / UPDATE_BINDINGS
+    -- Tooltip 扫描走 libtipscan（与 IsSpellPassive 复用同一基础设施，避免手写 GameTooltip 状态管理）
+    spellbook.actionBindMap = {}
+
+    local SLOT_TO_BINDING = {}
+    for i = 1, 12 do SLOT_TO_BINDING[i]      = "ACTIONBUTTON" .. i end          -- 主栏 1-12
+    for i = 1, 12 do SLOT_TO_BINDING[i + 24] = "MULTIACTIONBAR3BUTTON" .. i end  -- 右栏1 slot 25-36
+    for i = 1, 12 do SLOT_TO_BINDING[i + 36] = "MULTIACTIONBAR4BUTTON" .. i end  -- 右栏2 slot 37-48
+    for i = 1, 12 do SLOT_TO_BINDING[i + 48] = "MULTIACTIONBAR2BUTTON" .. i end  -- 底栏2 slot 49-60
+    for i = 1, 12 do SLOT_TO_BINDING[i + 72] = "MULTIACTIONBAR1BUTTON" .. i end  -- 底栏1 slot 73-84
+
+    function spellbook:RebuildActionBindMap()
+        for k in pairs(spellbook.actionBindMap) do spellbook.actionBindMap[k] = nil end
+        local scanner = DFUI_Libs.libtipscan:GetScanner("SpellBookActionScan")
+        for slot, binding in pairs(SLOT_TO_BINDING) do
+            if HasAction(slot) then
+                scanner:SetAction(slot)
+                local spellName = scanner:GetLine(1)  -- 第一行 leftText 即 spell/item 名
+                if spellName and spellName ~= "" then
+                    local key1 = GetBindingKey(binding)
+                    if key1 and key1 ~= "" then
+                        if GetBindingText then key1 = GetBindingText(key1, "KEY_") end
+                        -- 同名多绑只保留第一个找到的（vanilla 行为）
+                        if not spellbook.actionBindMap[spellName] then
+                            spellbook.actionBindMap[spellName] = key1
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     -- IsSpellPassive：1.12 无原生 API，用 tooltip 扫描
     local function IsSpellPassive(spellIndex, bookType)
         if not spellIndex then return false end
@@ -225,7 +273,8 @@ DFUI:NewMod("SpellBook", 5, function()
                             variant = nil,
                             variantRank = 0,
                             texture = GetSpellTexture(i, BOOKTYPE_PET),
-                            isPassive = IsSpellPassive(i, BOOKTYPE_PET),
+                            isPassive = IsSpellPassive(i, BOOKTYPE_PET)
+                                or (spellRank and (string.find(spellRank, "Passive") or string.find(spellRank, "被动"))) and true or false,
                             isRacial = false,
                             tabIndex = tabIndex
                         })
@@ -265,7 +314,8 @@ DFUI:NewMod("SpellBook", 5, function()
                         variant = variant,
                         variantRank = variantRank,
                         texture = GetSpellTexture(spellIndex, BOOKTYPE_SPELL),
-                        isPassive = IsSpellPassive(spellIndex, BOOKTYPE_SPELL),
+                        isPassive = IsSpellPassive(spellIndex, BOOKTYPE_SPELL)
+                            or (spellRank and (string.find(spellRank, "Passive") or string.find(spellRank, "被动"))) and true or false,
                         isRacial = isRacial,
                         tabIndex = tabIndex
                     })
@@ -283,7 +333,7 @@ DFUI:NewMod("SpellBook", 5, function()
         local iconBtn = CreateFrame("Button", nil, container)
         iconBtn:SetWidth(50)
         iconBtn:SetHeight(50)
-        iconBtn:SetPoint("LEFT", container, "LEFT", 5, 0)
+        iconBtn:SetPoint("LEFT", container, "LEFT", 5, 5)
         container.iconBtn = iconBtn
 
         iconBtn.cooldown = CreateFrame("Model", nil, iconBtn, "CooldownFrameTemplate")
@@ -294,57 +344,93 @@ DFUI:NewMod("SpellBook", 5, function()
         icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         container.icon = icon
 
+        -- retail Spellbook-SlotFrame：图标外框 atlas (0.00390625, 0.27734375, 0.44140625, 0.69531250) = 70×65 native
+        -- 等比放大到 95×88 让内部坑位匹配 50×50 icon (retail 70×65 配 37×37，比例 1.892/1.757)
         local border = iconBtn:CreateTexture(nil, "ARTWORK")
-        border:SetWidth(67)
-        border:SetHeight(67)
-        border:SetPoint("CENTER", iconBtn, "CENTER", -2, -1)
+        border:SetTexture(TEX .. "panels\\spellbook_parts.tga")
+        border:SetTexCoord(0.00390625, 0.27734375, 0.44140625, 0.69531250)
+        border:SetWidth(95)
+        border:SetHeight(88)
+        border:SetPoint("CENTER", iconBtn, "CENTER", 1, 0)
         container.border = border
 
-        local highlight = iconBtn:CreateTexture(nil, "HIGHLIGHT")
-        highlight:SetTexture(TEX .. "panels\\spellbook_highlight.blp")
-        highlight:SetWidth(67)
-        highlight:SetHeight(67)
-        highlight:SetPoint("CENTER", iconBtn, "CENTER", 0, 0)
+        -- hover：脱离 widget HIGHLIGHT 图层（PUSHED 状态会自动隐藏 HIGHLIGHT 层，
+        -- 被动按下时会闪烁），改用 OVERLAY 层 + OnEnter/OnLeave 手动驱动。
+        -- 贴图：vanilla 1.12 客户端 MPQ 自带的 ButtonHilight-Square（蓝白软方框 halo，BLP1+alpha 原生支持）。
+        -- SetAllPoints 跟 iconBtn 1:1：vanilla 设计 halo 边缘就在贴图边缘，按钮尺寸放大缩小都贴边。
+        -- 不能用 retail 抠出来的同名 BLP——retail 重制成 DXT1 无 alpha BLP2，1.12 读不了。
+        local highlight = iconBtn:CreateTexture(nil, "OVERLAY")
+        highlight:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+        highlight:SetAllPoints(iconBtn)
         highlight:SetBlendMode("ADD")
+        highlight:Hide()
         container.highlight = highlight
 
-        local maxRankHighlight = iconBtn:CreateTexture(nil, "OVERLAY")
-        maxRankHighlight:SetTexture(TEX .. "panels\\spellbook_highlight.blp")
-        maxRankHighlight:SetWidth(80)
-        maxRankHighlight:SetHeight(80)
-        maxRankHighlight:SetPoint("CENTER", iconBtn, "CENTER", 0, 0)
-        maxRankHighlight:SetBlendMode("ADD")
-        maxRankHighlight:SetAlpha(.3)
-        maxRankHighlight:Hide()
-        container.maxRankHighlight = maxRankHighlight
+        -- 手动控制按下闪（OnMouseDown/Up 里 show/hide），不用 Button.PushedTexture
+        local pushedFlash = iconBtn:CreateTexture(nil, "OVERLAY")
+        pushedFlash:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+        pushedFlash:SetAllPoints(iconBtn)
+        pushedFlash:SetBlendMode("ADD")
+        pushedFlash:Hide()
+        container.pushedFlash = pushedFlash
+
+        -- 新学法术金色 glow（同款 vanilla 1.12 MPQ 原生 ButtonHilight-Square，tint 成金色）
+        local newGlow = iconBtn:CreateTexture(nil, "OVERLAY")
+        newGlow:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+        newGlow:SetAllPoints(iconBtn)
+        newGlow:SetBlendMode("ADD")
+        newGlow:SetVertexColor(1, 0.95, 0.3)
+        newGlow:Hide()
+        container.newGlow = newGlow
+
+        -- 键位绑定提示（右下角小字，描边方便在任意图标底色上可读）
+        local bindKey = container:CreateFontString(nil, "OVERLAY")
+        bindKey:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+        bindKey:SetTextColor(1, 1, 0.6)
+        bindKey:SetJustifyH("RIGHT")
+        bindKey:SetPoint("BOTTOMRIGHT", iconBtn, "BOTTOMRIGHT", -1, 2)
+        bindKey:Hide()
+        container.bindKey = bindKey
+
+        -- retail Spellbook-TextBackground：技能名/说明渐变浅黑遮罩，叠两层达到 retail 浓度
+        -- atlas (0.31250, 0.96484, 0.37109, 0.52344) = 167×39，按 DF-Fix 图标 50×50 (retail 37×37) 比例放大
+        for layer = 1, 2 do
+            local textBg = container:CreateTexture(nil, "BACKGROUND")
+            textBg:SetTexture(TEX .. "panels\\spellbook_parts.tga")
+            textBg:SetTexCoord(0.31250, 0.96484, 0.37109, 0.52344)
+            textBg:SetWidth(200)
+            textBg:SetHeight(50)
+            textBg:SetPoint("TOPLEFT", iconBtn, "TOPRIGHT", -4, -1)
+            container["textBg" .. layer] = textBg
+        end
 
         local name = container:CreateFontString(nil, "OVERLAY")
-        name:SetFont("Fonts\\FRIZQT__.TTF", 11)
-        name:SetPoint("LEFT", iconBtn, "RIGHT", 5, 0)
+        name:SetFont("Fonts\\FRIZQT__.TTF", 14)
+        name:SetPoint("LEFT", iconBtn, "RIGHT", 12, 8)
         name:SetPoint("RIGHT", container, "RIGHT", -5, 0)
         name:SetJustifyH("LEFT")
-        name:SetTextColor(0.25, 0.12, 0)
+        name:SetTextColor(1.0, 0.82, 0)
         container.name = name
 
         local passive = container:CreateFontString(nil, "OVERLAY")
-        passive:SetFont("Fonts\\FRIZQT__.TTF", 9)
-        passive:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, 0)
-        passive:SetText("被动")
-        passive:SetTextColor(0.25, 0.12, 0)
+        passive:SetFont("Fonts\\FRIZQT__.TTF", 8)
+        passive:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -3)
+        passive:SetText(L.PASSIVE)
+        passive:SetTextColor(0.85, 0.70, 0.20)
         passive:Hide()
         container.passive = passive
 
         local racial = container:CreateFontString(nil, "OVERLAY")
-        racial:SetFont("Fonts\\FRIZQT__.TTF", 9)
-        racial:SetText("种族技能")
-        racial:SetTextColor(0.25, 0.12, 0)
+        racial:SetFont("Fonts\\FRIZQT__.TTF", 8)
+        racial:SetText(L.RACIAL)
+        racial:SetTextColor(0.85, 0.70, 0.20)
         racial:Hide()
         container.racial = racial
 
         local rank = container:CreateFontString(nil, "OVERLAY")
-        rank:SetFont("Fonts\\FRIZQT__.TTF", 9)
-        rank:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, 0)
-        rank:SetTextColor(0.25, 0.12, 0)
+        rank:SetFont("Fonts\\FRIZQT__.TTF", 8)
+        rank:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -3)
+        rank:SetTextColor(0.85, 0.70, 0.20)
         rank:Hide()
         container.rank = rank
 
@@ -355,17 +441,21 @@ DFUI:NewMod("SpellBook", 5, function()
             icon:SetHeight(51)
             icon:SetPoint("CENTER", iconBtn, "CENTER", 2, -2)
             border:ClearAllPoints()
-            border:SetPoint("CENTER", iconBtn, "CENTER", -1, -4)
+            border:SetPoint("CENTER", iconBtn, "CENTER", 2, -3)
+            -- pushedFlash 用 SetAllPoints 常驻 iconBtn，只需 Show；不改锚点避免丢尺寸
+            pushedFlash:Show()
         end)
 
         iconBtn:SetScript("OnMouseUp", function()
-            -- 无条件重置，防止翻页/切过滤后 isPassive 改变导致卡住
+            -- 被动不响应：完全无视觉变化（边界态由 UpdateSpellDisplay 重画时归零兜底）
+            if container.isPassive then return end
             icon:ClearAllPoints()
             icon:SetWidth(50)
             icon:SetHeight(50)
             icon:SetPoint("CENTER", iconBtn, "CENTER", 0, 0)
             border:ClearAllPoints()
-            border:SetPoint("CENTER", iconBtn, "CENTER", -3, -2)
+            border:SetPoint("CENTER", iconBtn, "CENTER", 1, 0)
+            pushedFlash:Hide()
         end)
 
         iconBtn:SetScript("OnClick", function()
@@ -373,6 +463,8 @@ DFUI:NewMod("SpellBook", 5, function()
             if container.spellIndex and container.bookType then
                 CastSpell(container.spellIndex, container.bookType)
             end
+            ClearNewSpellMark(container.spellName)
+            if container.newGlow then container.newGlow:Hide() end
         end)
 
         iconBtn:SetScript("OnDragStart", function()
@@ -383,14 +475,19 @@ DFUI:NewMod("SpellBook", 5, function()
         end)
 
         iconBtn:SetScript("OnEnter", function()
+            highlight:Show()
             if container.spellIndex and container.bookType then
                 GameTooltip:SetOwner(iconBtn, "ANCHOR_RIGHT")
                 GameTooltip:SetSpell(container.spellIndex, container.bookType)
                 GameTooltip:Show()
             end
+            -- "查看即清"：鼠标悬停查看 tooltip 视为已知，下次打开不再高亮
+            ClearNewSpellMark(container.spellName)
+            if container.newGlow then container.newGlow:Hide() end
         end)
 
         iconBtn:SetScript("OnLeave", function()
+            highlight:Hide()
             GameTooltip:Hide()
         end)
 
@@ -404,15 +501,14 @@ DFUI:NewMod("SpellBook", 5, function()
         local btn = spellbook:CreateSpellButton(spellbook)
         local row = math.floor((i - 1) / 2)
         local col = math.mod(i - 1, 2)
-        -- col 0 at x=115, col 1 at x=335（COLUMN_SPACING=220）；首行 y=-75
+        -- 首格 TOPLEFT(115, -75)，COLUMN_SPACING=225 / ROW_SPACING=72 容纳 60 高容器
         btn:SetPoint("TOPLEFT", spellbook, "TOPLEFT", 115 + col * COLUMN_SPACING, -75 - row * ROW_SPACING)
         table.insert(spellbook.spellButtons, btn)
     end
 
     -- 8. 翻页系统
-    local pageText = spellbook:CreateFontString(nil, "OVERLAY")
-    pageText:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
-    pageText:SetTextColor(1, 0.82, 0)
+    local pageText = spellbook:CreateFontString(nil, "OVERLAY", "GameFontBlack")
+    pageText:SetTextColor(0.25, 0.12, 0)
     pageText:SetJustifyH("RIGHT")
     pageText:SetPoint("BOTTOMRIGHT", spellbook, "BOTTOMRIGHT", -110, 38)  -- retail 精确
     spellbook.pageText = pageText
@@ -420,6 +516,11 @@ DFUI:NewMod("SpellBook", 5, function()
     local prevBtn, nextBtn
 
     function spellbook:UpdateSpellDisplay()
+        -- lazy 建立 knownSpells，确保首次打开法术书前数据存在
+        if not knownSpells then
+            knownSpells = BuildKnownSpellSet()
+            DFUI:SetTempDB("SpellBook", "knownSpells", knownSpells)
+        end
         spellbook:CollectSpells(spellbook.selectedTabIndex, spellbook.bookType)
 
         local filteredSpells = {}
@@ -456,13 +557,44 @@ DFUI:NewMod("SpellBook", 5, function()
         for i, btn in ipairs(spellbook.spellButtons) do
             local spell = filteredSpells[startIndex + i - 1]
             if spell then
+                -- 重画前归零 icon/border 位置，兜底"按住时翻页/切过滤"的卡位
+                btn.icon:ClearAllPoints()
+                btn.icon:SetWidth(50)
+                btn.icon:SetHeight(50)
+                btn.icon:SetPoint("CENTER", btn.iconBtn, "CENTER", 0, 0)
+                btn.border:ClearAllPoints()
+                btn.border:SetPoint("CENTER", btn.iconBtn, "CENTER", 1, 0)
+                btn.pushedFlash:Hide()
+                btn.highlight:Hide()
+
                 if spell.texture then btn.icon:SetTexture(spell.texture) end
                 btn.name:SetText(spell.name or "")
                 btn.spellIndex = spell.index
                 btn.bookType = spellbook.bookType
+                btn.spellName = spell.name
+
+                -- 新学法术高亮：仅玩家法术（非宠物）按 name 比对 newSpells 集合
+                if btn.newGlow then
+                    if spellbook.bookType ~= BOOKTYPE_PET and spell.name and newSpells[spell.name] then
+                        btn.newGlow:Show()
+                    else
+                        btn.newGlow:Hide()
+                    end
+                end
+
+                -- 键位绑定提示（仅玩家法术，宠物动作另有 PetActionBar 不在反查范围）
+                if btn.bindKey then
+                    local k = spellbook.bookType ~= BOOKTYPE_PET and spell.name and spellbook.actionBindMap[spell.name]
+                    if k then
+                        btn.bindKey:SetText(k)
+                        btn.bindKey:Show()
+                    else
+                        btn.bindKey:Hide()
+                    end
+                end
 
                 local start, duration, enable = GetSpellCooldown(spell.index, spellbook.bookType)
-                if btn.iconBtn.cooldown and start and duration then
+                if btn.iconBtn.cooldown and start and duration and enable ~= nil then
                     CooldownFrame_SetTimer(btn.iconBtn.cooldown, start, duration, enable)
                 end
                 local lastAnchor = btn.name
@@ -470,21 +602,19 @@ DFUI:NewMod("SpellBook", 5, function()
                 if spell.isPassive then
                     btn.passive:Show()
                     lastAnchor = btn.passive
-                    btn.border:SetTexture(TEX .. "panels\\spellbook_passives_border.blp")
                 else
                     btn.passive:Hide()
-                    btn.border:SetTexture(TEX .. "panels\\spellbook_actives_border.blp")
                 end
                 if spell.isRacial then
                     btn.racial:ClearAllPoints()
-                    btn.racial:SetPoint("TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, 0)
+                    btn.racial:SetPoint("TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -3)
                     btn.racial:Show()
                     lastAnchor = btn.racial
                 else
                     btn.racial:Hide()
                 end
                 btn.rank:ClearAllPoints()
-                btn.rank:SetPoint("TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, 0)
+                btn.rank:SetPoint("TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -3)
                 if spell.isPassive then
                     btn.rank:Hide()
                 elseif spell.variant then
@@ -497,19 +627,6 @@ DFUI:NewMod("SpellBook", 5, function()
                     btn.rank:Hide()
                 end
 
-                if spellbook.bookType == BOOKTYPE_SPELL and type(spellbook.selectedTabIndex) == "number" then
-                    local tabName = GetSpellTabInfo(spellbook.selectedTabIndex)
-                    local isGeneralTab = tabName and string.find(tabName, "General")
-                    local dedupeKey = spell.name .. "\001" .. (spell.variant or "")
-                    if filterShowRanks and maxRanks[dedupeKey] and maxRanks[dedupeKey].index == spell.index and not isGeneralTab then
-                        btn.maxRankHighlight:Show()
-                    else
-                        btn.maxRankHighlight:Hide()
-                    end
-                else
-                    btn.maxRankHighlight:Hide()
-                end
-
                 btn:Show()
             else
                 btn.spellIndex = nil
@@ -519,7 +636,7 @@ DFUI:NewMod("SpellBook", 5, function()
             end
         end
 
-        pageText:SetText("第 " .. spellbook.currentPage .. " / " .. spellbook.maxPages .. " 页")
+        pageText:SetText(string.format(L.PAGE_FMT, spellbook.currentPage, spellbook.maxPages))
 
         if spellbook.currentPage <= 1 then
             prevBtn:Disable()
@@ -629,10 +746,16 @@ DFUI:NewMod("SpellBook", 5, function()
             end
         end
 
-        -- 隐藏没有数据的右侧 Tab
+        -- 隐藏没有数据的右侧 Tab，并把可见 Tab 紧凑重锚到 -90/-180/-270 槽位
+        -- spellbook.rightTabs 创建顺序 = MOUNT/COMPANION/TOY，按 ipairs 遍历天然保持优先级
         if spellbook.rightTabs then
+            local Y_SLOTS = { -90, -180, -270 }
+            local visibleSlot = 0
             for i, t in ipairs(spellbook.rightTabs) do
                 if spellbook.rightTabIndices[t.dfuiKind] then
+                    visibleSlot = visibleSlot + 1
+                    t:ClearAllPoints()
+                    t:SetPoint("TOPLEFT", spellbook, "TOPRIGHT", 0, Y_SLOTS[visibleSlot])
                     t:Show()
                 else
                     t:Hide()
@@ -641,7 +764,7 @@ DFUI:NewMod("SpellBook", 5, function()
         end
 
         local hasPetSpells, petToken = HasPetSpells()
-        local petTabText = "宠物"
+        local petTabText = L.PET
         if petToken then
             local petTypeName = getglobal("PET_TYPE_" .. petToken)
             if petTypeName then
@@ -727,7 +850,7 @@ DFUI:NewMod("SpellBook", 5, function()
         end
     end
 
-    prevBtn = CreatePageButton(spellbook, 32, 32, "west")        -- retail 32x32
+    prevBtn = CreatePageButton(spellbook, "prev")
     prevBtn:SetPoint("BOTTOMRIGHT", spellbook, "BOTTOMRIGHT", -66, 26)  -- retail 精确
     prevBtn:SetScript("OnClick", function()
         if spellbook.currentPage > 1 then
@@ -736,7 +859,7 @@ DFUI:NewMod("SpellBook", 5, function()
         end
     end)
 
-    nextBtn = CreatePageButton(spellbook, 32, 32, "east")        -- retail 32x32
+    nextBtn = CreatePageButton(spellbook, "next")
     nextBtn:SetPoint("BOTTOMRIGHT", spellbook, "BOTTOMRIGHT", -31, 26)  -- retail 精确
     nextBtn:SetScript("OnClick", function()
         if spellbook.currentPage < spellbook.maxPages then
@@ -746,7 +869,7 @@ DFUI:NewMod("SpellBook", 5, function()
     end)
 
     -- 复选框创建（OnClick 翻转 boolean → 刷新，不依赖 GetChecked）
-    local showPassiveCheckbox = CreateCheckbox(spellbook, "显示被动技能")
+    local showPassiveCheckbox = CreateCheckbox(spellbook, L.SHOW_PASSIVE)
     showPassiveCheckbox:SetPoint("BOTTOMLEFT", spellbook, "BOTTOMLEFT", 15, 8)
     showPassiveCheckbox:SetFrameLevel(spellbook:GetFrameLevel() + 10)
     showPassiveCheckbox:SetChecked(filterShowPassive)
@@ -759,7 +882,7 @@ DFUI:NewMod("SpellBook", 5, function()
         spellbook:UpdateSpellDisplay()
     end)
 
-    local showRanksCheckbox = CreateCheckbox(spellbook, "显示法术等级")
+    local showRanksCheckbox = CreateCheckbox(spellbook, L.SHOW_RANKS)
     showRanksCheckbox:SetPoint("LEFT", showPassiveCheckbox, "RIGHT", 100, 0)
     showRanksCheckbox:SetFrameLevel(spellbook:GetFrameLevel() + 10)
     showRanksCheckbox:SetChecked(filterShowRanks)
@@ -791,6 +914,7 @@ DFUI:NewMod("SpellBook", 5, function()
     local tabsPath = TEX .. "interface\\uiframetabs.blp"
 
     local function CreateVerticalSideTab(text, kind)
+        if not text or text == "" then return nil end
         local tab = CreateFrame("Button", nil, spellbook)
         local TAB_W, TAB_H = 36, 90
         tab:SetWidth(TAB_W); tab:SetHeight(TAB_H)
@@ -898,9 +1022,9 @@ DFUI:NewMod("SpellBook", 5, function()
     -- 右侧 Tab 创建包 pcall，万一某个 API 在 1.12 不可用，至少法术书本体能加载
     local ok, err = pcall(function()
         local rightTabSpecs = {
-            { text = "坐骑",   kind = "MOUNT",     y = -90  },
-            { text = "小伙伴", kind = "COMPANION", y = -180 },
-            { text = "玩具",   kind = "TOY",       y = -270 },
+            { text = L.MOUNT,     kind = "MOUNT",     y = -90  },
+            { text = L.COMPANION, kind = "COMPANION", y = -180 },
+            { text = L.TOY,       kind = "TOY",       y = -270 },
         }
         for i, spec in ipairs(rightTabSpecs) do
             local tab = CreateVerticalSideTab(spec.text, spec.kind)
@@ -912,7 +1036,7 @@ DFUI:NewMod("SpellBook", 5, function()
                 local tabIdx = spellbook.rightTabIndices and spellbook.rightTabIndices[capturedKind]
                 if not tabIdx then
                     if DEFAULT_CHAT_FRAME then
-                        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[DFUI 法术书]|r 服务端没有 " .. spec.text .. " SpellTab")
+                        DEFAULT_CHAT_FRAME:AddMessage(L.ERR_PREFIX .. string.format(L.ERR_NO_RIGHT_TAB, spec.text))
                     end
                     return
                 end
@@ -931,7 +1055,7 @@ DFUI:NewMod("SpellBook", 5, function()
         end
     end)
     if not ok and DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[DFUI 法术书]|r 右侧 Tab 创建失败：" .. tostring(err))
+        DEFAULT_CHAT_FRAME:AddMessage(L.ERR_PREFIX_RED .. L.ERR_RIGHT_TAB_FAIL .. tostring(err))
     end
 
     spellbook:CreateDynamicTabs()
@@ -943,17 +1067,33 @@ DFUI:NewMod("SpellBook", 5, function()
     spellbook:RegisterEvent("PET_BAR_UPDATE")
     spellbook:RegisterEvent("UNIT_PET")
     spellbook:RegisterEvent("SPELLS_CHANGED")
+    spellbook:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
+    spellbook:RegisterEvent("UPDATE_BINDINGS")
     spellbook:SetScript("OnEvent", function()
         if event == "SPELL_UPDATE_COOLDOWN" then
             for i, btn in ipairs(spellbook.spellButtons) do
                 if btn.spellIndex and btn:IsShown() and btn.bookType then
                     local start, duration, enable = GetSpellCooldown(btn.spellIndex, btn.bookType)
-                    if btn.iconBtn.cooldown then
+                    if btn.iconBtn.cooldown and start and duration and enable ~= nil then
                         CooldownFrame_SetTimer(btn.iconBtn.cooldown, start, duration, enable)
                     end
                 end
             end
         elseif event == "SPELLS_CHANGED" then
+            -- diff 出新学的 spell name 加入 newSpells；首次（knownSpells 仍 nil）只建立基线不闪
+            if not knownSpells then
+                knownSpells = BuildKnownSpellSet()
+            else
+                local currentSet = BuildKnownSpellSet()
+                for name in pairs(currentSet) do
+                    if not knownSpells[name] then
+                        newSpells[name] = true
+                    end
+                end
+                knownSpells = currentSet
+            end
+            DFUI:SetTempDB("SpellBook", "knownSpells", knownSpells)
+            DFUI:SetTempDB("SpellBook", "newSpells", newSpells)
             spellbook:CreateDynamicTabs()
             if spellbook:IsShown() then
                 spellbook:UpdateSpellDisplay()
@@ -965,10 +1105,17 @@ DFUI:NewMod("SpellBook", 5, function()
             if spellbook.bookType == BOOKTYPE_PET and spellbook:IsShown() then
                 spellbook:UpdateSpellDisplay()
             end
+        elseif event == "ACTIONBAR_SLOT_CHANGED" or event == "UPDATE_BINDINGS" then
+            -- 仅在法术书可见时重建键位映射，避免后台无谓 CPU 消耗
+            if spellbook:IsShown() then
+                spellbook:RebuildActionBindMap()
+                spellbook:UpdateSpellDisplay()
+            end
         end
     end)
 
-    -- 11. 覆写全局 ToggleSpellBook
+    -- 11. 覆写全局 ToggleSpellBook（保存原版以便链式覆写兼容/兜底）
+    local origToggleSpellBook = _G.ToggleSpellBook
     _G.ToggleSpellBook = function(bookType)
         if spellbook:IsShown() then
             spellbook:Hide()
