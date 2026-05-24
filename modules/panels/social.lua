@@ -688,12 +688,17 @@ DFUI:NewMod("Social", 5, function()
             -- 在线时记录，离线时查回 → 离线行仍能显示职业色（与 ShaguTweaks 行为一致）
             local friendClassCache = {}
 
+            -- 我们独立跟踪用户实际点选的好友 ID（不依赖 vanilla selectedFriend）
+            -- 根因：vanilla FriendsList_Update 自动设 selectedFriend=1（默认选第一个），
+            -- 导致 row 1 自动锁选中。改用 mySelectedFriendID 我们自己管理。
+            local mySelectedFriendID = nil
+
             -- 用 DFUI.CreateSocialRow 工厂统一创建 row（hover/sel/click 内置）
             local function onFriendLeftClick(row)
                 if not row.friendID then return end
-                FriendsFrame.selectedFriend = row.friendID
+                mySelectedFriendID = row.friendID
+                FriendsFrame.selectedFriend = row.friendID  -- vanilla 同步（底部按钮 enable）
                 FriendsList_Update()
-                -- Bug fix: FriendsFrame_Update 才控制底部按钮 enable（SendMessage/RemoveFriend/GroupInvite）
                 if FriendsFrame_Update then FriendsFrame_Update() end
             end
             local function onFriendRightClick(row)
@@ -828,7 +833,7 @@ DFUI:NewMod("Social", 5, function()
                                 row.zoneText:SetText(FRIENDS_LIST_OFFLINE or "<离线>")
                                 row.zoneText:SetTextColor(0.5, 0.5, 0.5, 0.5)
                             end
-                            row:SetSelected(FriendsFrame.selectedFriend == idx)
+                            row:SetSelected(mySelectedFriendID == idx)
                             row:Show()
                         else
                             row.friendID = nil
@@ -905,8 +910,12 @@ DFUI:NewMod("Social", 5, function()
             end
             for i = 1, WHO_ROWS do hideVanillaWhoBtn(i) end
 
+            -- 独立跟踪用户实际点选的 Who 索引（避免 vanilla WhoList_Update 自动设 selectedWho）
+            local mySelectedWhoIdx = nil
+
             local function onWhoLeftClick(row)
                 if not row.whoIdx then return end
+                mySelectedWhoIdx = row.whoIdx
                 WhoFrame.selectedWho = row.whoIdx
                 WhoFrame.selectedName = row.name
                 if WhoList_Update then WhoList_Update() end
@@ -1018,7 +1027,7 @@ DFUI:NewMod("Social", 5, function()
                             row.class:SetTextColor(cr, cg, cb)
                             row.zoneText:SetText(zone or "")
                             row.zoneText:SetTextColor(1, 1, 1)
-                            row:SetSelected(WhoFrame.selectedWho == idx)
+                            row:SetSelected(mySelectedWhoIdx == idx)
                             row:Show()
                         else
                             row.whoIdx = nil; row:Hide()
@@ -1107,11 +1116,14 @@ DFUI:NewMod("Social", 5, function()
             end
             for i = 1, GUILD_ROWS do hideVanillaGuildBtn(i) end
 
+            -- 独立跟踪用户实际点选的公会成员索引（避免 vanilla GuildStatus_Update 自动设 selection）
+            local mySelectedGuildIdx = nil
+
             local function onGuildLeftClick(row)
                 if not row.guildIdx then return end
+                mySelectedGuildIdx = row.guildIdx
                 if SetGuildRosterSelection then SetGuildRosterSelection(row.guildIdx) end
                 if GuildStatus_Update then GuildStatus_Update() end
-                -- Bug fix: GuildFrame_Update 控制底部按钮 enable（邀请/离会/会长 transfer 等）
                 if GuildFrame_Update then GuildFrame_Update() end
             end
             local function onGuildRightClick(row)
@@ -1222,7 +1234,6 @@ DFUI:NewMod("Social", 5, function()
                 if not layoutGuildRows() then return end
                 local off = (FauxScrollFrame_GetOffset and FauxScrollFrame_GetOffset(sfGuild)) or 0
                 local numTotal = (GetNumGuildMembers and GetNumGuildMembers()) or 0
-                local selectedIdx = GetGuildRosterSelection and GetGuildRosterSelection() or 0
                 for i = 1, visibleRowsGuild do
                     local row = _G["DFUI_GuildRow"..i]
                     local idx = off + i
@@ -1260,7 +1271,7 @@ DFUI:NewMod("Social", 5, function()
                                 row.class:SetText(class or ""); row.class:SetTextColor(cr, cg, cb, 0.5)
                                 row.zoneText:SetText(zone or ""); row.zoneText:SetTextColor(cr, cg, cb, 0.5)
                             end
-                            row:SetSelected(selectedIdx == idx)
+                            row:SetSelected(mySelectedGuildIdx == idx)
                             row:Show()
                         else
                             row.guildIdx = nil; row:Hide()
