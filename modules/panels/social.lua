@@ -732,13 +732,11 @@ DFUI:NewMod("Social", 5, function()
                     name       = "DFUI_FriendRow"..i,
                     frameLevel = sf:GetFrameLevel() + 10,
                     columns = {
-                        -- 合并 status 到 zoneText 单字串（vanilla FRIENDS_LIST_TEMPLATE 同款设计）
-                        -- 消除双 RIGHT 链错位风险，4 列：dot + title + lc + zoneText
-                        { name="dot",      type="texture",    width=9, height=9,
-                          anchor="LEFT", offsetX=4 },
+                        -- 去掉状态点（dot），title.offsetX=18 保持原 title 起始 X
+                        -- （之前 dot 占 4+9=13，title offsetX=5 → 18）
                         { name="title",    type="fontstring", width=120,
                           font="GameFontNormalSmall", color="main",
-                          anchor="LEFT", offsetX=5 },
+                          anchor="LEFT", offsetX=18 },
                         { name="lc",       type="fontstring", width=70,
                           font="GameFontNormalSmall", color="next_",
                           anchor="LEFT", offsetX=4 },
@@ -807,17 +805,11 @@ DFUI:NewMod("Social", 5, function()
                             row.title:SetText(name)
                             row.lc:SetText(lcText)
                             if connected then
-                                local dotKey
-                                if status == CHAT_FLAG_AFK then dotKey = "afk"
-                                elseif status == CHAT_FLAG_DND then dotKey = "dnd"
-                                else dotKey = "online" end
-                                row.dot:SetVertexColor(STATUS_DOT[dotKey][1], STATUS_DOT[dotKey][2], STATUS_DOT[dotKey][3])
                                 row.title:SetTextColor(cr, cg, cb)
                                 local lvl = tonumber(level)
                                 local lc = lvl and GetDifficultyColor and GetDifficultyColor(lvl) or nil
                                 if lc then row.lc:SetTextColor(lc.r, lc.g, lc.b) else row.lc:SetTextColor(1, 1, 1) end
                                 -- zone + status 拼字串（vanilla FRIENDS_LIST_TEMPLATE 同款）
-                                -- "凄凉之地"（无 AFK） / "凄凉之地 |cffffd000<AFK>|r"
                                 local zoneStr = zone or ""
                                 if status and status ~= "" then
                                     zoneStr = zoneStr .. " |cffffd000" .. status .. "|r"
@@ -826,7 +818,6 @@ DFUI:NewMod("Social", 5, function()
                                 row.zoneText:SetTextColor(1, 1, 1)
                             else
                                 -- 离线：职业色 + alpha 0.5（与 ShaguTweaks 聊天插件风格一致）
-                                row.dot:SetVertexColor(STATUS_DOT.offline[1], STATUS_DOT.offline[2], STATUS_DOT.offline[3])
                                 row.title:SetTextColor(cr, cg, cb, 0.5)
                                 row.lc:SetTextColor(cr, cg, cb, 0.5)
                                 -- 离线 zoneText 显示 "<离线>" 标签（灰 + alpha，不染职业色）
@@ -1125,6 +1116,9 @@ DFUI:NewMod("Social", 5, function()
                 if SetGuildRosterSelection then SetGuildRosterSelection(row.guildIdx) end
                 if GuildStatus_Update then GuildStatus_Update() end
                 if GuildFrame_Update then GuildFrame_Update() end
+                -- vanilla GuildFrameButton OnClick 内会调 GuildMemberDetailFrame:Show()
+                -- 我们 hide vanilla button 后这条路径丢失，手动补上（vanilla 自带 OnShow 填充数据）
+                if GuildMemberDetailFrame then GuildMemberDetailFrame:Show() end
             end
             local function onGuildRightClick(row)
                 if not row.guildIdx then return end
@@ -1156,11 +1150,10 @@ DFUI:NewMod("Social", 5, function()
                     name       = "DFUI_GuildRow"..i,
                     frameLevel = sfGuild:GetFrameLevel() + 10,
                     columns = {
-                        { name="dot",      type="texture",    width=9, height=9,
-                          anchor="LEFT", offsetX=4 },
+                        -- 去掉状态点（dot），title.offsetX=18 保持 title 起始 X 不变
                         { name="title",    type="fontstring", width=90,
                           font="GameFontNormalSmall", color="main",
-                          anchor="LEFT", offsetX=5 },
+                          anchor="LEFT", offsetX=18 },
                         { name="lvl",      type="fontstring", width=24,
                           font="GameFontNormalSmall", color="next_",
                           anchor="LEFT", offsetX=4 },
@@ -1244,14 +1237,6 @@ DFUI:NewMod("Social", 5, function()
                             row.name = name
                             local cr, cg, cb = getGuildClassColor(class)
                             if online then
-                                -- 在线状态点：根据 status 标记（AFK/DND）
-                                if status == CHAT_FLAG_AFK then
-                                    row.dot:SetVertexColor(1.00, 0.82, 0.00)
-                                elseif status == CHAT_FLAG_DND then
-                                    row.dot:SetVertexColor(0.85, 0.20, 0.20)
-                                else
-                                    row.dot:SetVertexColor(0.20, 0.85, 0.20)
-                                end
                                 row.title:SetText(name)
                                 row.title:SetTextColor(cr, cg, cb)
                                 row.lvl:SetText(level or "")
@@ -1265,7 +1250,6 @@ DFUI:NewMod("Social", 5, function()
                                 row.zoneText:SetTextColor(1, 1, 1)
                             else
                                 -- 离线：职业色 + alpha 0.5（与 ShaguTweaks 聊天/Guild 染色风格一致）
-                                row.dot:SetVertexColor(0.45, 0.45, 0.45)
                                 row.title:SetText(name); row.title:SetTextColor(cr, cg, cb, 0.5)
                                 row.lvl:SetText(level or ""); row.lvl:SetTextColor(cr, cg, cb, 0.5)
                                 row.class:SetText(class or ""); row.class:SetTextColor(cr, cg, cb, 0.5)
