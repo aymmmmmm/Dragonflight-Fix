@@ -1,10 +1,25 @@
 local error_counts = {}
 local max_errors = 2
 
+-- 屏蔽来源：上游/客户端内置 bug 无法修复时，完全静默（聊天 + 缓冲都跳过）
+local SOURCE_BLOCKLIST = {
+    ['Turtle_GuildBankUI'] = true,
+}
+
 local function GetAddonName(msg)
+    -- 标准插件路径：Interface\AddOns\X\...
     local start = string.find(msg, 'AddOns\\')
     if start then
         local path = string.sub(msg, start + 7)
+        local end_pos = string.find(path, '\\')
+        if end_pos then
+            return string.sub(path, 1, end_pos - 1)
+        end
+    end
+    -- Turtle 客户端把伪插件塞在 Interface\FrameXML\X\X.lua 里，识别一下子目录
+    start = string.find(msg, 'FrameXML\\')
+    if start then
+        local path = string.sub(msg, start + 9)
         local end_pos = string.find(path, '\\')
         if end_pos then
             return string.sub(path, 1, end_pos - 1)
@@ -174,6 +189,8 @@ end
 
 local function ErrorHandler(msg)
     local addon = GetAddonName(msg)
+
+    if SOURCE_BLOCKLIST[addon] then return end
 
     if not error_counts[msg] then
         error_counts[msg] = 1

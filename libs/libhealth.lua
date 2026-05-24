@@ -1,7 +1,8 @@
 -- ═══════════════════════════════════════════════════════════════
 -- libhealth - 怪物血量估算库 (MobHealth3 风格,独立自管)
 -- 算法:双轴累加(accDmg + accPerc),precision 阈值收敛误差
--- 数据源:UNIT_COMBAT.arg4 (精确数值) + CHAT_MSG_SPELL_* (兜底)
+-- 数据源:仅 UNIT_COMBAT.arg4 单轴,与 MobHealth3/ShaguTweaks 算法对齐
+-- 写入时机:首次累计达到 precision 时写一次(per-session 锁定 + 跨 session sticky,永不覆盖)
 -- 独立 SavedVariables: DFUI_HealthDB
 -- ═══════════════════════════════════════════════════════════════
 
@@ -11,7 +12,7 @@ DFUI.libhealth = DFUI.libhealth or {}
 local lib = DFUI.libhealth
 lib.precision = 10   -- 累计百分比降达到该值才写入估算
 lib.reqperc   = 10   -- 读取时要求累计百分比降至少这么大
-lib.reqhit    = 2    -- 读取时要求采样次数至少这么多
+lib.reqhit    = 1    -- 读取时要求采样次数(v4:session 内仅写一次,降为 1 让首次估算就可信)
 
 -- 内存数据库(运行时操作的对象)
 local mobdb = {}
@@ -24,6 +25,7 @@ local recentDmg    = 0     -- UNIT_HEALTH 之间累加的伤害
 local accDmg       = 0     -- 自切目标累计伤害(经过验证后才参与计算)
 local accPerc      = 0     -- 自切目标累计百分比降
 local locked       = {}    -- Beast Lore 已知真值的目标,不再估算
+local wroteSession = false -- session 内是否已写入 entry(实现"一锤定音",避免跳变)
 
 -- ═══════════════════════════════════════════════════════════════
 -- 目标合法性检查
@@ -83,12 +85,13 @@ local function PerformMigration()
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- 切换目标:flush 当前累计,重置状态
+-- 切换目标:重置累计状态
 -- ═══════════════════════════════════════════════════════════════
 local function OnTargetChanged()
     target = nil
     recentDmg, accDmg, accPerc = 0, 0, 0
     startPerc, lastPerc = 100, 100
+    wroteSession = false   -- 切目标重置锁,新 session 可以重新估算一次
 
     if not IsValidEstimateTarget("target") then return end
     local rawMax = UnitHealthMax("target")
@@ -122,21 +125,8 @@ local function AddDamage(dmg)
     end
 end
 
--- 启发式:从战斗日志文本提取伤害数字(兜底,仅 UNIT_COMBAT 没触发的法术 dot)
-local function ExtractDamage(msg)
-    if not msg then return 0 end
-    local damage = 0
-    for n in string.gmatch(msg, "(%d+)") do
-        local num = tonumber(n)
-        if num and num > damage and num < 1000000 then
-            damage = num
-        end
-    end
-    return damage
-end
-
 -- ═══════════════════════════════════════════════════════════════
--- UNIT_HEALTH:核心计算时机
+-- UNIT_HEALTH:核心计算时机(累计达到 precision 后实时写入 entry)
 -- ═══════════════════════════════════════════════════════════════
 local function OnTargetHealth()
     if not target or locked[target] then return end
@@ -160,13 +150,17 @@ local function OnTargetHealth()
         recentDmg = 0
         lastPerc = cur
 
-        -- 达到 precision → 写入估算
-        if accPerc >= lib.precision then
-            mobdb[target] = mobdb[target] or {}
-            local entry = mobdb[target]
-            entry[1] = math.floor(accDmg / accPerc * 100 + 0.5)
-            entry[2] = accPerc
-            entry[3] = (entry[3] or 0) + 1
+        -- 首次累计达到 precision → 写入一次后锁定 session,避免运行中 maxHP 跳变
+        -- v4: entry 永久 sticky——已存在则不覆盖,实现同名同级"一锤定音"
+        if accPerc >= lib.precision and not wroteSession then
+            wroteSession = true   -- 锁定 session(无论是否落地)
+            if not (mobdb[target] and mobdb[target][1]) then
+                mobdb[target] = {
+                    math.floor(accDmg / accPerc * 100 + 0.5),
+                    accPerc,
+                    1,
+                }
+            end
         end
     else
         -- 有 diff 但没记到伤害(可能被吸收/格挡漏算),只推进 lastPerc
@@ -182,11 +176,6 @@ frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("PLAYER_TARGET_CHANGED")
 frame:RegisterEvent("UNIT_COMBAT")
 frame:RegisterEvent("UNIT_HEALTH")
--- 法术/远程兜底(UNIT_COMBAT 在 1.12 vanilla 偶有遗漏的 dot)
-frame:RegisterEvent("CHAT_MSG_SPELL_SELF_DAMAGE")
-frame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_DAMAGE")
-frame:RegisterEvent("CHAT_MSG_SPELL_PET_DAMAGE")
-frame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_PET_DAMAGE")
 
 frame:SetScript("OnEvent", function()
     if event == "PLAYER_ENTERING_WORLD" then
@@ -211,13 +200,6 @@ frame:SetScript("OnEvent", function()
     if event == "UNIT_HEALTH" and arg1 == "target" then
         OnTargetHealth()
         return
-    end
-
-    -- 战斗日志兜底:仅当 target 已设定且数据合理时累加
-    if target and string.sub(event, 1, 14) == "CHAT_MSG_SPELL" then
-        local d = ExtractDamage(arg1)
-        -- 加严过滤:伤害必须 > 5 避免抓到等级/技能 ID 等小数字
-        if d > 5 then AddDamage(d) end
     end
 end)
 

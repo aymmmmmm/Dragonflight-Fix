@@ -755,3 +755,169 @@ function GetUnitRealHealth(unit)
     -- 4. max≠100 且≠0:别的插件接管了 API 返回真值,直接信任
     return rawCur, rawMax, "real"
 end
+
+
+-- ============================================================
+-- DFUI.SocialRowColors — DF UI 设计规范配色（与 plans/9-10 一致）
+-- ============================================================
+-- 列表 row 字体配色（与 vanilla FriendsList + 项目其他面板对齐）
+-- 注意：之前"主金/次金/暗金"是 DF 面板背景羊皮纸配色，不是列表字体规范
+-- vanilla FriendsList 字体：name = 白/职业色，info = 灰；与项目内其他 panel 默认色一致
+DFUI.SocialRowColors = {
+    main    = {1.00, 1.00, 1.00},   -- 白色（name 在线时被职业色覆盖，离线 fallback 白）
+    next_   = {0.60, 0.60, 0.60},   -- 灰（FRIENDS_GRAY_COLOR 风格：info/zone/lc 次要文字）
+    dim     = {0.50, 0.50, 0.50},   -- 离线灰
+    online  = {0.20, 0.85, 0.20},   -- status 在线绿
+    offline = {0.45, 0.45, 0.45},   -- status 离线灰
+    afk     = {1.00, 0.82, 0.00},   -- status AFK 黄
+    dnd     = {0.85, 0.20, 0.20},   -- status DND 红
+}
+
+-- ============================================================
+-- DFUI.CreateSocialRow(parent, opts) — DF retail 风格列表 row 工厂
+-- ============================================================
+-- 用途：Friend / Who / Guild 列表共用的单行 row 工厂
+-- 设计：column-driven，左右双向链锚，hover/selected 内置
+--
+-- opts = {
+--     name        = "DFUI_FriendRow1",       -- 可选全局名
+--     frameLevel  = sf:GetFrameLevel() + 5,  -- 可选
+--     columns = {
+--         { name="dot",    type="texture",    width=9,  height=9,
+--           anchor="LEFT", offsetX=4,
+--           texture="Interface\\Buttons\\WHITE8X8" },
+--         { name="title",  type="fontstring", width=100,
+--           font="GameFontNormal",      color="main",
+--           anchor="LEFT", offsetX=5 },
+--         { name="lc",     type="fontstring", width=80,
+--           font="GameFontNormalSmall", color="next_",
+--           anchor="LEFT", offsetX=4 },
+--         { name="status", type="fontstring", width=40,
+--           font="GameFontNormalSmall", color="next_",
+--           anchor="RIGHT", offsetX=-6 },
+--         { name="zone",   type="fontstring", width=80,
+--           font="GameFontNormalSmall", color="next_",
+--           anchor="RIGHT", offsetX=-8 },
+--     },
+--     onLeftClick  = function(row) ... end,
+--     onRightClick = function(row) ... end,
+-- }
+--
+-- 返回：row Frame，含 row.dot / row.title / row.lc / ... 子元素
+-- row:SetSelected(true/false) 切换选中视觉
+-- ============================================================
+function DFUI.CreateSocialRow(parent, opts)
+    opts = opts or {}
+    local row = CreateFrame("Button", opts.name, parent)
+    row:EnableMouse(true)
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    if opts.frameLevel then row:SetFrameLevel(opts.frameLevel) end
+
+    -- 滚轮事件：直接改 sf 的 VerticalScroll + 调 opts.onWheel 手动触发列表 *_Update
+    -- 不调 vanilla OnMouseWheel handler（vanilla 1.12 ScrollFrameTemplate_OnMouseWheel 访问
+    -- self.scrollBar 但 FauxScrollFrame 没设此字段 → nil 报错）
+    -- 不依赖 sb:SetValue → OnValueChanged → OnVerticalScroll → updateFunction 链路（vanilla
+    -- 中间 handler 可能 broken），直接 SetVerticalScroll + 手动调对应 *_Update
+    row:EnableMouseWheel(true)
+    row:SetScript("OnMouseWheel", function()
+        local p = row:GetParent()
+        if not p or not p.SetVerticalScroll then return end
+        local cur = p:GetVerticalScroll() or 0
+        local step = 18  -- 一行高度（与 FIXED_ROW_H 一致）
+        local newScroll = cur - arg1 * step  -- arg1=1 上滚（scroll 减）；arg1=-1 下滚（加）
+        if newScroll < 0 then newScroll = 0 end
+        -- 限制 max：从 ScrollBar 拿 maxValues
+        local pname = p.GetName and p:GetName()
+        local sb = pname and getglobal(pname.."ScrollBar")
+        if sb and sb.GetMinMaxValues then
+            local _, maxV = sb:GetMinMaxValues()
+            if maxV and newScroll > maxV then newScroll = maxV end
+        end
+        p:SetVerticalScroll(newScroll)
+        -- 同步 scrollbar value（让 scrollbar 视觉跟随，虽然我们 nuke 了视觉但其他逻辑可能依赖）
+        if sb and sb.SetValue then sb:SetValue(newScroll) end
+        -- 调用 opts.onWheel 手动触发对应列表 *_Update（绕开 vanilla broken OnVerticalScroll）
+        if opts.onWheel then opts.onWheel() end
+    end)
+
+    -- hover highlight（金色 ADD）
+    local hl = row:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+    hl:SetAllPoints(row)
+    hl:SetAlpha(0.35)
+    hl:SetBlendMode("ADD")
+
+    -- selected（蓝半透明 ADD，初始 Hide）
+    local sel = row:CreateTexture(nil, "BACKGROUND")
+    sel:SetTexture("Interface\\Buttons\\WHITE8X8")
+    sel:SetAllPoints(row)
+    sel:SetVertexColor(0.30, 0.50, 1.00, 0.30)
+    sel:SetBlendMode("ADD")
+    sel:Hide()
+    row.sel = sel
+
+    -- 创建列：LEFT 链从 row.LEFT 起，RIGHT 链从 row.RIGHT 起反向
+    local prevLeft, prevRight = nil, nil
+    local cols = opts.columns or {}
+    for i = 1, table.getn(cols) do
+        local col = cols[i]
+        local element
+        if col.type == "texture" then
+            element = row:CreateTexture(nil, col.drawLayer or "OVERLAY")
+            element:SetTexture(col.texture or "Interface\\Buttons\\WHITE8X8")
+            if col.width  then element:SetWidth(col.width)  end
+            if col.height then element:SetHeight(col.height) end
+        else
+            element = row:CreateFontString(nil, "OVERLAY", col.font or "GameFontNormalSmall")
+            if col.width then element:SetWidth(col.width) end
+            element:SetJustifyH(col.justifyH or (col.anchor == "RIGHT" and "RIGHT" or "LEFT"))
+            if element.SetNonSpaceWrap then element:SetNonSpaceWrap(false) end
+            local cname = col.color or "main"
+            local c = DFUI.SocialRowColors[cname] or DFUI.SocialRowColors.main
+            element:SetTextColor(c[1], c[2], c[3])
+        end
+
+        local anchor = col.anchor or "LEFT"
+        if anchor == "LEFT" then
+            if prevLeft then
+                element:SetPoint("LEFT", prevLeft, "RIGHT", col.offsetX or 4, col.offsetY or 0)
+            else
+                element:SetPoint("LEFT", row, "LEFT", col.offsetX or 4, col.offsetY or 0)
+            end
+            prevLeft = element
+        else  -- RIGHT
+            if prevRight then
+                element:SetPoint("RIGHT", prevRight, "LEFT", col.offsetX or -4, col.offsetY or 0)
+            else
+                element:SetPoint("RIGHT", row, "RIGHT", col.offsetX or -6, col.offsetY or 0)
+            end
+            prevRight = element
+        end
+        row[col.name] = element
+    end
+
+    -- OnClick 分发左/右键 + 自实现双击检测（vanilla 1.12 Button OnDoubleClick 不一定触发，
+    -- 用 GetTime 记录上次 LeftButton 时间，<0.4s 内第二次视为双击）
+    local lastLeftClick = 0
+    row:SetScript("OnClick", function()
+        if arg1 == "RightButton" then
+            if opts.onRightClick then opts.onRightClick(row) end
+        else
+            local now = GetTime and GetTime() or 0
+            local dt = now - lastLeftClick
+            lastLeftClick = now
+            if dt > 0 and dt < 0.4 and opts.onDoubleClick then
+                opts.onDoubleClick(row)
+                lastLeftClick = 0  -- 重置避免三击连发
+            else
+                if opts.onLeftClick then opts.onLeftClick(row) end
+            end
+        end
+    end)
+
+    function row:SetSelected(on)
+        if on then self.sel:Show() else self.sel:Hide() end
+    end
+
+    return row
+end
