@@ -201,6 +201,20 @@ DFUI:NewMod("SpellBook", 5, function()
     local knownSpells = DFUI:GetTempDB("SpellBook", "knownSpells")
     local newSpells = DFUI:GetTempDB("SpellBook", "newSpells") or {}
 
+    -- 仅在法术 API 就绪（扫得到法术）时建立基线；空表/nil 都视为"未建立"。
+    -- 关键：ADDON_LOADED 阶段 API 未就绪会建出空集基线，导致随后 SPELLS_CHANGED 把全部法术
+    -- 误判为"新学"全部点亮。这里用 next() 判有效，未就绪直接 return 留待下次重试；
+    -- 首次成功建立时顺带清空 newSpells（此前累积的都是误判残留，不可信）。
+    local function EnsureBaseline()
+        if knownSpells and next(knownSpells) then return end
+        local set = BuildKnownSpellSet()
+        if not set or not next(set) then return end
+        knownSpells = set
+        newSpells = {}
+        DFUI:SetTempDB("SpellBook", "knownSpells", knownSpells)
+        DFUI:SetTempDB("SpellBook", "newSpells", newSpells)
+    end
+
     local function ClearNewSpellMark(spellName)
         if spellName and newSpells[spellName] then
             newSpells[spellName] = nil
@@ -374,12 +388,20 @@ DFUI:NewMod("SpellBook", 5, function()
         pushedFlash:Hide()
         container.pushedFlash = pushedFlash
 
-        -- 新学法术金色 glow（同款 vanilla 1.12 MPQ 原生 ButtonHilight-Square，tint 成金色）
-        local newGlow = iconBtn:CreateTexture(nil, "OVERLAY")
-        newGlow:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
-        newGlow:SetAllPoints(iconBtn)
-        newGlow:SetBlendMode("ADD")
-        newGlow:SetVertexColor(1, 0.95, 0.3)
+        -- 新学法术金色 glow：frame 容器贴齐图标边缘，内叠多层 ButtonHilight-Square 染金增亮
+        -- （叠层数控制亮度，frame 包让 Show/Hide 联动且层级在最上）
+        local newGlow = CreateFrame("Frame", nil, iconBtn)
+        newGlow:SetPoint("TOPLEFT", iconBtn, "TOPLEFT", -2, 2)          -- 四周外扩 2px，光圈比图标大一圈
+        newGlow:SetPoint("BOTTOMRIGHT", iconBtn, "BOTTOMRIGHT", 2, -2)
+        newGlow:SetFrameLevel(iconBtn:GetFrameLevel() + 5)
+        for _ = 1, 3 do
+            local g = newGlow:CreateTexture(nil, "OVERLAY")
+            g:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+            g:SetAllPoints(newGlow)
+            g:SetBlendMode("ADD")
+            g:SetVertexColor(1, 0.82, 0)  -- 去蓝染金，与 hover 蓝白拉开区分
+            g:SetAlpha(0.8)               -- 总亮度 ≈ 2.4 层，落在 2 层(暗)与 3 层(亮)之间；调此值控亮度
+        end
         newGlow:Hide()
         container.newGlow = newGlow
 
@@ -516,11 +538,8 @@ DFUI:NewMod("SpellBook", 5, function()
     local prevBtn, nextBtn
 
     function spellbook:UpdateSpellDisplay()
-        -- lazy 建立 knownSpells，确保首次打开法术书前数据存在
-        if not knownSpells then
-            knownSpells = BuildKnownSpellSet()
-            DFUI:SetTempDB("SpellBook", "knownSpells", knownSpells)
-        end
+        -- 建立 knownSpells 基线（仅 API 就绪时生效，未就绪留待 SPELLS_CHANGED 重试）
+        EnsureBaseline()
         spellbook:CollectSpells(spellbook.selectedTabIndex, spellbook.bookType)
 
         local filteredSpells = {}
@@ -1080,20 +1099,22 @@ DFUI:NewMod("SpellBook", 5, function()
                 end
             end
         elseif event == "SPELLS_CHANGED" then
-            -- diff 出新学的 spell name 加入 newSpells；首次（knownSpells 仍 nil）只建立基线不闪
-            if not knownSpells then
-                knownSpells = BuildKnownSpellSet()
+            -- diff 出新学的 spell name 加入 newSpells；首次（基线尚未有效建立）只建立基线不闪
+            if not (knownSpells and next(knownSpells)) then
+                EnsureBaseline()
             else
                 local currentSet = BuildKnownSpellSet()
-                for name in pairs(currentSet) do
-                    if not knownSpells[name] then
-                        newSpells[name] = true
+                if next(currentSet) then  -- 仅 API 就绪时 diff，避免空集把全部误判为新学
+                    for name in pairs(currentSet) do
+                        if not knownSpells[name] then
+                            newSpells[name] = true
+                        end
                     end
+                    knownSpells = currentSet
+                    DFUI:SetTempDB("SpellBook", "knownSpells", knownSpells)
+                    DFUI:SetTempDB("SpellBook", "newSpells", newSpells)
                 end
-                knownSpells = currentSet
             end
-            DFUI:SetTempDB("SpellBook", "knownSpells", knownSpells)
-            DFUI:SetTempDB("SpellBook", "newSpells", newSpells)
             spellbook:CreateDynamicTabs()
             if spellbook:IsShown() then
                 spellbook:UpdateSpellDisplay()
