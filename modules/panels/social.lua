@@ -351,9 +351,18 @@ DFUI:NewMod("Social", 5, function()
     -- SF.h 动态 = inset.h - 8（顶 4 + 底 4 padding），10 行 × (SF.h/10) 铺满 SF
     -- 提到 18（>vanilla FRIENDS_TO_DISPLAY=10）让 visibleRows 上限 ≥ 15，填满 inset
     -- vanilla GetFriendInfo(i) 接受 i > 10（FRIENDS_TO_DISPLAY 仅控制 vanilla button 数量）
-    local MAX_ROWS = 18
+    local MAX_ROWS = 18       -- 屏蔽列表 fitButtons 拉伸填充用的按钮数（除数，勿与好友行混用）
+    local FRIEND_ROWS = 24    -- 好友自建行 frame 数：建足量，实际显示由 floor(sf高/18) 决定，自动填满 inset
+    -- 1.12 GetHeight 对"双锚无 SetHeight"的 frame 返回脏值（实测 inset 真高 267 却报 221，差 46px）
+    -- 必须用 GetTop-GetBottom 取真实高度（reference-wow112-frame-size-pitfalls）
+    local function insetTrueH(f)
+        if not f then return 0 end
+        local t, b = f:GetTop(), f:GetBottom()
+        if t and b then return t - b end
+        return f:GetHeight() or 0
+    end
     local function getSFHeight()
-        local ih = friendsInset and friendsInset:GetHeight() or 0
+        local ih = insetTrueH(friendsInset)
         if ih > 8 then return ih - 8 end
         return 200
     end
@@ -384,14 +393,15 @@ DFUI:NewMod("Social", 5, function()
             WhoListScrollFrame:ClearAllPoints()
             WhoListScrollFrame:SetPoint("TOPLEFT",  whoInset, "TOPLEFT",  6,  -4)
             WhoListScrollFrame:SetPoint("TOPRIGHT", whoInset, "TOPRIGHT", -24, -4)
-            local whH = (whoInset:GetHeight() or 0) - 8
+            local whH = insetTrueH(whoInset) - 8
             if whH > 0 then WhoListScrollFrame:SetHeight(whH) end
         end
         if GuildListScrollFrame and guildInset then
             GuildListScrollFrame:ClearAllPoints()
             GuildListScrollFrame:SetPoint("TOPLEFT",  guildInset, "TOPLEFT",  6,  -4)
             GuildListScrollFrame:SetPoint("TOPRIGHT", guildInset, "TOPRIGHT", -24, -4)
-            local ghH = (guildInset:GetHeight() or 0) - 8
+            -- 底部再少留一行(18px)给玩家状态按钮（GuildFramePlayerStatusDropDown），避免末行与按钮重叠
+            local ghH = insetTrueH(guildInset) - 8 - 18
             if ghH > 0 then GuildListScrollFrame:SetHeight(ghH) end
         end
     end
@@ -727,7 +737,7 @@ DFUI:NewMod("Social", 5, function()
                 end
                 ToggleDropDownMenu(1, nil, FriendsDropDown, "cursor")
             end
-            for i = 1, MAX_ROWS do
+            for i = 1, FRIEND_ROWS do
                 DFUI.CreateSocialRow(sf, {
                     name       = "DFUI_FriendRow"..i,
                     frameLevel = sf:GetFrameLevel() + 10,
@@ -736,8 +746,8 @@ DFUI:NewMod("Social", 5, function()
                         -- （之前 dot 占 4+9=13，title offsetX=5 → 18）
                         { name="title",    type="fontstring", width=120,
                           font="GameFontNormalSmall", color="main",
-                          anchor="LEFT", offsetX=18 },
-                        { name="lc",       type="fontstring", width=70,
+                          anchor="LEFT", offsetX=4 },
+                        { name="lc",       type="fontstring", width=92,
                           font="GameFontNormalSmall", color="next_",
                           anchor="LEFT", offsetX=4 },
                         { name="zoneText", type="fontstring", width=110,
@@ -762,9 +772,9 @@ DFUI:NewMod("Social", 5, function()
                 local h = sf:GetHeight()
                 if not h or h <= 0 then visibleRows = 0; return false end
                 visibleRows = math.floor(h / FIXED_ROW_H)
-                if visibleRows > MAX_ROWS then visibleRows = MAX_ROWS end
+                if visibleRows > FRIEND_ROWS then visibleRows = FRIEND_ROWS end
                 if visibleRows < 1 then visibleRows = 1 end
-                for i = 1, MAX_ROWS do
+                for i = 1, FRIEND_ROWS do
                     local row = _G["DFUI_FriendRow"..i]
                     if i <= visibleRows then
                         row:ClearAllPoints()
@@ -863,7 +873,7 @@ DFUI:NewMod("Social", 5, function()
     do
         local sfWho = WhoListScrollFrame
         if sfWho then
-            local WHO_ROWS = WHOS_TO_DISPLAY or 17
+            local WHO_ROWS = 24  -- 建足量 frame，实际显示由 floor(sf高/18) 决定，自动填满 inset（解耦 vanilla WHOS_TO_DISPLAY）
 
             -- class loc 名 → token 反查（GetWhoInfo 返回 localized class，如 "战士"）
             -- 优先用 LOCALIZED_CLASS_NAMES_MALE（vanilla 1.12 可能不存在），fallback hardcoded zhCN/enUS
@@ -950,10 +960,10 @@ DFUI:NewMod("Social", 5, function()
                         { name="lvl",   type="fontstring", width=24,
                           font="GameFontNormalSmall", color="next_",
                           anchor="LEFT", offsetX=4 },
-                        { name="class", type="fontstring", width=55,
+                        { name="class", type="fontstring", width=78,
                           font="GameFontNormalSmall", color="next_",
                           anchor="LEFT", offsetX=4 },
-                        { name="zoneText", type="fontstring", width=100,
+                        { name="zoneText", type="fontstring", width=120,
                           font="GameFontNormalSmall", color="next_",
                           anchor="RIGHT", offsetX=-8 },
                     },
@@ -1077,10 +1087,10 @@ DFUI:NewMod("Social", 5, function()
                 WhoFrameColumnHeader3:SetWidth(24 + 4)
                 WhoFrameColumnHeader4:ClearAllPoints()
                 WhoFrameColumnHeader4:SetPoint("LEFT", WhoFrameColumnHeader3, "RIGHT", 0, 0)
-                WhoFrameColumnHeader4:SetWidth(55 + 4)
+                WhoFrameColumnHeader4:SetWidth(78 + 4)
                 WhoFrameColumnHeader2:ClearAllPoints()
                 WhoFrameColumnHeader2:SetPoint("BOTTOMRIGHT", whoInset, "TOPRIGHT", -8, -24)
-                WhoFrameColumnHeader2:SetWidth(100)
+                WhoFrameColumnHeader2:SetWidth(120)
             end
         end
     end
@@ -1093,7 +1103,7 @@ DFUI:NewMod("Social", 5, function()
     do
         local sfGuild = GuildListScrollFrame
         if sfGuild then
-            local GUILD_ROWS = GUILDMEMBERS_TO_DISPLAY or 17
+            local GUILD_ROWS = 24  -- 建足量 frame，实际显示由 floor(sf高/18) 决定，自动填满 inset（解耦 vanilla GUILDMEMBERS_TO_DISPLAY）
 
             local function hideVanillaGuildBtn(i)
                 local b = _G["GuildFrameButton"..i]
@@ -1150,17 +1160,17 @@ DFUI:NewMod("Social", 5, function()
                     name       = "DFUI_GuildRow"..i,
                     frameLevel = sfGuild:GetFrameLevel() + 10,
                     columns = {
-                        -- 去掉状态点（dot），title.offsetX=18 保持 title 起始 X 不变
+                        -- 去掉状态点（dot），回收左侧死区：title.offsetX 18→4
                         { name="title",    type="fontstring", width=90,
                           font="GameFontNormalSmall", color="main",
-                          anchor="LEFT", offsetX=18 },
+                          anchor="LEFT", offsetX=4 },
                         { name="lvl",      type="fontstring", width=24,
                           font="GameFontNormalSmall", color="next_",
                           anchor="LEFT", offsetX=4 },
-                        { name="class",    type="fontstring", width=55,
+                        { name="class",    type="fontstring", width=78,
                           font="GameFontNormalSmall", color="next_",
                           anchor="LEFT", offsetX=4 },
-                        { name="zoneText", type="fontstring", width=80,
+                        { name="zoneText", type="fontstring", width=112,
                           font="GameFontNormalSmall", color="next_",
                           anchor="RIGHT", offsetX=-8 },
                     },
@@ -1301,17 +1311,17 @@ DFUI:NewMod("Social", 5, function()
                 nukeHdr(GuildFrameColumnHeader3); nukeHdr(GuildFrameColumnHeader4)
                 -- 设计 B：列头跨越 inset 上边框（DF retail 风格）
                 GuildFrameColumnHeader1:ClearAllPoints()
-                GuildFrameColumnHeader1:SetPoint("BOTTOMLEFT", guildInset, "TOPLEFT", 18, -24)  -- X=18 让出 dot+title 起始
+                GuildFrameColumnHeader1:SetPoint("BOTTOMLEFT", guildInset, "TOPLEFT", 4, -24)  -- 回收 dot 死区，与 row title offsetX=4 对齐
                 GuildFrameColumnHeader1:SetWidth(90 + 5)
                 GuildFrameColumnHeader3:ClearAllPoints()
                 GuildFrameColumnHeader3:SetPoint("LEFT", GuildFrameColumnHeader1, "RIGHT", 0, 0)
                 GuildFrameColumnHeader3:SetWidth(24 + 4)
                 GuildFrameColumnHeader4:ClearAllPoints()
                 GuildFrameColumnHeader4:SetPoint("LEFT", GuildFrameColumnHeader3, "RIGHT", 0, 0)
-                GuildFrameColumnHeader4:SetWidth(55 + 4)
+                GuildFrameColumnHeader4:SetWidth(78 + 4)
                 GuildFrameColumnHeader2:ClearAllPoints()
                 GuildFrameColumnHeader2:SetPoint("BOTTOMRIGHT", guildInset, "TOPRIGHT", -8, -24)
-                GuildFrameColumnHeader2:SetWidth(100)
+                GuildFrameColumnHeader2:SetWidth(112)
             end
         end
     end
