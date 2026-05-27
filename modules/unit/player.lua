@@ -51,7 +51,6 @@ DFUI:NewMod("Player", 1, function()
         fontpath = "Interface\\AddOns\\Dragonflight-Fix\\media\\fnt\\",
 
         hideFrame = nil,
-        restingAnimation = nil,
         combatOverlay = nil,
         combatOverlayTex = nil,
         combatGlow = {
@@ -218,7 +217,15 @@ DFUI:NewMod("Player", 1, function()
     function Setup:CombatGlow()
         function _G.PlayerFrame_UpdateStatus() end
         PlayerAttackGlow:SetTexture("")
-        PlayerAttackIcon:SetTexture("")
+        -- 保留 PlayerAttackIcon 原生纹理(Interface\CharacterFrame\UI-StateIcon)与 TexCoord,
+        -- 仅重新锚到蓝条下方,显隐由 Setup:StateIcons() 自管
+        PlayerAttackIcon:ClearAllPoints()
+        PlayerAttackIcon:SetPoint("TOPLEFT", Setup.manaBar, "BOTTOMLEFT", -65, 60)
+        PlayerAttackIcon:SetWidth(24)
+        PlayerAttackIcon:SetHeight(24)
+        -- 收紧 bottom 到 0.49 裁掉剑下方黑边(参考 TWThreat 同图集用法)
+        PlayerAttackIcon:SetTexCoord(0.5, 1.0, 0, 0.49)
+        PlayerAttackIcon:Hide()
         Setup.combatOverlay = CreateFrame("Frame", nil, PlayerFrame)
         Setup.combatOverlay:SetAllPoints(PlayerFrame)
         Setup.combatOverlay:SetFrameStrata("MEDIUM")
@@ -231,11 +238,15 @@ DFUI:NewMod("Player", 1, function()
     end
 
     function Setup:RestingGlow()
-        PlayerRestIcon:SetTexture("")
         PlayerRestGlow:SetTexture("")
+        -- 保留 PlayerRestIcon 原生 Zzz 纹理与 TexCoord,与攻击图标共用蓝条下方位置(二者互斥)
+        PlayerRestIcon:ClearAllPoints()
+        PlayerRestIcon:SetPoint("TOPLEFT", Setup.manaBar, "BOTTOMLEFT", -65, 60)
+        PlayerRestIcon:SetWidth(24)
+        PlayerRestIcon:SetHeight(24)
+        PlayerRestIcon:Hide()
         Setup.restingOverlay = CreateFrame("Frame", nil, PlayerFrame)
         Setup.restingOverlay:SetAllPoints(PlayerFrame)
-        Setup.restingOverlay:SetFrameStrata("MEDIUM")
         Setup.restingOverlayTex = Setup.restingOverlay:CreateTexture(nil, "OVERLAY")
         Setup.restingOverlayTex:SetTexture(Setup.texpath.. "UI-Player-Status.blp")
         Setup.restingOverlayTex:SetPoint("CENTER", PlayerFrame, "CENTER", 45, -21)
@@ -244,64 +255,55 @@ DFUI:NewMod("Player", 1, function()
         Setup.restingOverlayTex:SetAlpha(0)
     end
 
-    function Setup:RestingZZZ()
-        restingAnimation = CreateFrame("Frame", "restingAnimation", UIParent)
-        restingAnimation:SetPoint("CENTER", PlayerFrame, "CENTER", -20, 30)
-        restingAnimation:SetWidth(24)
-        restingAnimation:SetHeight(24)
-        local texture = restingAnimation:CreateTexture(nil, "OVERLAY")
-        texture:SetTexture(Setup.texpath.. "UIUnitFrameRestingFlipbook")
-        texture:SetAllPoints(restingAnimation)
-        local texCoords = {
-            {0/512, 60/512, 0/512, 60/512}, {60/512, 120/512, 0/512, 60/512}, {120/512, 180/512, 0/512, 60/512}, {180/512, 240/512, 0/512, 60/512}, {240/512, 300/512, 0/512, 60/512}, {300/512, 360/512, 0/512, 60/512},
-            {0/512, 60/512, 60/512,120/512}, {60/512, 120/512, 60/512, 120/512}, {120/512, 180/512, 60/512, 120/512}, {180/512, 240/512, 60/512, 120/512}, {240/512, 300/512, 60/512, 120/512}, {300/512, 360/512, 60/512, 120/512},
-            {0/512, 60/512, 120/512, 180/512}, {60/512, 120/512, 120/512, 180/512}, {120/512, 180/512, 120/512, 180/512}, {180/512, 240/512, 120/512, 180/512}, {240/512, 300/512, 120/512, 180/512}, {300/512, 360/512, 120/512, 180/512},
-            {0/512, 60/512, 180/512, 240/512}, {60/512, 120/512, 180/512, 240/512}, {120/512, 180/512, 180/512, 240/512}, {180/512, 240/512, 180/512, 240/512}, {240/512, 300/512, 180/512, 240/512}, {300/512, 360/512, 180/512, 240/512},
-            {0/512, 60/512, 240/512, 300/512}, {60/512, 120/512, 240/512, 300/512}, {120/512, 180/512, 240/512, 300/512}, {180/512, 240/512, 240/512, 300/512}, {240/512, 300/512, 240/512, 300/512}, {300/512, 360/512, 240/512, 300/512},
-            {0/512, 60/512, 300/512, 360/512}, {60/512, 120/512, 300/512, 360/512}, {120/512, 180/512, 300/512, 360/512}, {180/512, 240/512, 300/512, 360/512}, {240/512, 300/512, 300/512, 360/512}, {300/512, 360/512, 300/512, 360/512},
-        }
-
-        local currentFrame = 1
-        local totalFrames = table.getn(texCoords)
-        local timeSinceLastUpdate = 0
-        local updateInterval = 0.05
-
-        restingAnimation:Hide()
-
-        restingAnimation:SetScript("OnUpdate", function()
-            timeSinceLastUpdate = timeSinceLastUpdate + arg1
-
-            if timeSinceLastUpdate >= updateInterval then
-                currentFrame = currentFrame + 1
-                if currentFrame > totalFrames then
-                    currentFrame = 1
-                end
-                local coords = texCoords[currentFrame]
-                texture:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
-
-                timeSinceLastUpdate = 0
-                DFUI.activeScripts["RestingAnimationScript"] = true
-            else
-                DFUI.activeScripts["RestingAnimationScript"] = false
-            end
-        end)
-
-        local function UpdateRestingState()
+    -- 状态图标显隐:复用 vanilla 原生 PlayerAttackIcon(剑)/PlayerRestIcon(Zzz),
+    -- 二者互斥(战斗优先),纹理与 TexCoord 在 CombatGlow/RestingGlow 中已就位
+    function Setup:UpdateStateIcons()
+        if UnitAffectingCombat("player") then
+            PlayerRestIcon:Hide()
+            PlayerAttackIcon:Show()
+        else
+            PlayerAttackIcon:Hide()
             if IsResting() and PlayerFrame:IsShown() then
-                restingAnimation:Show()
+                PlayerRestIcon:Show()
             else
-                restingAnimation:Hide()
+                PlayerRestIcon:Hide()
             end
         end
+    end
 
+    function Setup:StateIcons()
         local f = CreateFrame("Frame")
         f:RegisterEvent("PLAYER_ENTERING_WORLD")
+        f:RegisterEvent("PLAYER_REGEN_DISABLED")
+        f:RegisterEvent("PLAYER_REGEN_ENABLED")
         f:RegisterEvent("PLAYER_UPDATE_RESTING")
         f:SetScript("OnEvent", function()
-            UpdateRestingState()
+            Setup:UpdateStateIcons()
         end)
 
-        UpdateRestingState()
+        -- 图标呼吸:对当前显示的剑/Zzz 做 alpha 脉冲(0.45~1.0),沿用插件 this.tick 限频风格
+        local pulseTime = 0
+        f:SetScript("OnUpdate", function()
+            local now = GetTime()
+            if (this.tick or 0) > now then
+                DFUI.activeScripts["StateIconPulse"] = false
+                return
+            end
+            this.tick = now + 0.01
+
+            local icon = (PlayerAttackIcon:IsShown() and PlayerAttackIcon)
+                or (PlayerRestIcon:IsShown() and PlayerRestIcon)
+            if not icon then
+                DFUI.activeScripts["StateIconPulse"] = false
+                return
+            end
+
+            pulseTime = pulseTime + arg1
+            icon:SetAlpha(0.45 + 0.55 * (0.5 + 0.5 * math.sin(pulseTime * 3)))
+            DFUI.activeScripts["StateIconPulse"] = true
+        end)
+
+        Setup:UpdateStateIcons()
     end
 
     function Setup:EnergyTick()
@@ -366,7 +368,7 @@ DFUI:NewMod("Player", 1, function()
         self:NameText()
         self:CombatGlow()
         self:RestingGlow()
-        self:RestingZZZ()
+        self:StateIcons()
         self:EnergyTick()
     end
 
@@ -581,14 +583,9 @@ DFUI:NewMod("Player", 1, function()
 
             if health == maxHealth and not inCombat then
                 PlayerFrame:Hide()
-                if restingAnimation then restingAnimation:Hide() end
             else
                 PlayerFrame:Show()
-                if restingAnimation and IsResting() then
-                    restingAnimation:Show()
-                elseif restingAnimation then
-                    restingAnimation:Hide()
-                end
+                Setup:UpdateStateIcons()
             end
         end
 
@@ -605,11 +602,7 @@ DFUI:NewMod("Player", 1, function()
             updatePlayerFrameAndResting()
         else
             PlayerFrame:Show()
-            if restingAnimation and IsResting() then
-                restingAnimation:Show()
-            elseif restingAnimation then
-                restingAnimation:Hide()
-            end
+            Setup:UpdateStateIcons()
         end
     end
 
