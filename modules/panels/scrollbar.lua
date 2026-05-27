@@ -162,28 +162,28 @@ DFUI:NewMod("Scrollbar", 6, function()
     -------------------------------------------------------
     -- 翻页箭头换肤（金色着色原有纹理）
     -------------------------------------------------------
-    function DFUI.SkinPageButton(button)
+    function DFUI.SkinPageButton(button, size)
         if not button or button._dfScrollSkinned then return end
         button._dfScrollSkinned = true
+        button:SetWidth(size or 24); button:SetHeight(size or 24)
 
         local normal = button:GetNormalTexture()
         local pushed = button:GetPushedTexture()
         local disabled = button:GetDisabledTexture()
         local highlight = button:GetHighlightTexture()
 
-        if normal then normal:SetVertexColor(BRONZE_LIGHT[1], BRONZE_LIGHT[2], BRONZE_LIGHT[3], 0.9) end
-        if pushed then pushed:SetVertexColor(BRONZE[1], BRONZE[2], BRONZE[3], 1.0) end
-        if disabled then disabled:SetVertexColor(BRONZE_DIM[1], BRONZE_DIM[2], BRONZE_DIM[3], 0.5) end
-        if highlight then highlight:SetVertexColor(BRONZE_LIGHT[1], BRONZE_LIGHT[2], BRONZE_LIGHT[3], 0.4) end
+        -- 亮金本色（去青铜着色，复位为 vanilla 翻页箭头原色）
+        if normal then normal:SetVertexColor(1, 1, 1, 1) end
+        if pushed then pushed:SetVertexColor(1, 1, 1, 1) end
+        if disabled then disabled:SetVertexColor(1, 1, 1, 0.5) end
+        if highlight then highlight:SetVertexColor(1, 1, 1, 0.4) end
     end
 
     -------------------------------------------------------
     -- 批量应用目标列表
     -------------------------------------------------------
     local scrollbarTargets = {
-        -- 角色面板
-        "SkillListScrollFrameScrollBar",
-        "ReputationListScrollFrameScrollBar",
+        -- 角色面板技能/声望滚动条改由 character.lua 保留 vanilla 原生亮金箭头，这里不接管
         -- 任务日志
         "QuestLogListScrollFrameScrollBar",
         "QuestLogDetailScrollFrameScrollBar",
@@ -194,11 +194,7 @@ DFUI:NewMod("Scrollbar", 6, function()
         "QuestGreetingScrollFrameScrollBar",
         -- NPC 对话
         "GossipGreetingScrollFrameScrollBar",
-        -- 社交
-        "FriendsFrameFriendsScrollFrameScrollBar",
-        "FriendsFrameIgnoreScrollFrameScrollBar",
-        "WhoListScrollFrameScrollBar",
-        "GuildListScrollFrameScrollBar",
+        -- 社交（好友/屏蔽/查找/公会改由 social.lua 保留 vanilla 亮金箭头，这里不接管）
         "GuildInfoFrameScrollFrameScrollBar",
         "ChannelListScrollFrameScrollBar",
         "ChannelRosterScrollFrameScrollBar",
@@ -261,16 +257,16 @@ DFUI:NewMod("Scrollbar", 6, function()
             local frame = _G[sbName]
             if frame then DFUI.SkinScrollbar(frame) end
         end
-        -- 声望滚动条下箭头纹理微调（往上3px）
-        NudgeArrowTextures(_G["ReputationListScrollFrameScrollBarScrollDownButton"], 0, 3)
+        -- 声望滚动条已交还 character.lua（vanilla 原生亮金箭头），不再微调
         for _, ddName in ipairs(dropdownTargets) do
             local frame = _G[ddName]
             if frame then DFUI.SkinDropDown(frame) end
         end
-        for _, pbName in ipairs(pageButtonTargets) do
-            local frame = _G[pbName]
-            if frame then DFUI.SkinPageButton(frame) end
-        end
+        -- 商人翻页 32×32，邮件翻页 24×24
+        if _G["MerchantPrevPageButton"] then DFUI.SkinPageButton(_G["MerchantPrevPageButton"], 32) end
+        if _G["MerchantNextPageButton"] then DFUI.SkinPageButton(_G["MerchantNextPageButton"], 32) end
+        if _G["InboxPrevPageButton"]    then DFUI.SkinPageButton(_G["InboxPrevPageButton"],    24) end
+        if _G["InboxNextPageButton"]    then DFUI.SkinPageButton(_G["InboxNextPageButton"],    24) end
     end
 
     local f = CreateFrame("Frame")

@@ -82,7 +82,39 @@ DFUI:NewMod("Character", 5, function()
             NukeScrollBar(children[i])
         end
     end
-    NukeScrollBar(SkillListScrollFrameScrollBar)
+
+    -- 保留 vanilla 原生上下箭头（亮金本色），只隐藏轨道与 thumb
+    local function KeepArrowsHideTrack(sbName)
+        local sb = getglobal(sbName)
+        if not sb then return end
+        sb._dfScrollSkinned = true   -- 抢先占位，挡 scrollbar.lua 的 ChatIcon 换肤/青铜 thumb
+        sb:Show(); sb:SetAlpha(1)
+        local top = getglobal(sbName.."Top")
+        local mid = getglobal(sbName.."Middle")
+        local bot = getglobal(sbName.."Bottom")
+        if top and top.SetTexture then top:SetTexture(nil); top:Hide() end
+        if mid and mid.SetTexture then mid:SetTexture(nil); mid:Hide() end
+        if bot and bot.SetTexture then bot:SetTexture(nil); bot:Hide() end
+        local thumb = sb.GetThumbTexture and sb:GetThumbTexture()
+        if thumb then thumb:SetTexture(nil) end
+        -- 上下按钮换成 ChatIcon 金色下拉箭头本色（与角色 tab 下拉箭头同款），不着色
+        local function goldArrow(btn, isUp)
+            if not btn then return end
+            btn._dfScrollSkinned = true
+            btn:SetWidth(24); btn:SetHeight(24)
+            btn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+            btn:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Down")
+            btn:SetDisabledTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Disabled")
+            btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+            local L, R, T, B = 0, 1, 0, 1
+            if isUp then T, B = 1, 0 end   -- 上箭头垂直翻转
+            local function setc(t) if t then t:SetTexCoord(L, R, T, B) end end
+            setc(btn:GetNormalTexture());   setc(btn:GetPushedTexture())
+            setc(btn:GetDisabledTexture()); setc(btn:GetHighlightTexture())
+        end
+        goldArrow(getglobal(sbName.."ScrollUpButton"),   true)
+        goldArrow(getglobal(sbName.."ScrollDownButton"), false)
+    end
 
     -- 再扫一遍 SkillListScrollFrame 自身的装饰纹理（残留竖条/边框/小箭头来源）
     if SkillListScrollFrame then
@@ -96,8 +128,9 @@ DFUI:NewMod("Character", 5, function()
         -- nuke SkillListScrollFrame 上所有 child frame（除内容承载 ScrollChildFrame）
         local scrollChild = SkillListScrollFrame:GetScrollChild()
         local children = {SkillListScrollFrame:GetChildren()}
+        local sb = SkillListScrollFrameScrollBar
         for i = 1, table.getn(children) do
-            if children[i] ~= scrollChild then
+            if children[i] ~= scrollChild and children[i] ~= sb then
                 NukeScrollBar(children[i])
             end
         end
@@ -163,8 +196,9 @@ DFUI:NewMod("Character", 5, function()
         end
         local scrollChild = ReputationListScrollFrame:GetScrollChild()
         local children = {ReputationListScrollFrame:GetChildren()}
+        local sb = ReputationListScrollFrameScrollBar
         for i = 1, table.getn(children) do
-            if children[i] ~= scrollChild then
+            if children[i] ~= scrollChild and children[i] ~= sb then
                 NukeScrollBar(children[i])
             end
         end
@@ -344,19 +378,19 @@ DFUI:NewMod("Character", 5, function()
     if HonorFrame then HonorFrame:SetFrameLevel(honorInset:GetFrameLevel() + 1) end
     if ArenaFrame then ArenaFrame:SetFrameLevel(honorInset:GetFrameLevel() + 1) end
 
-    -- 声望 tab / 技能 tab：仅 NukeScrollBar 隐藏 vanilla 原生（不创建 retail 滚动条）
+    -- 声望 tab / 技能 tab：保留 vanilla 原生上下箭头（亮金本色），隐藏轨道与 thumb
     -- 鼠标滚轮仍能滚动列表（FauxScrollFrame 自带 OnMouseWheel）
     if ReputationListScrollFrame and ReputationListScrollFrameScrollBar then
-        NukeScrollBar(ReputationListScrollFrameScrollBar)
-        -- 持续压住（NukeScrollBar 静态隐藏一次不够，引擎在 ScrollFrame OnShow 时会重 Show）
+        KeepArrowsHideTrack("ReputationListScrollFrameScrollBar")
+        -- 持续压住轨道（引擎在 ScrollFrame OnShow 时会重 Show/恢复纹理），函数幂等
         HookScript(ReputationListScrollFrameScrollBar, "OnShow", function()
-            ReputationListScrollFrameScrollBar:Hide()
+            KeepArrowsHideTrack("ReputationListScrollFrameScrollBar")
         end)
     end
-    -- 技能 tab：SkillListScrollFrameScrollBar 已在 line 85 NukeScrollBar 处理
-    if SkillListScrollFrameScrollBar then
+    if SkillListScrollFrame and SkillListScrollFrameScrollBar then
+        KeepArrowsHideTrack("SkillListScrollFrameScrollBar")
         HookScript(SkillListScrollFrameScrollBar, "OnShow", function()
-            SkillListScrollFrameScrollBar:Hide()
+            KeepArrowsHideTrack("SkillListScrollFrameScrollBar")
         end)
     end
 

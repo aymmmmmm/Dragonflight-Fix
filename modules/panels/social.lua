@@ -504,20 +504,51 @@ DFUI:NewMod("Social", 5, function()
             nukeScrollBar(children[i])
         end
     end
-    -- 公会/好友/屏蔽/查找 tab 全部清掉 vanilla 滚动条（鼠标滚轮仍可滚动）
-    local scrollBarsToNuke = {
-        GuildListScrollFrameScrollBar,
-        FriendsFrameFriendsScrollFrameScrollBar,
-        FriendsFrameIgnoreScrollFrameScrollBar,
-        WhoListScrollFrameScrollBar,
+    -- 公会/好友/屏蔽/查找 tab：保留 vanilla 原生上下箭头（亮金本色 24×24），隐藏轨道/thumb
+    -- （与角色面板技能/声望页一致；鼠标滚轮仍可滚动）
+    local function keepGoldArrows(sbName)
+        local sb = getglobal(sbName)
+        if not sb then return end
+        sb._dfScrollSkinned = true   -- 抢先占位，挡 scrollbar.lua 的 SkinScrollbar
+        sb:Show(); sb:SetAlpha(1)
+        local top = getglobal(sbName.."Top")
+        local mid = getglobal(sbName.."Middle")
+        local bot = getglobal(sbName.."Bottom")
+        if top and top.SetTexture then top:SetTexture(nil); top:Hide() end
+        if mid and mid.SetTexture then mid:SetTexture(nil); mid:Hide() end
+        if bot and bot.SetTexture then bot:SetTexture(nil); bot:Hide() end
+        local thumb = sb.GetThumbTexture and sb:GetThumbTexture()
+        if thumb then thumb:SetTexture(nil) end
+        local function goldArrow(btn, isUp)
+            if not btn then return end
+            btn._dfScrollSkinned = true
+            btn:SetWidth(24); btn:SetHeight(24)
+            btn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+            btn:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Down")
+            btn:SetDisabledTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Disabled")
+            btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+            local L, R, T, B = 0, 1, 0, 1
+            if isUp then T, B = 1, 0 end   -- 上箭头垂直翻转
+            local function setc(t) if t then t:SetTexCoord(L, R, T, B) end end
+            setc(btn:GetNormalTexture());   setc(btn:GetPushedTexture())
+            setc(btn:GetDisabledTexture()); setc(btn:GetHighlightTexture())
+        end
+        goldArrow(getglobal(sbName.."ScrollUpButton"),   true)
+        goldArrow(getglobal(sbName.."ScrollDownButton"), false)
+    end
+    local scrollBarNames = {
+        "GuildListScrollFrameScrollBar",
+        "FriendsFrameFriendsScrollFrameScrollBar",
+        "FriendsFrameIgnoreScrollFrameScrollBar",
+        "WhoListScrollFrameScrollBar",
     }
-    for i = 1, table.getn(scrollBarsToNuke) do
-        local sb = scrollBarsToNuke[i]
-        -- sb.GetScript 双重检查：vanilla 某些 ScrollBar 全局可能存在但不是真 frame（无 GetScript 方法）
+    for i = 1, table.getn(scrollBarNames) do
+        local nm = scrollBarNames[i]
+        local sb = getglobal(nm)
         if sb and sb.GetScript then
-            nukeScrollBar(sb)
+            keepGoldArrows(nm)
             HookScript(sb, "OnShow", function()
-                sb:Hide()
+                keepGoldArrows(nm)
             end)
         end
     end
