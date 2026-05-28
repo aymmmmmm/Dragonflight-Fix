@@ -890,7 +890,7 @@ DFUI:NewMod("SpellBook", 5, function()
     -- 复选框创建（OnClick 翻转 boolean → 刷新，不依赖 GetChecked）
     local showPassiveCheckbox = CreateCheckbox(spellbook, L.SHOW_PASSIVE)
     showPassiveCheckbox:SetPoint("BOTTOMLEFT", spellbook, "BOTTOMLEFT", 15, 8)
-    showPassiveCheckbox:SetFrameLevel(spellbook:GetFrameLevel() + 10)
+    showPassiveCheckbox:SetFrameLevel(spellbook:GetFrameLevel() + 5)
     showPassiveCheckbox:SetChecked(filterShowPassive)
     showPassiveCheckbox:SetScript("OnClick", function()
         filterShowPassive = not filterShowPassive
@@ -903,7 +903,7 @@ DFUI:NewMod("SpellBook", 5, function()
 
     local showRanksCheckbox = CreateCheckbox(spellbook, L.SHOW_RANKS)
     showRanksCheckbox:SetPoint("LEFT", showPassiveCheckbox, "RIGHT", 100, 0)
-    showRanksCheckbox:SetFrameLevel(spellbook:GetFrameLevel() + 10)
+    showRanksCheckbox:SetFrameLevel(spellbook:GetFrameLevel() + 5)
     showRanksCheckbox:SetChecked(filterShowRanks)
     showRanksCheckbox:SetScript("OnClick", function()
         filterShowRanks = not filterShowRanks
