@@ -366,20 +366,21 @@ DFUI:NewMod("Social", 5, function()
         if ih > 8 then return ih - 8 end
         return 200
     end
+    -- 治本：4 个 sf 全部双锚 TL+BR 跟随 inset，sf.height 由 1.12 reflow 自动算
+    -- 旧端：vanilla XML 给 sf 设过的 SetHeight 被双锚 override，行为等价
+    -- 新端：脱离 GetTop/GetBottom 依赖（inset Hide 时全 nil），不会再 0 高度
     local function reanchorScrollFrames()
-        local sfH = getSFHeight()
         if FriendsFrameFriendsScrollFrame then
             FriendsFrameFriendsScrollFrame:ClearAllPoints()
-            FriendsFrameFriendsScrollFrame:SetPoint("TOPLEFT",  friendsInset, "TOPLEFT",  6,  -4)
-            FriendsFrameFriendsScrollFrame:SetPoint("TOPRIGHT", friendsInset, "TOPRIGHT", -24, -4)
-            FriendsFrameFriendsScrollFrame:SetHeight(sfH)
+            FriendsFrameFriendsScrollFrame:SetPoint("TOPLEFT",     friendsInset, "TOPLEFT",      6, -4)
+            FriendsFrameFriendsScrollFrame:SetPoint("BOTTOMRIGHT", friendsInset, "BOTTOMRIGHT", -24,  4)
         end
         if FriendsFrameIgnoreScrollFrame then
             FriendsFrameIgnoreScrollFrame:ClearAllPoints()
-            FriendsFrameIgnoreScrollFrame:SetPoint("TOPLEFT",  friendsInset, "TOPLEFT",  6,  -4)
-            FriendsFrameIgnoreScrollFrame:SetPoint("TOPRIGHT", friendsInset, "TOPRIGHT", -24, -4)
-            FriendsFrameIgnoreScrollFrame:SetHeight(sfH)
+            FriendsFrameIgnoreScrollFrame:SetPoint("TOPLEFT",     friendsInset, "TOPLEFT",      6, -4)
+            FriendsFrameIgnoreScrollFrame:SetPoint("BOTTOMRIGHT", friendsInset, "BOTTOMRIGHT", -24,  4)
         end
+        -- vanilla button 链锚保留（DFUI row 系统不依赖，留给共存插件 / fallback 路径）
         if FriendsFrameFriendButton1 then
             FriendsFrameFriendButton1:ClearAllPoints()
             FriendsFrameFriendButton1:SetPoint("TOPLEFT", FriendsFrameFriendsScrollFrame, "TOPLEFT", 0, 0)
@@ -388,21 +389,16 @@ DFUI:NewMod("Social", 5, function()
             FriendsFrameIgnoreButton1:ClearAllPoints()
             FriendsFrameIgnoreButton1:SetPoint("TOPLEFT", FriendsFrameIgnoreScrollFrame, "TOPLEFT", 0, 0)
         end
-        -- Who / Guild SF 也对齐 inset（之前漏处理 → vanilla 默认 287/237 > inset 高度 → row 溢出 inset）
         if WhoListScrollFrame and whoInset then
             WhoListScrollFrame:ClearAllPoints()
-            WhoListScrollFrame:SetPoint("TOPLEFT",  whoInset, "TOPLEFT",  6,  -4)
-            WhoListScrollFrame:SetPoint("TOPRIGHT", whoInset, "TOPRIGHT", -24, -4)
-            local whH = insetTrueH(whoInset) - 8
-            if whH > 0 then WhoListScrollFrame:SetHeight(whH) end
+            WhoListScrollFrame:SetPoint("TOPLEFT",     whoInset, "TOPLEFT",      6, -4)
+            WhoListScrollFrame:SetPoint("BOTTOMRIGHT", whoInset, "BOTTOMRIGHT", -24,  4)
         end
         if GuildListScrollFrame and guildInset then
             GuildListScrollFrame:ClearAllPoints()
-            GuildListScrollFrame:SetPoint("TOPLEFT",  guildInset, "TOPLEFT",  6,  -4)
-            GuildListScrollFrame:SetPoint("TOPRIGHT", guildInset, "TOPRIGHT", -24, -4)
-            -- 底部再少留一行(18px)给玩家状态按钮（GuildFramePlayerStatusDropDown），避免末行与按钮重叠
-            local ghH = insetTrueH(guildInset) - 8 - 18
-            if ghH > 0 then GuildListScrollFrame:SetHeight(ghH) end
+            GuildListScrollFrame:SetPoint("TOPLEFT",     guildInset, "TOPLEFT",      6,  -4)
+            -- 底部 BR y=22 (4 base + 18 留给 GuildFramePlayerStatusDropDown)，避免末行与按钮重叠
+            GuildListScrollFrame:SetPoint("BOTTOMRIGHT", guildInset, "BOTTOMRIGHT", -24, 22)
         end
     end
     reanchorScrollFrames()
@@ -578,6 +574,10 @@ DFUI:NewMod("Social", 5, function()
         if HideDropDownMenu then HideDropDownMenu(1) end
     end
 
+    -- forward declare：deferFit 在 mod load 末尾才赋值，但 Tab callback 闭包需先捕获 upvalue
+    -- 用 if deferFit then 守卫，避免 mod load 期间被 vanilla ToggleFriendsFrame 触发时 deferFit 还 nil
+    local deferFit
+
     local guildTab
     customBg:AddTab("好友", function()
         hideDropDown()
@@ -585,6 +585,8 @@ DFUI:NewMod("Social", 5, function()
         FriendsFrame_ShowSubFrame("FriendsListFrame")
         PanelTemplates_SetTab(FriendsFrame, 1)
         FriendsFrame_Update()
+        -- 覆盖"重复点同一 Tab，inset 已 Show 不再触发 OnShow"路径
+        if deferFit then deferFit() end
     end, 70)
 
     customBg:AddTab("查找", function()
@@ -593,6 +595,7 @@ DFUI:NewMod("Social", 5, function()
         FriendsFrame_ShowSubFrame("WhoFrame")
         PanelTemplates_SetTab(FriendsFrame, 2)
         FriendsFrame_Update()
+        if deferFit then deferFit() end
     end, 60)
 
     guildTab = customBg:AddTab("公会", function()
@@ -601,6 +604,7 @@ DFUI:NewMod("Social", 5, function()
         FriendsFrame_ShowSubFrame("GuildFrame")
         PanelTemplates_SetTab(FriendsFrame, 3)
         FriendsFrame_Update()
+        if deferFit then deferFit() end
     end, 60)
 
     local function UpdateGuildTab()
@@ -659,6 +663,17 @@ DFUI:NewMod("Social", 5, function()
     fitEventFrame:SetScript("OnEvent", function()
         fitButtonHeights()
     end)
+
+    -- inset OnShow 触发刷新的通用 helper（治本兜底，覆盖 hook 失效 / Tab 切换错失 OnShow 的路径）
+    -- 一帧延迟让双锚 sf 完成 reflow，闭包内 IsShown + sf 双守卫防 race
+    local function deferOneFrame(fn)
+        local f = CreateFrame("Frame")
+        f:SetScript("OnUpdate", function() f:SetScript("OnUpdate", nil); fn() end)
+    end
+    local function safeRefresh(inset, sf, refresh)
+        if not (inset and inset:IsShown() and sf and refresh) then return end
+        refresh()
+    end
 
     -- ============================================================
     -- 自建好友 row 系统（替换 vanilla FriendsFrameFriendButton1..10）
@@ -800,7 +815,10 @@ DFUI:NewMod("Social", 5, function()
             local FIXED_ROW_H = 18
             local visibleRows = 0
             local function layoutRows()
-                local h = sf:GetHeight()
+                -- 1.12 GetHeight 在双锚未完全 reflow 时返回脏值，GetTop-GetBottom 才准
+                -- 参考 [reference-wow112-frame-size-pitfalls]，fallback GetHeight 覆盖极短窗口
+                local t, b = sf:GetTop(), sf:GetBottom()
+                local h = (t and b and (t-b) > 0) and (t-b) or sf:GetHeight()
                 if not h or h <= 0 then visibleRows = 0; return false end
                 visibleRows = math.floor(h / FIXED_ROW_H)
                 if visibleRows > FRIEND_ROWS then visibleRows = FRIEND_ROWS end
@@ -893,6 +911,11 @@ DFUI:NewMod("Social", 5, function()
             local refreshFrame = CreateFrame("Frame")
             refreshFrame:RegisterEvent("FRIENDLIST_UPDATE")
             refreshFrame:SetScript("OnEvent", function() refreshFriendRows() end)
+
+            -- 治本兜底：inset OnShow 时延迟一帧刷新（覆盖 hook 静默失败 / Tab callback 重复 Show 不触发 OnShow）
+            HookScript(friendsInset, "OnShow", function()
+                deferOneFrame(function() safeRefresh(friendsInset, sf, refreshFriendRows) end)
+            end)
         end
     end
 
@@ -1013,7 +1036,9 @@ DFUI:NewMod("Social", 5, function()
             local COLHDR_OFFSET_WHO = 24  -- 列头完全在 inset 顶部内侧，row1 起点下移 24px
             local visibleRowsWho = 0
             local function layoutWhoRows()
-                local h = sfWho:GetHeight()
+                -- 同 Friend layoutRows：GetTop-GetBottom 优先，GetHeight fallback
+                local t, b = sfWho:GetTop(), sfWho:GetBottom()
+                local h = (t and b and (t-b) > 0) and (t-b) or sfWho:GetHeight()
                 if not h or h <= 0 then visibleRowsWho = 0; return false end
                 local availH = h - COLHDR_OFFSET_WHO
                 visibleRowsWho = math.floor(availH / FIXED_ROW_H_WHO)
@@ -1081,6 +1106,11 @@ DFUI:NewMod("Social", 5, function()
             local refreshFrameWho = CreateFrame("Frame")
             refreshFrameWho:RegisterEvent("WHO_LIST_UPDATE")
             refreshFrameWho:SetScript("OnEvent", function() refreshWhoRows() end)
+
+            -- 治本兜底：whoInset OnShow 时延迟一帧刷新
+            HookScript(whoInset, "OnShow", function()
+                deferOneFrame(function() safeRefresh(whoInset, sfWho, refreshWhoRows) end)
+            end)
 
             -- 重锚 WhoFrameColumnHeader1..4 到 whoInset 内 + 列宽匹配 row 列布局
             -- vanilla 4 列默认顺序: Header1=Name / Header2=Variable / Header3=Level / Header4=Class
@@ -1220,7 +1250,9 @@ DFUI:NewMod("Social", 5, function()
             local COLHDR_OFFSET_GUILD = 24  -- 列头完全在 inset 顶部内侧
             local visibleRowsGuild = 0
             local function layoutGuildRows()
-                local h = sfGuild:GetHeight()
+                -- 同 Friend layoutRows：GetTop-GetBottom 优先，GetHeight fallback
+                local t, b = sfGuild:GetTop(), sfGuild:GetBottom()
+                local h = (t and b and (t-b) > 0) and (t-b) or sfGuild:GetHeight()
                 if not h or h <= 0 then visibleRowsGuild = 0; return false end
                 local availH = h - COLHDR_OFFSET_GUILD
                 visibleRowsGuild = math.floor(availH / FIXED_ROW_H_GUILD)
@@ -1319,6 +1351,11 @@ DFUI:NewMod("Social", 5, function()
             refreshFrameGuild:RegisterEvent("GUILD_ROSTER_UPDATE")
             refreshFrameGuild:SetScript("OnEvent", function() refreshGuildRows() end)
 
+            -- 治本兜底：guildInset OnShow 时延迟一帧刷新
+            HookScript(guildInset, "OnShow", function()
+                deferOneFrame(function() safeRefresh(guildInset, sfGuild, refreshGuildRows) end)
+            end)
+
             -- 重锚 GuildFrameColumnHeader1..4 到 guildInset 内 + 列宽匹配 row
             -- 视觉顺序: Header1=Name(95) → Header3=Level(28) → Header4=Class(59) → Header2=Zone(108 RIGHT)
             if GuildFrameColumnHeader1 then
@@ -1360,8 +1397,9 @@ DFUI:NewMod("Social", 5, function()
 
     -- /reload 后首次 OnShow 时 inset/SF size 未 settle，需延迟一帧再 fit
     -- 1.12 OnUpdate handler 第一参是 elapsed 不是 self，用闭包引用 deferFitFrame
+    -- deferFit 已在 Tab callback 之前 forward declare 为 local，此处赋值
     local deferFitFrame = CreateFrame("Frame")
-    local function deferFit()
+    deferFit = function()
         deferFitFrame:SetScript("OnUpdate", function()
             deferFitFrame:SetScript("OnUpdate", nil)
             reanchorScrollFrames()
