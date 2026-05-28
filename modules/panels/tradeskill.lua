@@ -33,6 +33,7 @@ local PROF_BG_KEY = {
     ["Tailoring"]="tailoring", ["裁缝"]="tailoring",
     ["Beast Training"]="default", ["宠物训练"]="default",
     ["野兽训练"]="default", ["宠物技能"]="default", ["训练野兽"]="default",
+    ["Survival"]="survival", ["生存"]="survival",
 }
 
 -- ============================================================
@@ -1742,6 +1743,7 @@ DFUI:NewMod("TradeSkill", 5, function()
         ["Tailoring"] = true, ["裁缝"] = true,
         ["Beast Training"] = true, ["宠物训练"] = true,
         ["野兽训练"] = true, ["宠物技能"] = true, ["训练野兽"] = true,
+        ["Survival"] = true, ["生存"] = true,
     }
 
     -- 扫描法术书综合 tab（第1页），匹配已知专业名
@@ -1812,6 +1814,11 @@ DFUI:NewMod("TradeSkill", 5, function()
         local bgKey = PROF_BG_KEY[apiName] or PROF_BG_KEY[activeProfName] or "default"
         detailBg:SetTexture(PROF_TEX .. "bg_" .. bgKey .. ".tga")
         detailBg:SetTexCoord(0, 339/512, 0, 275/512)
+        if bgKey == "survival" then
+            detailBg:SetVertexColor(0.55, 0.85, 0.6, 1)
+        else
+            detailBg:SetVertexColor(1, 1, 1, 1)
+        end
 
         -- 扫描法术书专业（需在设置图标前完成，避免首次打开没 texture）
         if not profScanned then
