@@ -137,6 +137,17 @@ DFUI:NewMod("Social", 5, function()
         followFrame = WhoFrame,
     })
 
+    -- who 搜索结果路由进 UI 列表：DFUI 全程不调 SetWhoToUI(1)，SendWho 结果默认漏进聊天框，
+    -- 导致 GetNumWhoResults/GetWhoInfo 不更新、自建查找列表搜名字无结果（留空时是面板首开 vanilla
+    -- OnShow 偶发 SetWhoToUI(1) 残留的旧缓存）。借 DFUI 自定义 hooksecurefunc 默认 new-before-old
+    -- 顺序（core/tools.lua:121-124），在真正 SendWho 执行前置 SetWhoToUI(1)，结果即进 UI 数据源。
+    if hooksecurefunc and not DFUI._whoSetUIHooked then
+        DFUI._whoSetUIHooked = true
+        hooksecurefunc("SendWho", function(q)
+            if SetWhoToUI then SetWhoToUI(1) end
+        end)
+    end
+
     -- WhoFrameEditBox 在 vanilla 1.12 是裸 EditBox（无 InputBoxTemplate 继承，无 Layers 边框）
     -- 原本依赖 FriendsFrame 4 角 marble 衬底，DF UI 第 8-11 行 Hide 后变"可输入但无框体"
     -- 不动 EditBox parent/锚点，反向锚 backdrop 到 EditBox 自身（外扩 3px），自动跟随
@@ -1064,6 +1075,13 @@ DFUI:NewMod("Social", 5, function()
                 if not layoutWhoRows() then return end
                 local off = (FauxScrollFrame_GetOffset and FauxScrollFrame_GetOffset(sfWho)) or 0
                 local numTotal = (GetNumWhoResults and GetNumWhoResults()) or 0
+                -- 新查询结果数骤减时旧偏移残留并越界 → 下面 idx=off+i 全部 > numTotal → 整列被 Hide → 面板看似查不到
+                -- 钳回合法范围（与下方 scrollbar maxV 同口径）；结果 ≤ 可见行数时 maxOff=0，自动回到顶部
+                local maxOff = math.max(0, numTotal - visibleRowsWho)
+                if off > maxOff then
+                    off = maxOff
+                    if FauxScrollFrame_SetOffset then FauxScrollFrame_SetOffset(sfWho, off) end
+                end
                 for i = 1, visibleRowsWho do
                     local row = _G["DFUI_WhoRow"..i]
                     local idx = off + i

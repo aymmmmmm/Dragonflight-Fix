@@ -72,8 +72,12 @@ DFUI:NewDefaults("SpellBook", {
 })
 
 DFUI:NewMod("SpellBook", 5, function()
-    -- 1. 禁用原生技能书
-    KillFrame(SpellBookFrame)
+    -- 1. 透明保活原生技能书：不 Hide，保留在 UIPanel 系统以参与 left 区互斥（与制造面板同机制）
+    SoftHideFrame(SpellBookFrame)
+    -- 清原生事件与 OnShow/OnHide：避免 vanilla 重复播放 igSpellBookOpen 及无谓的 SpellBookFrame_Update 开销
+    SpellBookFrame:UnregisterAllEvents()
+    SpellBookFrame:SetScript("OnShow", nil)
+    SpellBookFrame:SetScript("OnHide", nil)
 
     -- 显式隐藏原生法术书子元素，防止残留纹理
     for i = 1, 8 do
@@ -137,7 +141,7 @@ DFUI:NewMod("SpellBook", 5, function()
     title:SetPoint("TOP", spellbook, "TOP", 0, -6)
 
     -- 5. 关闭按钮
-    local closeBtn = DFUI.CreateRedButton(spellbook, "close", function() spellbook:Hide() end)
+    local closeBtn = DFUI.CreateRedButton(spellbook, "close", function() HideUIPanel(SpellBookFrame) end)
     closeBtn:SetPoint("TOPRIGHT", spellbook, "TOPRIGHT", 0, -1)
 
     -- OnShow / OnHide 音效
@@ -1135,12 +1139,14 @@ DFUI:NewMod("SpellBook", 5, function()
         end
     end)
 
-    -- 11. 覆写全局 ToggleSpellBook（保存原版以便链式覆写兼容/兜底）
+    -- 11. 覆写全局 ToggleSpellBook：改走 vanilla ShowUIPanel/HideUIPanel，
+    --     让透明保活的原生 SpellBookFrame 进入 left 区 UIPanel 互斥（与制造面板同机制）。
     local origToggleSpellBook = _G.ToggleSpellBook
     _G.ToggleSpellBook = function(bookType)
-        if spellbook:IsShown() then
-            spellbook:Hide()
+        if SpellBookFrame:IsShown() then
+            HideUIPanel(SpellBookFrame)
         else
+            -- 宠物技能入口：打开前先把可见 panel 预选到宠物 Tab
             if bookType == BOOKTYPE_PET and spellbook.petTab and spellbook.petTab:IsShown() then
                 if spellbook.selectedTab then
                     spellbook.selectedTab:SetSelected(false)
@@ -1151,12 +1157,25 @@ DFUI:NewMod("SpellBook", 5, function()
                 spellbook.selectedTabIndex = "pet"
                 spellbook.currentPage = 1
             end
-            spellbook:Show()
+            ShowUIPanel(SpellBookFrame)
         end
     end
 
-    -- 12. ESC 关闭
-    table.insert(UISpecialFrames, spellbook:GetName())
+    -- 11b. 可见 panel 跟随原生 SpellBookFrame 显隐（覆盖 toggle / close / ESC / 互斥自动关闭所有路径）
+    HookScript(SpellBookFrame, "OnShow", function() spellbook:Show() end)
+    HookScript(SpellBookFrame, "OnHide", function() spellbook:Hide() end)
+
+    -- 12. ESC 关闭：交由原生 SpellBookFrame（其 OnHide 已联动隐藏可见 panel）；
+    --     防御性确保它仍注册于 UISpecialFrames，避免个别客户端移除导致 ESC 失效。
+    local sbfRegistered = false
+    for i = 1, table.getn(UISpecialFrames) do
+        if UISpecialFrames[i] == "SpellBookFrame" then
+            sbfRegistered = true
+        end
+    end
+    if not sbfRegistered then
+        table.insert(UISpecialFrames, "SpellBookFrame")
+    end
 
     -- 13. 调试 slash 命令：列出所有 SpellTab 名称，方便确认坐骑/小伙伴/玩具的实际 tab 名
     SLASH_DFSBTABS1 = "/dfsbtabs"

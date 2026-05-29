@@ -738,19 +738,12 @@ DFUI:NewMod("Map", 1, function()
                     if tex and name then
                         local isTrack = false
                         if _G.string.find(name, "追踪") or _G.string.find(name, "寻找")
-                            or _G.string.find(name, "感知")
-                            or _G.string.find(name, "Track") or _G.string.find(name, "Find")
-                            or _G.string.find(name, "Sense") then
+                            or _G.string.find(name, "Track") or _G.string.find(name, "Find") then
                             isTrack = true
                         end
                         if not isTrack then
                             if _G.string.find(tex, "Tracking") or _G.string.find(tex, "Flower")
-                                or _G.string.find(tex, "Earthquake") or _G.string.find(tex, "FindTreasure")
-                                or _G.string.find(tex, "SenseUndead") or _G.string.find(tex, "Metamorphosis")
-                                or _G.string.find(tex, "Stealth") or _G.string.find(tex, "PrayerOfHealing")
-                                or _G.string.find(tex, "DarkSummoning") or _G.string.find(tex, "SummonWaterElemental")
-                                or _G.string.find(tex, "SummonFelHunter") or _G.string.find(tex, "Racial_Avatar")
-                                or _G.string.find(tex, "Head_Dragon") then
+                                or _G.string.find(tex, "Earthquake") or _G.string.find(tex, "FindTreasure") then
                                 isTrack = true
                             end
                         end
@@ -794,7 +787,7 @@ DFUI:NewMod("Map", 1, function()
     trackBtnFrame:SetFrameStrata("HIGH")
     trackBtnFrame:SetWidth(24)
     trackBtnFrame:SetHeight(24)
-    trackBtnFrame:SetPoint("TOPRIGHT", _G.Minimap, "TOPLEFT", -5, -5)
+    trackBtnFrame:SetPoint("TOPRIGHT", _G.Minimap, "TOPRIGHT", -2, -2)
     trackBtnFrame:SetMovable(true)
     trackBtnFrame:EnableMouse(true)
     trackBtnFrame:RegisterForDrag("LeftButton")
@@ -826,9 +819,7 @@ DFUI:NewMod("Map", 1, function()
                     local isTrack = false
                     -- Match by spell name keywords (most reliable)
                     if _G.string.find(name, "追踪") or _G.string.find(name, "寻找")
-                        or _G.string.find(name, "感知")
-                        or _G.string.find(name, "Track") or _G.string.find(name, "Find")
-                        or _G.string.find(name, "Sense") then
+                        or _G.string.find(name, "Track") or _G.string.find(name, "Find") then
                         isTrack = true
                     end
                     -- Match by texture (fallback for edge cases)
@@ -836,16 +827,7 @@ DFUI:NewMod("Map", 1, function()
                         if _G.string.find(tex, "Tracking")
                             or _G.string.find(tex, "Flower")
                             or _G.string.find(tex, "Earthquake")
-                            or _G.string.find(tex, "FindTreasure")
-                            or _G.string.find(tex, "SenseUndead")
-                            or _G.string.find(tex, "Metamorphosis")
-                            or _G.string.find(tex, "Stealth")
-                            or _G.string.find(tex, "PrayerOfHealing")
-                            or _G.string.find(tex, "DarkSummoning")
-                            or _G.string.find(tex, "SummonWaterElemental")
-                            or _G.string.find(tex, "SummonFelHunter")
-                            or _G.string.find(tex, "Racial_Avatar")
-                            or _G.string.find(tex, "Head_Dragon") then
+                            or _G.string.find(tex, "FindTreasure") then
                             isTrack = true
                         end
                     end
@@ -864,7 +846,8 @@ DFUI:NewMod("Map", 1, function()
         if curTex then
             trackIcon:SetTexture(curTex)
         else
-            trackIcon:SetTexture("Interface\\Minimap\\Tracking\\None")
+            -- No active tracking: show a square placeholder so the button stays visible
+            trackIcon:SetTexture("Interface\\Icons\\Ability_Tracking")
         end
     end
 
@@ -872,10 +855,17 @@ DFUI:NewMod("Map", 1, function()
     trackBtnFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     trackBtnFrame:RegisterEvent("SPELLS_CHANGED")
     trackBtnFrame:RegisterEvent("PLAYER_AURAS_CHANGED")
+    -- 1.12 fires MINIMAP_UPDATE_TRACKING when tracking is activated/changed
+    -- (e.g. casting Find Minerals from the spellbook). Without this the icon never refreshes.
+    trackBtnFrame:RegisterEvent("MINIMAP_UPDATE_TRACKING")
     trackBtnFrame:SetScript("OnEvent", function()
         ScanTrackBtn()
         UpdateTrackBtnIcon()
     end)
+
+    -- Initial refresh: show current tracking icon immediately on load / reload
+    ScanTrackBtn()
+    UpdateTrackBtnIcon()
 
     -- Right-click: show menu
     trackBtnFrame:SetScript("OnClick", function()

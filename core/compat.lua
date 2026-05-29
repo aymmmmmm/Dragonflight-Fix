@@ -240,34 +240,63 @@ Setup:Init()
 -- DFUI.env 的 metatable 没有 __newindex，必须显式 _G.XXX 写全局。
 --=================
 do
-    -- (1) UIDROPDOWNMENU_OPEN_MENU 1.17 vanilla 未预设。
-    -- 不依赖 PLAYER_LOGIN，立即 hook UIDropDownMenu_Initialize：
-    -- 每次任何 dropdown 初始化前都确保该全局非 nil。
-    -- 同时钳位 UIDROPDOWNMENU_MAXBUTTONS 到 listFrame 实际存在的按钮数：
-    -- Atlas（Atlas.lua:36）把全局 MAXBUTTONS 提到 48 以容纳 33 项副本菜单，
-    -- 但 patch-Z 的 UIDropDownMenu.xml 只静态创建了 8 个按钮，且 CreateFrames 在 1.17 客户端不工作，
-    -- vanilla Initialize 内部循环到第 9 个按钮时 getglobal 返回 nil → button:Hide() 炸 → dropdown 系统全死。
+    -- 当前生效的 patch-9（最高优先级，覆盖 patch-8/patch/interface）UIDropDownMenu 的模板
+    -- 静态建有限个按钮（$parentButtonN，实测约 38，随 patch 版本浮动），且无 CreateFrames
+    -- 不能动态扩建。Atlas（Atlas.lua:35）却把全局 UIDROPDOWNMENU_MAXBUTTONS 顶到 48 且不还原，
+    -- 48 > 静态按钮数，于是任何
+    --   `for i=1,MAXBUTTONS do _G["DropDownList"..lvl.."Button"..i]:XXX() end`
+    -- 循环跑到第一个不存在的按钮时即 nil → 崩（隐藏循环 :44 的 button:Hide()、
+    -- ClearAll:760 的 button:UnlockHighlight()）。任何把上限顶过静态按钮数的插件同理。
+    --
+    -- 修复：进 Initialize/Refresh/ClearAll 前，把上限临时钳到“所有 level 实际连续按钮数的最小值”
+    -- （运行时实测，不硬编码——按钮数随 patch 变；隐藏循环遍历所有 level，取最小才对每个都安全），
+    -- pcall 兜底，调用后立即还原。⚠️ 但 OnShow 等 XML 内联脚本绑在 frame 上、frame:Show() 时 C 层
+    -- 直接触发，没有全局函数可 hook，临时钳位够不着（本次 DropDownList1:OnShow:4 即此）→ 见下方 ddlPin，
+    -- 改在 PLAYER_LOGIN 把 MAXBUTTONS **永久**钳到实测真值。永久钳安全（旧注释"会污染分页"判断有误）：
+    -- 第 39+ 号按钮本就不存在、48 是虚高错值，Atlas 33≤真值不受影响，Bagshui 按真值分页（多翻页不填 nil）。
+    if _G.UIDROPDOWNMENU_OPEN_MENU == nil then
+        _G.UIDROPDOWNMENU_OPEN_MENU = ""
+    end
+
+    local function ddlGetLevels()
+        local n = _G.UIDROPDOWNMENU_MAXLEVELS
+        if type(n) == "number" and n >= 1 then return n end
+        return 3
+    end
+
+    -- 所有“已存在 level”的最小连续按钮数（遇第一个不存在的即停）—— 隐藏循环遍历所有 level，取最小才对每个都安全
+    local function ddlSafeMax(cap)
+        local minCount = nil
+        for level = 1, ddlGetLevels() do
+            if _G["DropDownList" .. level] then
+                local c = 0
+                for j = 1, cap do
+                    if _G["DropDownList" .. level .. "Button" .. j] then c = j else break end
+                end
+                if minCount == nil or c < minCount then minCount = c end
+            end
+        end
+        return minCount
+    end
+
+    local function ddlGuardBefore()
+        if _G.UIDROPDOWNMENU_OPEN_MENU == nil then
+            _G.UIDROPDOWNMENU_OPEN_MENU = ""
+        end
+        local savedMax = _G.UIDROPDOWNMENU_MAXBUTTONS
+        if type(savedMax) == "number" and savedMax > 1 then
+            local safe = ddlSafeMax(savedMax)
+            if safe and safe >= 1 and safe < savedMax then
+                _G.UIDROPDOWNMENU_MAXBUTTONS = safe
+            end
+        end
+        return savedMax
+    end
+
     if type(_G.UIDropDownMenu_Initialize) == "function" then
         local _origInit = _G.UIDropDownMenu_Initialize
         _G.UIDropDownMenu_Initialize = function(frame, initFunc, displayMode, level)
-            if _G.UIDROPDOWNMENU_OPEN_MENU == nil then
-                _G.UIDROPDOWNMENU_OPEN_MENU = ""
-            end
-            local lvl = level or 1
-            local savedMax = _G.UIDROPDOWNMENU_MAXBUTTONS
-            if type(savedMax) == "number" and savedMax > 1 then
-                local realCount = 0
-                for i = 1, savedMax do
-                    if _G["DropDownList" .. lvl .. "Button" .. i] then
-                        realCount = i
-                    else
-                        break
-                    end
-                end
-                if realCount > 0 and realCount < savedMax then
-                    _G.UIDROPDOWNMENU_MAXBUTTONS = realCount
-                end
-            end
+            local savedMax = ddlGuardBefore()
             local ok, err = pcall(_origInit, frame, initFunc, displayMode, level)
             _G.UIDROPDOWNMENU_MAXBUTTONS = savedMax
             if not ok then
@@ -275,65 +304,57 @@ do
             end
         end
     end
-    -- 顺便立即设上一个，覆盖 hook 之前的访问路径
-    if _G.UIDROPDOWNMENU_OPEN_MENU == nil then
-        _G.UIDROPDOWNMENU_OPEN_MENU = ""
-    end
 
-    -- 同样钳位 UIDropDownMenu_Refresh —— UIOptionsFrameTargetofTargetDropDown 的
-    -- OnLoad 触发 SetSelectedValue → Refresh，Refresh 内部也循环 1..MAXBUTTONS。
+    -- Refresh 内部也有 1..MAXBUTTONS 循环（如 UIOptionsFrameTargetofTargetDropDown 的 OnLoad）；
+    -- 第三参 dropdownLevel 透传以兼容带该参的版本。
     if type(_G.UIDropDownMenu_Refresh) == "function" then
         local _origRefresh = _G.UIDropDownMenu_Refresh
-        _G.UIDropDownMenu_Refresh = function(frame, useValue)
-            local lvl = (_G.UIDROPDOWNMENU_MENU_LEVEL or 1)
-            local savedMax = _G.UIDROPDOWNMENU_MAXBUTTONS
-            if type(savedMax) == "number" and savedMax > 1 then
-                local realCount = 0
-                for i = 1, savedMax do
-                    if _G["DropDownList" .. lvl .. "Button" .. i] then
-                        realCount = i
-                    else
-                        break
-                    end
-                end
-                if realCount > 0 and realCount < savedMax then
-                    _G.UIDROPDOWNMENU_MAXBUTTONS = realCount
-                end
-            end
-            local ok, err = pcall(_origRefresh, frame, useValue)
+        _G.UIDropDownMenu_Refresh = function(frame, useValue, dropdownLevel)
+            local savedMax = ddlGuardBefore()
+            local ok, err = pcall(_origRefresh, frame, useValue, dropdownLevel)
             _G.UIDROPDOWNMENU_MAXBUTTONS = savedMax
             if not ok then return nil, err end
         end
     end
 
-    -- 主动补建 DropDownList<L>Button9..MAXBUTTONS 占位 button，
-    -- 让 vanilla 内部循环不再撞 nil（同时解决 OnShow 等内嵌脚本里读 buttons 索引的 nil 问题）。
-    local function ensureDropDownButtons()
-        local cap = type(_G.UIDROPDOWNMENU_MAXBUTTONS) == "number" and _G.UIDROPDOWNMENU_MAXBUTTONS or 8
-        if cap <= 8 then return end
-        for level = 1, (_G.UIDROPDOWNMENU_MAXLEVELS or 2) do
-            local listFrame = _G["DropDownList" .. level]
-            if listFrame then
-                for i = 9, cap do
-                    local btnName = "DropDownList" .. level .. "Button" .. i
-                    if not _G[btnName] then
-                        local ok = pcall(CreateFrame, "Button", btnName, listFrame, "UIDropDownMenuButtonTemplate")
-                        if not ok or not _G[btnName] then
-                            local btn = CreateFrame("Button", btnName, listFrame)
-                            btn:SetWidth(1); btn:SetHeight(1)
-                            btn:Hide()
-                        end
-                    end
-                end
+    -- ClearAll 内部同样有 1..MAXBUTTONS 静态循环（line 758: button:UnlockHighlight()）；
+    -- WorldMap 的 SetMapToCurrentZone → WorldMap_UpdateZoneDropDownText 会直接调它，
+    -- 绕过 Initialize/Refresh，故 Atlas 顶到 48 时第 39+ 个按钮 nil 崩。同样钳位兜底。
+    if type(_G.UIDropDownMenu_ClearAll) == "function" then
+        local _origClearAll = _G.UIDropDownMenu_ClearAll
+        _G.UIDropDownMenu_ClearAll = function(frame)
+            local savedMax = ddlGuardBefore()
+            local ok, err = pcall(_origClearAll, frame)
+            _G.UIDROPDOWNMENU_MAXBUTTONS = savedMax
+            if not ok then return nil, err end
+        end
+    end
+
+    -- 治本：OnShow 等 XML 内联脚本（frame:Show() 时 C 层触发，无全局函数可 hook）够不着上面的
+    -- 临时钳位——右键头像 BCS ToggleDropDownMenu → DropDownList1:Show → OnShow:4
+    -- `_G[..Button..i]:SetWidth` 撞 nil 即此；GetSelectedID(:466) 等也未 hook。故按 ddlSafeMax
+    -- 实测真值把 MAXBUTTONS **永久**钳定，一次兜住全部入口（Initialize/Refresh/ClearAll/
+    -- GetSelectedID/OnShow 内联脚本）。幂等：钳到真值后 real<cur 不再成立，重入不会误降。
+    local function ddlPinNow()
+        local cur = _G.UIDROPDOWNMENU_MAXBUTTONS
+        if type(cur) == "number" and cur > 1 then
+            local real = ddlSafeMax(cur)
+            if real and real >= 1 and real < cur then
+                _G.UIDROPDOWNMENU_MAXBUTTONS = real
             end
         end
     end
-    ensureDropDownButtons()
-    local _dfui_ddl_btnfix = CreateFrame("Frame")
-    _dfui_ddl_btnfix:RegisterEvent("PLAYER_LOGIN")
-    _dfui_ddl_btnfix:RegisterEvent("PLAYER_ENTERING_WORLD")
-    _dfui_ddl_btnfix:RegisterEvent("ADDON_LOADED")
-    _dfui_ddl_btnfix:SetScript("OnEvent", ensureDropDownButtons)
+
+    -- (a) 文件级立即钳一次：Atlas(A) 必早于 Dragonflight-Fix(D) 加载，此刻 48 已就位，
+    --     DropDownList1/2/3 及其按钮（FrameXML 早于所有 addon 创建）已存在，ddlSafeMax 可立即测真值。
+    --     不依赖任何事件——避免 /reload 不触发 PLAYER_LOGIN 导致 reload 后停在 48 的缺口。
+    ddlPinNow()
+
+    -- (b) PLAYER_ENTERING_WORLD（登录与 /reload 都触发）再钳一次作防御：
+    --     防某插件在 DF-Fix 文件级之后再把上限顶高。
+    local ddlPin = CreateFrame("Frame")
+    ddlPin:RegisterEvent("PLAYER_ENTERING_WORLD")
+    ddlPin:SetScript("OnEvent", ddlPinNow)
 
     -- (4) Turtle_ShopUI patch-Z 滞后服务器：
     --   - Shop_ProcessEntries:285 调 SetHyperlink，但服务器返回了 patch-Z 不认识的新链接类型 → Unknown link type

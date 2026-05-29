@@ -47,6 +47,16 @@ function KillFrame(frame)
     end
 end
 
+-- 软隐藏：透明 + 移出屏幕 + 禁交互，但【不 Hide、不清事件/脚本】，
+-- 使 frame 继续活在 UIPanel 系统中（用于让自定义面板复用原生 frame 的 UIPanel 互斥）。
+function SoftHideFrame(frame)
+    if not frame then return end
+    frame:SetAlpha(0)
+    frame:EnableMouse(false)
+    frame:ClearAllPoints()
+    frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -10000, 10000)
+end
+
 function HideFrameTextures(frame)
     local regions = {frame:GetRegions()}
     for _, region in ipairs(regions) do

@@ -35,9 +35,19 @@ function Setup:TempDBForSwitching(isDarkMode)
         if moduleTable then
             DFUI.tempDB[moduleName] = {}
             for key, value in pairs(moduleTable) do
-                if value then
+                if value ~= nil then
                     DFUI.tempDB[moduleName][key] = value
                 end
+            end
+        end
+    end
+
+    -- 套用 profile 后补全未覆盖的 key，防止 profile 表漏掉的模块/key 变 nil（如 Auras/Cooldowns）
+    for moduleName, defaults in pairs(DFUI.defaults) do
+        DFUI.tempDB[moduleName] = DFUI.tempDB[moduleName] or {}
+        for key, valueTable in pairs(defaults) do
+            if DFUI.tempDB[moduleName][key] == nil then
+                DFUI.tempDB[moduleName][key] = valueTable[1]
             end
         end
     end

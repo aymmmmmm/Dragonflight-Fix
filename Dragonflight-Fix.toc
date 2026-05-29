@@ -41,7 +41,6 @@ modules\chat\chat.lua
 modules\bags\bags.lua
 modules\map\map.lua
 modules\map\collect.lua
-modules\map\pfquest.lua
 modules\menu\menu.lua
 modules\menu\addons.lua
 modules\micro\micro.lua

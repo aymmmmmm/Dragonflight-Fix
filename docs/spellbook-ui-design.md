@@ -161,16 +161,22 @@ SetScale(0.9)
 SetMovable(true)              -- 可拖动
 RegisterForDrag("LeftButton") -- 左键拖动
 
--- 关闭方式
-ESC 关闭（UISpecialFrames）
-红色关闭按钮（CreateRedButton）
+-- UIPanel 互斥（与制造面板同机制；单向数据流）
+-- 原生 SpellBookFrame 透明保活（SoftHideFrame，不 Hide）→ 留在 left 区 UIPanel 系统
+-- 打开/关闭统一作用于原生 SpellBookFrame：ShowUIPanel / HideUIPanel
+-- 可见 panel 经 HookScript(SpellBookFrame, OnShow/OnHide) 被动跟随
+-- → 与角色 / 制造 / 社交互斥，任意时刻只显示一个面板
 
--- 音效
+-- 关闭方式（全部最终落到原生 SpellBookFrame，panel 跟随隐藏）
+ESC 关闭（原生 SpellBookFrame 在 UISpecialFrames）
+红色关闭按钮 → HideUIPanel(SpellBookFrame)
+
+-- 音效（仅 panel 自身播放；原生 OnShow/OnHide 已清除以避免重复）
 OnShow: igSpellBookOpen
 OnHide: igSpellBookClose
 
 -- 全局覆写
-_G.ToggleSpellBook = function() ... end
+_G.ToggleSpellBook = function(bookType) ... ShowUIPanel/HideUIPanel(SpellBookFrame) ... end
 ```
 
 ## 八、复用指南
