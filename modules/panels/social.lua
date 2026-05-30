@@ -236,7 +236,7 @@ DFUI:NewMod("Social", 5, function()
 
     local guildInset = DFUI.CreateRetailInset(customBg, {
         name        = "DFUI_GuildInset",
-        anchors     = {6, -58, -9, 98},     -- 左右各比原 {3,-6} 多收 3px；底部再上移 18px (80→98)
+        anchors     = {3, -58, -6, 98},     -- 左右与 查找/好友 inset 一致(3/-6)；底部上移 18px (80→98)
         followFrame = GuildFrame,
     })
 
@@ -643,6 +643,19 @@ DFUI:NewMod("Social", 5, function()
         reanchorGuildArrows()
         local guildSB = getglobal("GuildListScrollFrameScrollBar")
         if guildSB then HookScript(guildSB, "OnShow", reanchorGuildArrows) end
+        -- vanilla 多入口(成员点击 GuildMemberDetailFrame:Show / 箭头滚动 / 拖动滚动条 …)都会反复把
+        -- 区域列头 H2 宽度改回 vanilla(~105) → 右锚下左缘左移。逐个 hook 堵不完，改用 guildInset
+        -- OnUpdate 每帧轻检测：H2 一旦被改宽(>80)就把 width+位置+文字对齐三件套设回。偏移最多 1 帧、肉眼无感。
+        guildInset:SetScript("OnUpdate", function()
+            local h2 = GuildFrameColumnHeader2
+            if h2 and (h2:GetWidth() or 0) > 98 then
+                h2:ClearAllPoints()
+                h2:SetPoint("BOTTOMRIGHT", guildInset, "TOPRIGHT", -13, -24)
+                h2:SetWidth(92)
+                local fs = h2.GetFontString and h2:GetFontString()
+                if fs then fs:ClearAllPoints(); fs:SetPoint("LEFT", h2, "LEFT", 0, 0); fs:SetJustifyH("LEFT") end
+            end
+        end)
     end
 
     -- ScrollFrame 自身的边框/凹槽纹理（不在 ScrollBar 子树中），单独清掉
@@ -883,10 +896,19 @@ DFUI:NewMod("Social", 5, function()
                 end
                 ToggleDropDownMenu(1, nil, FriendsDropDown, "cursor")
             end
+            -- 脱钩 vanilla FauxScrollFrame：row 挂自有容器 friendRowHost（不挂 sf），sf 被 FauxScrollFrame_Update
+            -- 在好友数≤10 时 Hide 也不再连带隐藏 row。offset/visibleRows 自管，提前声明供 onWheel 捕获。
+            local friendOffset = 0
+            local visibleRows = 0
+            local lastFriRefreshT = -1  -- refreshFriendRows 同帧节流时间戳（防切 tab 同帧双触发重渲染）
+            -- 行容器：切 tab 时一次 Hide/Show 整个容器（替 24 row 逐个显隐，消除批量 reflow 卡顿）
+            local friendRowHost = CreateFrame("Frame", nil, friendsInset)
+            friendRowHost:SetAllPoints(friendsInset)
+            friendRowHost:SetFrameLevel(friendsInset:GetFrameLevel() + 5)
             for i = 1, FRIEND_ROWS do
-                DFUI.CreateSocialRow(sf, {
+                DFUI.CreateSocialRow(friendRowHost, {
                     name       = "DFUI_FriendRow"..i,
-                    frameLevel = sf:GetFrameLevel() + 10,
+                    frameLevel = friendRowHost:GetFrameLevel() + 10,
                     columns = {
                         -- 去掉状态点（dot），title.offsetX=18 保持原 title 起始 X
                         -- （之前 dot 占 4+9=13，title offsetX=5 → 18）
@@ -915,29 +937,34 @@ DFUI:NewMod("Social", 5, function()
                         if row.name and ChatFrame_SendTell then ChatFrame_SendTell(row.name) end
                     end,
                     onWheel = function()
-                        if FriendsList_Update then FriendsList_Update() end
+                        -- 自管翻页：arg1=1 上滚(offset 减)/ -1 下滚(offset 加)
+                        local numTotal = (GetNumFriends and GetNumFriends()) or 0
+                        local maxOff = math.max(0, numTotal - visibleRows)
+                        friendOffset = friendOffset - (arg1 or 0)
+                        if friendOffset < 0 then friendOffset = 0 elseif friendOffset > maxOff then friendOffset = maxOff end
+                        lastFriRefreshT = -1  -- 绕同帧节流：快速滚轮同帧多次也保证每次翻页都渲染
+                        refreshFriendRows()
                     end,
                 })
             end
 
             -- 行高固定 20px（三 tab 一致），行数自适应 SF.h
             local FIXED_ROW_H = 18
-            local visibleRows = 0
             local function layoutRows()
-                -- 1.12 GetHeight 在双锚未完全 reflow 时返回脏值，GetTop-GetBottom 才准
-                -- 参考 [reference-wow112-frame-size-pitfalls]，fallback GetHeight 覆盖极短窗口
-                local t, b = sf:GetTop(), sf:GetBottom()
-                local h = (t and b and (t-b) > 0) and (t-b) or sf:GetHeight()
+                -- 基准换 friendsInset（脱离 vanilla sf；sf 被 FauxScrollFrame Hide 时不受影响）
+                -- GetTop-GetBottom 取真高（reference-wow112-frame-size-pitfalls），fallback GetHeight
+                local t, b = friendsInset:GetTop(), friendsInset:GetBottom()
+                local h = (t and b and (t-b) > 0) and (t-b) or friendsInset:GetHeight()
                 if not h or h <= 0 then visibleRows = 0; return false end
-                visibleRows = math.floor(h / FIXED_ROW_H)
+                visibleRows = math.floor((h - 8) / FIXED_ROW_H)  -- -8 = inset 顶4+底4 padding（对应原 sf 锚偏移）
                 if visibleRows > FRIEND_ROWS then visibleRows = FRIEND_ROWS end
                 if visibleRows < 1 then visibleRows = 1 end
                 for i = 1, FRIEND_ROWS do
                     local row = _G["DFUI_FriendRow"..i]
                     if i <= visibleRows then
                         row:ClearAllPoints()
-                        row:SetPoint("TOPLEFT",  sf, "TOPLEFT",  0, -(i - 1) * FIXED_ROW_H)
-                        row:SetPoint("TOPRIGHT", sf, "TOPRIGHT", 0, -(i - 1) * FIXED_ROW_H)
+                        row:SetPoint("TOPLEFT",  friendRowHost, "TOPLEFT",   6, -4 - (i - 1) * FIXED_ROW_H)
+                        row:SetPoint("TOPRIGHT", friendRowHost, "TOPRIGHT", -24, -4 - (i - 1) * FIXED_ROW_H)
                         row:SetHeight(FIXED_ROW_H)
                     else
                         row:Hide()
@@ -947,12 +974,22 @@ DFUI:NewMod("Social", 5, function()
             end
 
             refreshFriendRows = function()
-                -- vanilla FriendsList_Update 每次会 SetText 子 FontString + button:Show()
-                -- 我们用 SetAlpha(0) 让按钮视觉透明，但 SetText 后字串还在；需每次清空 text + alpha 兜底
+                -- 同帧节流：切 tab 时 vanilla FriendsList_Update + FRIENDLIST_UPDATE 同帧双触发 → 只渲染 1 次
+                local _t = GetTime()
+                if _t == lastFriRefreshT then return end
+                lastFriRefreshT = _t
                 for i = 1, MAX_ROWS do hideVanillaButton(i) end
+                -- 屏蔽 tab（FriendsListFrame 隐藏）→ 一次 Hide 整个行容器，让 vanilla 屏蔽列表显示
+                if FriendsListFrame and not FriendsListFrame:IsShown() then
+                    friendRowHost:Hide()
+                    return
+                end
+                friendRowHost:Show()  -- 好友 tab：一次 Show 容器（从屏蔽切回）
                 if not layoutRows() then return end
-                local off = (FauxScrollFrame_GetOffset and FauxScrollFrame_GetOffset(sf)) or 0
                 local numTotal = (GetNumFriends and GetNumFriends()) or 0
+                local maxOff = math.max(0, numTotal - visibleRows)  -- 钳位防越界（who 复查 bug 同源）
+                if friendOffset > maxOff then friendOffset = maxOff end
+                local off = friendOffset
                 for i = 1, visibleRows do
                     local row = _G["DFUI_FriendRow"..i]
                     local idx = off + i
@@ -1023,6 +1060,13 @@ DFUI:NewMod("Social", 5, function()
             -- hook vanilla FriendsList_Update：FauxScrollFrame 滚动 / 数据变化都会触发
             -- 与 ShaguTweaks 共存（它 hook 同函数改 vanilla button 文字，对已 hide 的 button 无视觉影响）
             if hooksecurefunc then hooksecurefunc("FriendsList_Update", refreshFriendRows) end
+
+            -- 切 好友/屏蔽 toggle tab 时刷新：脱钩后 row 挂 friendsInset、不再随 sf 自动显隐，
+            -- 需手动 Hide(屏蔽 tab)/显示(好友 tab)。deferOneFrame 等 FriendsListFrame 显隐稳定再读
+            -- 立即刷新（不 deferOneFrame）：HookScript prev-then-func，vanilla OnClick 已先切好
+            -- FriendsListFrame 显隐，此处读得准；延迟一帧会让 row 空一帧→切 tab 有卡顿感
+            if FriendsFrameToggleTab1 then HookScript(FriendsFrameToggleTab1, "OnClick", function() refreshFriendRows() end) end
+            if FriendsFrameToggleTab2 then HookScript(FriendsFrameToggleTab2, "OnClick", function() refreshFriendRows() end) end
 
             -- 数据变化兜底（vanilla 大多走 FriendsList_Update，但事件直接触发也安全）
             local refreshFrame = CreateFrame("Frame")
@@ -1462,16 +1506,23 @@ DFUI:NewMod("Social", 5, function()
                 mySelectedGuildIdx = row.guildIdx
                 if SetGuildRosterSelection then SetGuildRosterSelection(row.guildIdx) end
                 if GuildStatus_Update then GuildStatus_Update() end
-                if GuildFrame_Update then GuildFrame_Update() end
+                -- 不调 GuildFrame_Update：它把列头 H2 重设回 vanilla 宽/位 → 点击成员区域列头往左跳
                 -- vanilla GuildFrameButton OnClick 内会调 GuildMemberDetailFrame:Show()
                 -- 我们 hide vanilla button 后这条路径丢失，手动补上（vanilla 自带 OnShow 填充数据）
                 if GuildMemberDetailFrame then GuildMemberDetailFrame:Show() end
+                -- 根因：GuildMemberDetailFrame:Show 在 refreshGuildRows(设回 H2)之后才执行，把区域列头 H2
+                -- 宽度改回 vanilla(~105)→右锚下左缘左移 31px。这里(Show 之后、最后一步)设回 74，无人再覆盖。
+                if GuildFrameColumnHeader2 then
+                    GuildFrameColumnHeader2:ClearAllPoints()
+                    GuildFrameColumnHeader2:SetPoint("BOTTOMRIGHT", guildInset, "TOPRIGHT", -13, -24)
+                    GuildFrameColumnHeader2:SetWidth(92)
+                end
             end
             local function onGuildRightClick(row)
                 if not row.guildIdx then return end
                 if SetGuildRosterSelection then SetGuildRosterSelection(row.guildIdx) end
                 if GuildStatus_Update then GuildStatus_Update() end
-                if GuildFrame_Update then GuildFrame_Update() end
+                -- 不调 GuildFrame_Update（同 onLeftClick：避免区域列头往左跳）
                 -- 自定义 dropdown：公会成员
                 FriendsDropDown.displayMode = "MENU"
                 FriendsDropDown.initialize = function()
@@ -1514,7 +1565,7 @@ DFUI:NewMod("Social", 5, function()
                         -- 去掉状态点（dot），回收左侧死区：title.offsetX 18→4
                         { name="title",    type="fontstring", width=90,
                           font="GameFontNormalSmall", color="main",
-                          anchor="LEFT", offsetX=4 },
+                          anchor="LEFT", offsetX=8 },
                         { name="lvl",      type="fontstring", width=24,
                           font="GameFontNormalSmall", color="next_",
                           anchor="LEFT", offsetX=4 },
@@ -1525,7 +1576,7 @@ DFUI:NewMod("Social", 5, function()
                         -- justifyH="LEFT" 与前三列一致左对齐排表格，溢出由 TruncateToWidth 截断
                         { name="zoneText", type="fontstring", width=80,
                           font="GameFontNormalSmall", color="next_",
-                          anchor="RIGHT", justifyH="LEFT", offsetX=-8 },
+                          anchor="RIGHT", justifyH="LEFT", offsetX=-13 },
                     },
                     onLeftClick   = onGuildLeftClick,
                     onRightClick  = onGuildRightClick,
@@ -1621,6 +1672,43 @@ DFUI:NewMod("Social", 5, function()
                 end
             end
 
+            -- 列宽：公会状态与玩家状态【完全统一】（用户取舍：切换 mode 列不跳动 > 官阶完整）
+            -- 名字90/第2列34/第3列60/第4列70 + 列头同步；官阶在 34px 会截断
+            local function applyGuildColWidths(gMode)  -- gMode 保留兼容调用，列宽已两 mode 统一
+                for i = 1, GUILD_ROWS do
+                    local row = _G["DFUI_GuildRow"..i]
+                    if row and row.lvl then
+                        row.title:SetWidth(90)
+                        row.lvl:SetWidth(64)
+                        row.lvl:SetJustifyH("LEFT")
+                        row.class:SetWidth(45)
+                        row.zoneText:SetWidth(68)
+                    end
+                end
+                -- 列头每次重设 SetPoint + width：vanilla GuildStatus_Update(点击成员)会重排列头位置，
+                -- 只设 width 不设 SetPoint → 点击后 H2 框左移、"区域"文字跟着偏。这里把锚链整体设回。
+                if GuildFrameColumnHeader1 then
+                    GuildFrameColumnHeader1:ClearAllPoints()
+                    GuildFrameColumnHeader1:SetPoint("BOTTOMLEFT", guildInset, "TOPLEFT", 8, -24)
+                    GuildFrameColumnHeader1:SetWidth(95)
+                end
+                if GuildFrameColumnHeader3 then
+                    GuildFrameColumnHeader3:ClearAllPoints()
+                    GuildFrameColumnHeader3:SetPoint("LEFT", GuildFrameColumnHeader1, "RIGHT", 0, 0)
+                    GuildFrameColumnHeader3:SetWidth(68)
+                end
+                if GuildFrameColumnHeader4 then
+                    GuildFrameColumnHeader4:ClearAllPoints()
+                    GuildFrameColumnHeader4:SetPoint("LEFT", GuildFrameColumnHeader3, "RIGHT", 0, 0)
+                    GuildFrameColumnHeader4:SetWidth(50)
+                end
+                if GuildFrameColumnHeader2 then
+                    GuildFrameColumnHeader2:ClearAllPoints()
+                    GuildFrameColumnHeader2:SetPoint("BOTTOMRIGHT", guildInset, "TOPRIGHT", -13, -24)
+                    GuildFrameColumnHeader2:SetWidth(92)
+                end
+            end
+
             refreshGuildRows = function()
                 for i = 1, GUILD_ROWS do hideVanillaGuildBtn(i) end
                 suppressGuildStatusFrame()
@@ -1660,32 +1748,37 @@ DFUI:NewMod("Social", 5, function()
                             if online then
                                 row.title:SetText(name)
                                 row.title:SetTextColor(cr, cg, cb)
-                                row.lvl:SetText(level or "")
-                                local lvl = tonumber(level)
-                                local lc = lvl and GetDifficultyColor and GetDifficultyColor(lvl) or nil
-                                if lc then row.lvl:SetTextColor(lc.r, lc.g, lc.b)
-                                else row.lvl:SetTextColor(1, 1, 1) end
                                 if gMode then
-                                    row.class:SetText(DFUI.TruncateToWidth(note or "", 76))
+                                    -- 公会：col2=官阶 rank / col3=注释 note / col4=在线
+                                    row.lvl:SetText(DFUI.TruncateToWidth(rank or "", 62))
+                                    row.lvl:SetTextColor(0.82, 0.82, 0.82)    -- 官阶灰白
+                                    row.class:SetText(DFUI.TruncateToWidth(note or "", 48))
                                     row.class:SetTextColor(0.82, 0.82, 0.82)  -- 注释灰白
                                     row.zoneText:SetText("在线")
                                     row.zoneText:SetTextColor(0.1, 1, 0.1)    -- 在线绿
                                 else
+                                    -- 玩家：col2=等级 level / col3=职业 class / col4=区域 zone
+                                    row.lvl:SetText(level or "")
+                                    local lvl = tonumber(level)
+                                    local lc = lvl and GetDifficultyColor and GetDifficultyColor(lvl) or nil
+                                    if lc then row.lvl:SetTextColor(lc.r, lc.g, lc.b)
+                                    else row.lvl:SetTextColor(1, 1, 1) end
                                     row.class:SetText(class or "")
                                     row.class:SetTextColor(cr, cg, cb)
-                                    row.zoneText:SetText(DFUI.TruncateToWidth(zone or "", 78))  -- 78 = zone 框 80 − 2px
+                                    row.zoneText:SetText(DFUI.TruncateToWidth(zone or "", 66))  -- 78 = zone 框 80 − 2px
                                     row.zoneText:SetTextColor(1, 1, 1)
                                 end
                             else
                                 -- 离线：职业色 + alpha 0.5（与 ShaguTweaks 聊天/Guild 染色风格一致）
                                 row.title:SetText(name); row.title:SetTextColor(cr, cg, cb, 0.5)
-                                row.lvl:SetText(level or ""); row.lvl:SetTextColor(cr, cg, cb, 0.5)
                                 if gMode then
-                                    row.class:SetText(DFUI.TruncateToWidth(note or "", 76)); row.class:SetTextColor(cr, cg, cb, 0.5)
+                                    row.lvl:SetText(DFUI.TruncateToWidth(rank or "", 62)); row.lvl:SetTextColor(cr, cg, cb, 0.5)
+                                    row.class:SetText(DFUI.TruncateToWidth(note or "", 48)); row.class:SetTextColor(cr, cg, cb, 0.5)
                                     row.zoneText:SetText(guildLastOnlineText(idx)); row.zoneText:SetTextColor(cr, cg, cb, 0.5)
                                 else
+                                    row.lvl:SetText(level or ""); row.lvl:SetTextColor(cr, cg, cb, 0.5)
                                     row.class:SetText(class or ""); row.class:SetTextColor(cr, cg, cb, 0.5)
-                                    row.zoneText:SetText(DFUI.TruncateToWidth(zone or "", 78)); row.zoneText:SetTextColor(cr, cg, cb, 0.5)
+                                    row.zoneText:SetText(DFUI.TruncateToWidth(zone or "", 66)); row.zoneText:SetTextColor(cr, cg, cb, 0.5)
                                 end
                             end
                             row:SetSelected(mySelectedGuildIdx == idx)
@@ -1698,23 +1791,34 @@ DFUI:NewMod("Social", 5, function()
                     end
                 end
                 -- 列头第3/4列随 mode：玩家「职业/区域」↔ 公会「注释/最后上线」（Header4=col3, Header2=col4）
-                if GuildFrameColumnHeader4 and GuildFrameColumnHeader4.GetFontString then
-                    local fs4 = GuildFrameColumnHeader4:GetFontString(); if fs4 then fs4:SetText(gMode and "注释" or "职业") end
+                -- 列头文字随 mode + 每次强制重设 fontstring 的 LEFT(0) 锚与左对齐：
+                -- vanilla GuildStatus_Update(点击成员触发)会把列头 fontstring 改回默认 CENTER 对齐，
+                -- 只 SetText 不重锚 → "区域"等文字会从左对齐跳成居中。这里每次刷新都设回 LEFT 保持一致。
+                local function relayoutHdr(h, txt)
+                    if not (h and h.GetFontString) then return end
+                    local fs = h:GetFontString(); if not fs then return end
+                    if txt then fs:SetText(txt) end
+                    fs:ClearAllPoints(); fs:SetPoint("LEFT", h, "LEFT", 0, 0); fs:SetJustifyH("LEFT")
                 end
-                if GuildFrameColumnHeader2 and GuildFrameColumnHeader2.GetFontString then
-                    local fs2 = GuildFrameColumnHeader2:GetFontString(); if fs2 then fs2:SetText(gMode and "最后上线" or "区域") end
-                end
+                relayoutHdr(GuildFrameColumnHeader1, nil)   -- 名字：只重锚，文字保持 vanilla
+                relayoutHdr(GuildFrameColumnHeader4, gMode and "注释" or "职业")
+                relayoutHdr(GuildFrameColumnHeader2, gMode and "最后上线" or "区域")
+                relayoutHdr(GuildFrameColumnHeader3, gMode and "官阶" or "等级")
+                applyGuildColWidths(gMode)
                 if updateGuildButtons then updateGuildButtons() end
             end
 
             if hooksecurefunc then hooksecurefunc("GuildStatus_Update", refreshGuildRows) end
 
-            -- 切 mode = vanilla 切换 GuildPlayerStatusFrame/GuildStatusFrame 显隐 → 两者 OnShow 都刷新自建列表+列头
-            if GuildStatusFrame then
-                HookScript(GuildStatusFrame, "OnShow", function() guildOffset = 0; refreshGuildRows() end)
-            end
-            if GuildPlayerStatusFrame then
-                HookScript(GuildPlayerStatusFrame, "OnShow", function() guildOffset = 0; refreshGuildRows() end)
+            -- 切 mode = vanilla 切换 GuildPlayerStatusFrame/GuildStatusFrame 显隐。
+            -- deferOneFrame 延迟一帧：等 vanilla 把两 Frame 切换完成、IsShown 稳定后再读 mode 刷新。
+            -- 否则切回时 PSF:Show 可能早于 GSF:Hide，gMode 读到 GSF 仍 shown=true、UI 卡在公会状态（回归 bug 根因）。
+            local function deferGuildRefresh() guildOffset = 0; deferOneFrame(refreshGuildRows) end
+            if GuildStatusFrame then HookScript(GuildStatusFrame, "OnShow", deferGuildRefresh) end
+            if GuildPlayerStatusFrame then HookScript(GuildPlayerStatusFrame, "OnShow", deferGuildRefresh) end
+            -- 兜底：直接 hook 切换按钮 OnClick（真实全局名大写 List）——OnShow 时机不可靠时也能触发刷新
+            if GuildFrameGuildListToggleButton then
+                HookScript(GuildFrameGuildListToggleButton, "OnClick", deferGuildRefresh)
             end
 
             local refreshFrameGuild = CreateFrame("Frame")
@@ -1740,10 +1844,11 @@ DFUI:NewMod("Social", 5, function()
                         if r.GetObjectType and r:GetObjectType() == "Texture" then r:SetTexture(nil) end
                     end
                     -- 列头 FontString 默认 CENTER → 改 LEFT 对齐与 row 文字一致
+                    -- offset 0（非4）：header frame 本身已 +4 锚 inset，文字再 +4 会比 row 数据(只+4)多缩进4px
                     local fs = h.GetFontString and h:GetFontString()
                     if fs then
                         fs:ClearAllPoints()
-                        fs:SetPoint("LEFT", h, "LEFT", 4, 0)
+                        fs:SetPoint("LEFT", h, "LEFT", 0, 0)
                         fs:SetJustifyH("LEFT")
                     end
                 end
@@ -1754,7 +1859,7 @@ DFUI:NewMod("Social", 5, function()
                 GuildFrameColumnHeader3:SetParent(guildInset); GuildFrameColumnHeader4:SetParent(guildInset)
                 -- 设计 B：列头跨越 inset 上边框（DF retail 风格）
                 GuildFrameColumnHeader1:ClearAllPoints()
-                GuildFrameColumnHeader1:SetPoint("BOTTOMLEFT", guildInset, "TOPLEFT", 4, -24)  -- 回收 dot 死区，与 row title offsetX=4 对齐
+                GuildFrameColumnHeader1:SetPoint("BOTTOMLEFT", guildInset, "TOPLEFT", 8, -24)  -- 与 row title offsetX=8 对齐（留出 2-3px 内缩，同查找页）
                 GuildFrameColumnHeader1:SetWidth(90 + 5)
                 GuildFrameColumnHeader3:ClearAllPoints()
                 GuildFrameColumnHeader3:SetPoint("LEFT", GuildFrameColumnHeader1, "RIGHT", 0, 0)
@@ -1763,8 +1868,8 @@ DFUI:NewMod("Social", 5, function()
                 GuildFrameColumnHeader4:SetPoint("LEFT", GuildFrameColumnHeader3, "RIGHT", 0, 0)
                 GuildFrameColumnHeader4:SetWidth(78 + 4)
                 GuildFrameColumnHeader2:ClearAllPoints()
-                GuildFrameColumnHeader2:SetPoint("BOTTOMRIGHT", guildInset, "TOPRIGHT", -8, -24)
-                GuildFrameColumnHeader2:SetWidth(112)
+                GuildFrameColumnHeader2:SetPoint("BOTTOMRIGHT", guildInset, "TOPRIGHT", -13, -24)
+                GuildFrameColumnHeader2:SetWidth(92)  -- 与 applyGuildColWidths 一致（避免首次刷新时列头跳）
             end
 
             -- 自建公会搜索框：客户端按名字即时过滤成员（无防抖——本地 roster 数据不涉网络）

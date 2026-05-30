@@ -1032,18 +1032,23 @@ local function dfuiGetMeasureFS(font)
     return fs
 end
 
+local truncCache = {}
 function DFUI.TruncateToWidth(text, maxW, font)
     if not text or text == "" or not maxW or maxW <= 0 then return text or "" end
+    -- 结果缓存：切 tab / 列表刷新会反复对同文本+同宽截断，命中缓存可跳过整个逐字符测宽循环
+    local key = text.."\1"..maxW.."\1"..(font or "")
+    local cached = truncCache[key]
+    if cached ~= nil then return cached end
     local fs = dfuiGetMeasureFS(font)
     fs:SetText(text)
-    if (fs:GetStringWidth() or 0) <= maxW then return text end
+    if (fs:GetStringWidth() or 0) <= maxW then truncCache[key] = text; return text end
     -- 省略号：优先单字符 …（U+2026），字体缺字形(测宽 0)则退回三点 ...
     local ell = "…"
     fs:SetText(ell)
     local ellW = fs:GetStringWidth() or 0
     if ellW <= 0 then ell = "..."; fs:SetText(ell); ellW = fs:GetStringWidth() or 0 end
     local budget = maxW - ellW
-    if budget <= 0 then return ell end
+    if budget <= 0 then truncCache[key] = ell; return ell end
     local out, i, n = "", 1, string.len(text)
     while i <= n do
         local b = string.byte(text, i)
@@ -1057,8 +1062,9 @@ function DFUI.TruncateToWidth(text, maxW, font)
         out = out .. ch
         i = i + clen
     end
-    if out == "" then return ell end
-    return out .. ell
+    local result = (out == "") and ell or (out .. ell)
+    truncCache[key] = result
+    return result
 end
 
 -- DFUI.MeasureWidth(text, font) — 测文本渲染像素宽（颜色码 |cff..|r 不计宽）。
