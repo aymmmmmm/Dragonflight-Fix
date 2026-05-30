@@ -349,8 +349,8 @@ DFUI:NewMod("SpellBook", 5, function()
         container:SetHeight(60)
 
         local iconBtn = CreateFrame("Button", nil, container)
-        iconBtn:SetWidth(50)
-        iconBtn:SetHeight(50)
+        iconBtn:SetWidth(48)
+        iconBtn:SetHeight(48)
         iconBtn:SetPoint("LEFT", container, "LEFT", 5, 5)
         container.iconBtn = iconBtn
 
@@ -363,12 +363,12 @@ DFUI:NewMod("SpellBook", 5, function()
         container.icon = icon
 
         -- retail Spellbook-SlotFrame：图标外框 atlas (0.00390625, 0.27734375, 0.44140625, 0.69531250) = 70×65 native
-        -- 等比放大到 95×88 让内部坑位匹配 50×50 icon (retail 70×65 配 37×37，比例 1.892/1.757)
+        -- 等比放大到 91×84 让内部坑位匹配 48×48 icon (retail 70×65 配 37×37，比例 1.892/1.757)
         local border = iconBtn:CreateTexture(nil, "ARTWORK")
         border:SetTexture(TEX .. "panels\\spellbook_parts.tga")
         border:SetTexCoord(0.00390625, 0.27734375, 0.44140625, 0.69531250)
-        border:SetWidth(95)
-        border:SetHeight(88)
+        border:SetWidth(91)
+        border:SetHeight(84)
         border:SetPoint("CENTER", iconBtn, "CENTER", 1, 0)
         container.border = border
 
@@ -463,11 +463,11 @@ DFUI:NewMod("SpellBook", 5, function()
         iconBtn:SetScript("OnMouseDown", function()
             if container.isPassive then return end
             icon:ClearAllPoints()
-            icon:SetWidth(51)
-            icon:SetHeight(51)
-            icon:SetPoint("CENTER", iconBtn, "CENTER", 2, -2)
+            icon:SetWidth(49)
+            icon:SetHeight(49)
+            icon:SetPoint("CENTER", iconBtn, "CENTER", 1, -1)
             border:ClearAllPoints()
-            border:SetPoint("CENTER", iconBtn, "CENTER", 2, -3)
+            border:SetPoint("CENTER", iconBtn, "CENTER", 2, -2)
             -- pushedFlash 用 SetAllPoints 常驻 iconBtn，只需 Show；不改锚点避免丢尺寸
             pushedFlash:Show()
         end)
@@ -476,8 +476,8 @@ DFUI:NewMod("SpellBook", 5, function()
             -- 被动不响应：完全无视觉变化（边界态由 UpdateSpellDisplay 重画时归零兜底）
             if container.isPassive then return end
             icon:ClearAllPoints()
-            icon:SetWidth(50)
-            icon:SetHeight(50)
+            icon:SetWidth(48)
+            icon:SetHeight(48)
             icon:SetPoint("CENTER", iconBtn, "CENTER", 0, 0)
             border:ClearAllPoints()
             border:SetPoint("CENTER", iconBtn, "CENTER", 1, 0)
@@ -582,8 +582,8 @@ DFUI:NewMod("SpellBook", 5, function()
             if spell then
                 -- 重画前归零 icon/border 位置，兜底"按住时翻页/切过滤"的卡位
                 btn.icon:ClearAllPoints()
-                btn.icon:SetWidth(50)
-                btn.icon:SetHeight(50)
+                btn.icon:SetWidth(48)
+                btn.icon:SetHeight(48)
                 btn.icon:SetPoint("CENTER", btn.iconBtn, "CENTER", 0, 0)
                 btn.border:ClearAllPoints()
                 btn.border:SetPoint("CENTER", btn.iconBtn, "CENTER", 1, 0)

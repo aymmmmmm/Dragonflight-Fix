@@ -299,7 +299,7 @@ DFUI:NewMod("Gui-elem", 3, function()
                 descFont:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(11), "OUTLINE")
                 descFont:SetPoint("TOPLEFT", catPanel, "TOPLEFT", PANEL_INSET + 1, -28)
                 descFont:SetText(desc)
-                descFont:SetTextColor(0.54, 0.48, 0.35)
+                descFont:SetTextColor(1, 0.82, 0)
             end
 
             local sep = catPanel:CreateTexture(nil, "ARTWORK")

@@ -223,7 +223,7 @@ DFUI:NewMod("Gui-superwow", 3, function()
     local PANEL_WIDTH = 680
     local PANEL_INSET = 15
     local ITEM_HEIGHT = 28
-    local DESC_COLOR = {0.54, 0.48, 0.35}
+    local DESC_COLOR = {1, 0.82, 0}
     local GOLD_COLOR = {1, 0.82, 0}
 
     local function CreateCategoryPanel(parent, width, height)

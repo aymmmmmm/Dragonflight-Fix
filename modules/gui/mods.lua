@@ -29,7 +29,7 @@ DFUI:NewMod("Gui-mods", 3, function()
         {name = "单位框架", desc = "玩家、目标、宠物、队伍的血条与Buff显示", modules = {"Player", "Target", "Mini", "Auras", "PVPIcon"}},
         {name = "动作条", desc = "技能栏、球体、距离指示、连击点、冷却数字", modules = {"Bars", "Orbs", "RangeIndicator", "ComboPoints", "Cooldowns"}},
         {name = "常驻UI", desc = "地图、施法条、经验条、菜单、聊天、提示框等", modules = {"Map", "Cast", "Xprep", "Micro", "Chat", "Tooltip", "Bags", "Loot"}},
-        {name = "面板皮肤", desc = "为暴雪原版窗口添加巨龙时代风格外观", modules = {"Bank", "Character", "Talents", "Merchant", "Mail", "OpenMail", "Trade", "Trainer", "QuestLog", "QuestDialog", "Gossip", "Social", "DressUp", "Help", "Inspect", "Macros", "SpellBook", "KeyBinding"}, hasSelectAll = true},
+        {name = "面板皮肤", desc = "为暴雪原版窗口添加巨龙时代风格外观", modules = {"Bank", "Character", "Talents", "Merchant", "Mail", "OpenMail", "Trade", "TradeSkill", "Trainer", "QuestLog", "QuestDialog", "Gossip", "Social", "DressUp", "Help", "Inspect", "Macros", "SpellBook", "KeyBinding"}, hasSelectAll = true},
         {name = "全局设置", desc = "职业颜色、界面行为、装备对比等全局选项", modules = {"Colors", "Ui", "Frames", "ItemCompare"}},
         {name = "系统", desc = "菜单、插件管理、版本更新", modules = {"Menu", "Addons", "UpdateNotifier"}},
     }
@@ -65,7 +65,7 @@ DFUI:NewMod("Gui-mods", 3, function()
         yPos = yPos + 28
 
         -- 描述
-        local descFont = DFUI.tools.CreateFont(panel, 13, "启用或禁用各功能模块，更改需要重载界面后生效", {0.54, 0.48, 0.35}, "CENTER")
+        local descFont = DFUI.tools.CreateFont(panel, 13, "启用或禁用各功能模块，更改需要重载界面后生效", {1, 0.82, 0}, "CENTER")
         descFont:SetPoint("TOP", panel, "TOP", 0, -yPos)
         yPos = yPos + 22
 
@@ -137,7 +137,7 @@ DFUI:NewMod("Gui-mods", 3, function()
                 countFont:SetFont(fontPath .. "BigNoodleTitling.ttf", SS(11), "OUTLINE")
                 countFont:SetPoint("LEFT", headerFont, "RIGHT", 8, 0)
                 countFont:SetText("(" .. modCount .. ")")
-                countFont:SetTextColor(0.54, 0.48, 0.35)
+                countFont:SetTextColor(1, 0.82, 0)
 
                 -- 全选/全不选按钮
                 local catCheckboxes = {}
@@ -169,7 +169,7 @@ DFUI:NewMod("Gui-mods", 3, function()
                 catDesc:SetFont(fontPath .. "BigNoodleTitling.ttf", SS(11), "OUTLINE")
                 catDesc:SetPoint("TOPLEFT", catPanel, "TOPLEFT", 16, -28)
                 catDesc:SetText(cat.desc)
-                catDesc:SetTextColor(0.54, 0.48, 0.35)
+                catDesc:SetTextColor(1, 0.82, 0)
 
                 -- 分隔线（标题+描述 与 checkbox 之间）
                 local sepLine = catPanel:CreateTexture(nil, "ARTWORK")

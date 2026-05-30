@@ -148,23 +148,47 @@ DFUI:NewMod("Social", 5, function()
         end)
     end
 
-    -- WhoFrameEditBox 在 vanilla 1.12 是裸 EditBox（无 InputBoxTemplate 继承，无 Layers 边框）
-    -- 原本依赖 FriendsFrame 4 角 marble 衬底，DF UI 第 8-11 行 Hide 后变"可输入但无框体"
-    -- 不动 EditBox parent/锚点，反向锚 backdrop 到 EditBox 自身（外扩 3px），自动跟随
-    local whoSearchBg = CreateFrame("Frame", nil, WhoFrame)
-    whoSearchBg:SetPoint("TOPLEFT",     WhoFrameEditBox, "TOPLEFT",     -3,  3)
-    whoSearchBg:SetPoint("BOTTOMRIGHT", WhoFrameEditBox, "BOTTOMRIGHT",  3, -3)
-    whoSearchBg:SetFrameStrata(WhoFrameEditBox:GetFrameStrata())  -- 跟随 EditBox 真实 strata（vanilla 1.12 未实测，retail XML 是 HIGH）
-    WhoFrameEditBox:SetFrameLevel(whoSearchBg:GetFrameLevel() + 1)
-    CreateInsetBackdrop(whoSearchBg, 0.85)
+    -- who 查询防抖：Turtle 服务器对连续 who 有冷却，连点 SendWho 会反复重置冷却 → "等多久都查不到"。
+    -- 客户端记录上次发送时间，冷却窗口内拦下并提示剩余秒数，避免重置 + 给反馈。
+    -- DFUI_WHO_CD 全局可调（/script DFUI_WHO_CD=8）以匹配服务器实际冷却。
+    DFUI_WHO_CD = DFUI_WHO_CD or 5
+    local dfuiLastWho = -999
+    local function dfuiTryWho(text)
+        local now = GetTime and GetTime() or 0
+        local cd = DFUI_WHO_CD or 5
+        local elapsed = now - dfuiLastWho
+        if elapsed < cd then return end  -- 冷却窗口内静默拦下（防连点重置服务器冷却），不提示
+        dfuiLastWho = now
+        if SetWhoToUI then SetWhoToUI(1) end
+        if SendWho then SendWho(text) end
+    end
 
-    -- 缩小 EditBox 高度 50%（32 → 16），宽度保持 vanilla 296；加放大镜图标 + "查找" 占位符
-    WhoFrameEditBox:SetHeight(16)
-    WhoFrameEditBox:SetTextInsets(20, 0, 0, 0)  -- 左缩进 20px 让位图标 + placeholder
-    -- 整体上移 9px：基于 vanilla 原锚加偏移，不假设 vanilla 实际 y 值
-    local _p, _rt, _rp, _x, _y = WhoFrameEditBox:GetPoint(1)
-    WhoFrameEditBox:ClearAllPoints()
-    WhoFrameEditBox:SetPoint(_p, _rt, _rp, _x, _y + 9)
+    -- 自建 who 搜索框：彻底脱离 vanilla WhoFrameEditBox，挂 whoInset 下方预留区，
+    -- 自己发起 SendWho、结果填 whoInset 上的 DFUI_WhoRow（自己查自己显示）。
+    -- 1.12 SendWho 透传输入串，原生支持 n-名字 / z-区域 / c-职业 / g-公会 / 数字=等级 筛选语法。
+    -- 统计行「找到N人（显示M人）」：复用 vanilla WhoFrameTotals（WhoList_Update 自动 SetText），
+    -- 学列头只重锚不 SetParent（parent 仍 WhoFrame、随其可见），放 whoInset 底边外侧第一行。
+    if WhoFrameTotals then
+        WhoFrameTotals:ClearAllPoints()
+        WhoFrameTotals:SetPoint("TOP", whoInset, "BOTTOM", 0, -5)
+        WhoFrameTotals:SetTextColor(1, 1, 1)
+    end
+
+    local whoSearch = CreateFrame("EditBox", "DFUI_WhoSearchBox", whoInset)
+    whoSearch:SetHeight(16)
+    whoSearch:SetPoint("TOPLEFT",  whoInset, "BOTTOMLEFT",  6, -24)
+    whoSearch:SetPoint("TOPRIGHT", whoInset, "BOTTOMRIGHT", -6, -24)
+    whoSearch:SetAutoFocus(false)
+    whoSearch:SetFontObject(GameFontHighlightSmall)
+    whoSearch:SetTextColor(1, 1, 1)  -- 输入文字纯白，与列表区(zoneText)文字颜色一致
+    whoSearch:SetTextInsets(20, 4, 0, 0)  -- 左缩进 20px 让位图标 + placeholder
+
+    local whoSearchBg = CreateFrame("Frame", nil, whoInset)
+    whoSearchBg:SetPoint("TOPLEFT",     whoSearch, "TOPLEFT",     -3,  3)
+    whoSearchBg:SetPoint("BOTTOMRIGHT", whoSearch, "BOTTOMRIGHT",  3, -3)
+    whoSearchBg:SetFrameLevel(whoInset:GetFrameLevel())
+    whoSearch:SetFrameLevel(whoSearchBg:GetFrameLevel() + 1)
+    CreateInsetBackdrop(whoSearchBg, 0.85)
 
     local whoSearchIcon = whoSearchBg:CreateTexture(nil, "OVERLAY")
     whoSearchIcon:SetTexture("Interface\\Common\\UI-Searchbox-Icon")
@@ -176,22 +200,39 @@ DFUI:NewMod("Social", 5, function()
     whoSearchPlaceholder:SetFont("Fonts\\FRIZQT__.TTF", 13)
     whoSearchPlaceholder:SetPoint("LEFT", whoSearchBg, "LEFT", 24, 0)
     whoSearchPlaceholder:SetText("查找")
-    whoSearchPlaceholder:SetTextColor(0.55, 0.50, 0.40)
+    whoSearchPlaceholder:SetTextColor(1, 1, 1)
 
-    -- OnTextChanged 钩链：空文本显示 placeholder，否则隐藏；保留 vanilla 原 handler
     local function whoUpdatePlaceholder()
-        if WhoFrameEditBox:GetText() == "" then
-            whoSearchPlaceholder:Show()
-        else
-            whoSearchPlaceholder:Hide()
-        end
+        if whoSearch:GetText() == "" then whoSearchPlaceholder:Show() else whoSearchPlaceholder:Hide() end
     end
     whoUpdatePlaceholder()
-    local prevOnTextChanged = WhoFrameEditBox:GetScript("OnTextChanged")
-    WhoFrameEditBox:SetScript("OnTextChanged", function()
-        if prevOnTextChanged then prevOnTextChanged() end
-        whoUpdatePlaceholder()
+    whoSearch:SetScript("OnTextChanged", whoUpdatePlaceholder)
+    whoSearch:SetScript("OnEscapePressed", function() whoSearch:ClearFocus() end)
+    whoSearch:SetScript("OnEnterPressed", function()
+        dfuiTryWho(whoSearch:GetText())
+        whoSearch:ClearFocus()
     end)
+
+    -- vanilla 搜索框彻底隐藏（WhoFrame 仍透明保活当数据载体）
+    if WhoFrameEditBox then WhoFrameEditBox:Hide() end
+
+    -- 取消 vanilla WhoFrame 其余可见功能按钮（底部"添加好友/组队"等），避免遮挡/冲突自制 UI。
+    -- 不硬编码按钮名（客户端无 FrameXML 源码）：运行时遍历 WhoFrame 直接子 Button，排除要保留重锚的
+    -- 列头（WhoFrameColumnHeader*）。用 alpha0+EnableMouse(false)：持久不可见且不拦鼠标，vanilla 即便
+    -- 重新 Show 也不改 alpha。这些功能已由自制 row 右键菜单覆盖（密语/组队/加好友/屏蔽）。
+    if WhoFrame and WhoFrame.GetChildren then
+        local kids = { WhoFrame:GetChildren() }
+        for i = 1, table.getn(kids) do
+            local c = kids[i]
+            if c and c.GetObjectType and c:GetObjectType() == "Button" then
+                local n = c.GetName and c:GetName()
+                if not (n and string.find(n, "ColumnHeader", 1, true)) then
+                    c:Hide(); c:SetAlpha(0)
+                    if c.EnableMouse then c:EnableMouse(false) end
+                end
+            end
+        end
+    end
 
     local guildInset = DFUI.CreateRetailInset(customBg, {
         name        = "DFUI_GuildInset",
@@ -560,6 +601,50 @@ DFUI:NewMod("Social", 5, function()
         end
     end
 
+    -- who 全自制：列表挂 whoInset，上下箭头（vanilla 默认锚 WhoListScrollFrame 右、超出 whoInset 外侧）
+    -- 重锚到 whoInset 右内侧、再内 1px；hook scrollbar OnShow 防 vanilla 布局重置
+    if whoInset then
+        local function reanchorWhoArrows()
+            local up   = getglobal("WhoListScrollFrameScrollBarScrollUpButton")
+            local down = getglobal("WhoListScrollFrameScrollBarScrollDownButton")
+            if up   then up:ClearAllPoints();   up:SetPoint("TOPRIGHT",     whoInset, "TOPRIGHT",     1, -1) end
+            if down then down:ClearAllPoints(); down:SetPoint("BOTTOMRIGHT", whoInset, "BOTTOMRIGHT", 1,  1) end
+        end
+        reanchorWhoArrows()
+        local whoSB = getglobal("WhoListScrollFrameScrollBar")
+        if whoSB then HookScript(whoSB, "OnShow", reanchorWhoArrows) end
+    end
+
+    -- 好友/屏蔽列表滚动箭头同样重锚到 friendsInset 右内侧（与查找 who 完全相同的偏移）
+    if friendsInset then
+        local function reanchorFriendArrows(sbName)
+            local up   = getglobal(sbName.."ScrollUpButton")
+            local down = getglobal(sbName.."ScrollDownButton")
+            if up   then up:ClearAllPoints();   up:SetPoint("TOPRIGHT",     friendsInset, "TOPRIGHT",     1, -1) end
+            if down then down:ClearAllPoints(); down:SetPoint("BOTTOMRIGHT", friendsInset, "BOTTOMRIGHT", 1,  1) end
+        end
+        local fSBs = { "FriendsFrameFriendsScrollFrameScrollBar", "FriendsFrameIgnoreScrollFrameScrollBar" }
+        for fi = 1, table.getn(fSBs) do
+            local nm = fSBs[fi]
+            reanchorFriendArrows(nm)
+            local sb = getglobal(nm)
+            if sb then HookScript(sb, "OnShow", function() reanchorFriendArrows(nm) end) end
+        end
+    end
+
+    -- 公会列表滚动箭头同样重锚到 guildInset 右内侧（与查找/好友相同偏移）
+    if guildInset then
+        local function reanchorGuildArrows()
+            local up   = getglobal("GuildListScrollFrameScrollBarScrollUpButton")
+            local down = getglobal("GuildListScrollFrameScrollBarScrollDownButton")
+            if up   then up:ClearAllPoints();   up:SetPoint("TOPRIGHT",     guildInset, "TOPRIGHT",     1, -1) end
+            if down then down:ClearAllPoints(); down:SetPoint("BOTTOMRIGHT", guildInset, "BOTTOMRIGHT", 1,  1) end
+        end
+        reanchorGuildArrows()
+        local guildSB = getglobal("GuildListScrollFrameScrollBar")
+        if guildSB then HookScript(guildSB, "OnShow", reanchorGuildArrows) end
+    end
+
     -- ScrollFrame 自身的边框/凹槽纹理（不在 ScrollBar 子树中），单独清掉
     local function nukeScrollFrameRegions(sf)
         if not sf then return end
@@ -759,14 +844,18 @@ DFUI:NewMod("Social", 5, function()
             -- 根因：vanilla FriendsList_Update 自动设 selectedFriend=1（默认选第一个），
             -- 导致 row 1 自动锁选中。改用 mySelectedFriendID 我们自己管理。
             local mySelectedFriendID = nil
+            local mySelectedFriendName = nil
+            local updateFriendButtons  -- forward decl：底部四按钮 enable 联动，按钮创建后赋值
 
             -- 用 DFUI.CreateSocialRow 工厂统一创建 row（hover/sel/click 内置）
             local function onFriendLeftClick(row)
                 if not row.friendID then return end
                 mySelectedFriendID = row.friendID
+                mySelectedFriendName = row.name
                 FriendsFrame.selectedFriend = row.friendID  -- vanilla 同步（底部按钮 enable）
                 FriendsList_Update()
                 if FriendsFrame_Update then FriendsFrame_Update() end
+                if updateFriendButtons then updateFriendButtons() end
             end
             local function onFriendRightClick(row)
                 if not row.friendID then return end
@@ -801,13 +890,22 @@ DFUI:NewMod("Social", 5, function()
                     columns = {
                         -- 去掉状态点（dot），title.offsetX=18 保持原 title 起始 X
                         -- （之前 dot 占 4+9=13，title offsetX=5 → 18）
-                        { name="title",    type="fontstring", width=120,
+                        -- 列宽收窄让三框不相交：title 框[4,100] / lc 框[104,192] /
+                        -- zoneText 框[201,293]，lc 与 zone 间留 9px。配合 refreshFriendRows
+                        -- 里的 DFUI.TruncateToWidth 像素截断，文本不溢出各自框、永不重叠。
+                        { name="title",    type="fontstring", width=96,
                           font="GameFontNormalSmall", color="main",
                           anchor="LEFT", offsetX=4 },
-                        { name="lc",       type="fontstring", width=92,
+                        { name="lc",       type="fontstring", width=88,
                           font="GameFontNormalSmall", color="next_",
                           anchor="LEFT", offsetX=4 },
-                        { name="zoneText", type="fontstring", width=110,
+                        -- 地区左锚填充[196,293]：左对齐紧跟 lc，宽填到行右；status 独立右锚。
+                        -- 无 status 时地区可用满整框；有 status 时按 status 实宽动态截断(见 refresh)。
+                        { name="zoneText", type="fontstring", width=97,
+                          font="GameFontNormalSmall", color="next_",
+                          anchor="LEFT", offsetX=4 },
+                        -- status(<暂离>/<勿扰>)：无固定宽(自适应文本)，右锚贴行右、右对齐独立显示
+                        { name="status",   type="fontstring",
                           font="GameFontNormalSmall", color="next_",
                           anchor="RIGHT", offsetX=-8 },
                     },
@@ -873,19 +971,26 @@ DFUI:NewMod("Social", 5, function()
                             local lcText = lvlStr ~= "" and class and (lvlStr.." "..class) or lvlStr
                             local cr, cg, cb = getClassColor(class)
                             row.title:SetText(name)
-                            row.lc:SetText(lcText)
+                            row.lc:SetText(DFUI.TruncateToWidth(lcText, 86))  -- lc 框 88 − 2px padding
                             if connected then
                                 row.title:SetTextColor(cr, cg, cb)
                                 local lvl = tonumber(level)
                                 local lc = lvl and GetDifficultyColor and GetDifficultyColor(lvl) or nil
                                 if lc then row.lc:SetTextColor(lc.r, lc.g, lc.b) else row.lc:SetTextColor(1, 1, 1) end
-                                -- zone + status 拼字串（vanilla FRIENDS_LIST_TEMPLATE 同款）
-                                local zoneStr = zone or ""
-                                if status and status ~= "" then
-                                    zoneStr = zoneStr .. " |cffffd000" .. status .. "|r"
-                                end
-                                row.zoneText:SetText(zoneStr)
+                                -- 地区左锚 + status 右锚独立：量 status 实宽给地区留右侧空间再截断。
+                                -- 无 status 时地区用满 95px(框97−2)；有 status 留 6px 间隔，整行单行。
+                                local hasStatus = status and status ~= ""
+                                local statusW = hasStatus and (DFUI.MeasureWidth(status) or 0) or 0
+                                local zoneBudget = hasStatus and (97 - statusW - 6) or 95
+                                if zoneBudget < 16 then zoneBudget = 16 end
+                                row.zoneText:SetText(DFUI.TruncateToWidth(zone or "", zoneBudget))
                                 row.zoneText:SetTextColor(1, 1, 1)
+                                if hasStatus then
+                                    row.status:SetText(status)
+                                    row.status:SetTextColor(1.00, 0.82, 0.00)  -- 黄：AFK/DND 标记
+                                else
+                                    row.status:SetText("")
+                                end
                             else
                                 -- 离线：职业色 + alpha 0.5（与 ShaguTweaks 聊天插件风格一致）
                                 row.title:SetTextColor(cr, cg, cb, 0.5)
@@ -893,6 +998,7 @@ DFUI:NewMod("Social", 5, function()
                                 -- 离线 zoneText 显示 "<离线>" 标签（灰 + alpha，不染职业色）
                                 row.zoneText:SetText(FRIENDS_LIST_OFFLINE or "<离线>")
                                 row.zoneText:SetTextColor(0.5, 0.5, 0.5, 0.5)
+                                row.status:SetText("")  -- 离线无 status
                             end
                             row:SetSelected(mySelectedFriendID == idx)
                             row:Show()
@@ -927,6 +1033,52 @@ DFUI:NewMod("Social", 5, function()
             HookScript(friendsInset, "OnShow", function()
                 deferOneFrame(function() safeRefresh(friendsInset, sf, refreshFriendRows) end)
             end)
+
+            -- 隐藏 vanilla 底部四按钮（自制替换）：alpha0+EnableMouse(false) 持久，Hide 加固
+            local vBtns = { FriendsFrameAddFriendButton, FriendsFrameSendMessageButton, FriendsFrameRemoveFriendButton, FriendsFrameGroupInviteButton }
+            for vi = 1, table.getn(vBtns) do
+                local vb = vBtns[vi]
+                if vb then vb:SetAlpha(0); vb:EnableMouse(false); vb:Hide() end
+            end
+
+            -- 自制底部四按钮（两排两列）。容器 fBtnHolder 跟 FriendsListFrame 显隐（屏蔽/其他 tab 不显示好友按钮）
+            local fBtnHolder = CreateFrame("Frame", nil, friendsInset)
+            fBtnHolder:SetAllPoints(friendsInset)
+            local fBtnAdd = DFUI.CreateActionButton(fBtnHolder, 110, "添加好友", function()
+                if StaticPopup_Show then StaticPopup_Show("ADD_FRIEND") end
+            end, 22)
+            fBtnAdd:SetPoint("TOPLEFT", friendsInset, "BOTTOMLEFT", 27, -10)
+            local fBtnSend = DFUI.CreateActionButton(fBtnHolder, 110, "发送信息", function()
+                if mySelectedFriendName and ChatFrame_SendTell then ChatFrame_SendTell(mySelectedFriendName) end
+            end, 22)
+            fBtnSend:SetPoint("TOPLEFT", friendsInset, "BOTTOMLEFT", 189, -10)  -- 右列独立锚，与左列均匀对称（左/中/右间距≈52）
+            local fBtnRemove = DFUI.CreateActionButton(fBtnHolder, 110, "删除好友", function()
+                if mySelectedFriendName and RemoveFriend then RemoveFriend(mySelectedFriendName) end
+            end, 22)
+            fBtnRemove:SetPoint("TOPLEFT", fBtnAdd, "BOTTOMLEFT", 0, -6)
+            local fBtnInvite = DFUI.CreateActionButton(fBtnHolder, 110, "组队邀请", function()
+                if mySelectedFriendName then
+                    if InviteUnit then InviteUnit(mySelectedFriendName)
+                    elseif InviteByName then InviteByName(mySelectedFriendName) end
+                end
+            end, 22)
+            fBtnInvite:SetPoint("TOPLEFT", fBtnSend, "BOTTOMLEFT", 0, -6)
+
+            -- 选中联动：未选好友时 发送/删除/组队 禁用（添加常亮）
+            updateFriendButtons = function()
+                local on = mySelectedFriendName ~= nil
+                fBtnSend:SetEnabledDF(on)
+                fBtnRemove:SetEnabledDF(on)
+                fBtnInvite:SetEnabledDF(on)
+            end
+            updateFriendButtons()
+
+            -- 好友按钮只在好友 tab（FriendsListFrame）显示，屏蔽/其他 tab 隐藏
+            if FriendsListFrame then
+                HookScript(FriendsListFrame, "OnShow", function() fBtnHolder:Show() end)
+                HookScript(FriendsListFrame, "OnHide", function() fBtnHolder:Hide() end)
+                if not FriendsListFrame:IsShown() then fBtnHolder:Hide() end
+            end
         end
     end
 
@@ -967,7 +1119,7 @@ DFUI:NewMod("Social", 5, function()
             local function hideVanillaWhoBtn(i)
                 local b = _G["WhoFrameButton"..i]
                 if not b then return end
-                b:SetAlpha(0); b:EnableMouse(false)
+                b:SetAlpha(0); b:Hide(); b:EnableMouse(false)
                 local suffixes = {"Name", "Variable", "Class", "Level"}
                 for j = 1, table.getn(suffixes) do
                     local fs = _G["WhoFrameButton"..i..suffixes[j]]
@@ -976,15 +1128,21 @@ DFUI:NewMod("Social", 5, function()
             end
             for i = 1, WHO_ROWS do hideVanillaWhoBtn(i) end
 
-            -- 独立跟踪用户实际点选的 Who 索引（避免 vanilla WhoList_Update 自动设 selectedWho）
+            -- 独立跟踪用户实际点选的 Who 索引/名字（避免 vanilla WhoList_Update 自动设 selectedWho）
             local mySelectedWhoIdx = nil
+            local mySelectedWhoName = nil
+            local updateWhoButtons  -- forward decl：底部按钮 enable 联动，按钮创建后赋值
+            local whoSortType = "zone"  -- 第4列分类：zone/guild/race（下拉切换，替代 vanilla WhoFrameDropDown）
+            local WHO_SORT_LABEL = { zone = "地区", guild = "公会", race = "种族" }
 
             local function onWhoLeftClick(row)
                 if not row.whoIdx then return end
                 mySelectedWhoIdx = row.whoIdx
+                mySelectedWhoName = row.name
                 WhoFrame.selectedWho = row.whoIdx
                 WhoFrame.selectedName = row.name
                 if WhoList_Update then WhoList_Update() end
+                if updateWhoButtons then updateWhoButtons() end
             end
             local function onWhoRightClick(row)
                 if not row.whoIdx then return end
@@ -1014,10 +1172,14 @@ DFUI:NewMod("Social", 5, function()
                 ToggleDropDownMenu(1, nil, FriendsDropDown, "cursor")
             end
 
+            -- 全自制 who：行挂 whoInset（脱离 vanilla WhoListScrollFrame，免被 FauxScrollFrame_Update 连带 Hide）
+            -- visibleRowsWho/whoOffset 提到行创建前声明，供 onWheel 闭包捕获
+            local visibleRowsWho = 0
+            local whoOffset = 0
             for i = 1, WHO_ROWS do
-                DFUI.CreateSocialRow(sfWho, {
+                DFUI.CreateSocialRow(whoInset, {
                     name       = "DFUI_WhoRow"..i,
-                    frameLevel = sfWho:GetFrameLevel() + 10,
+                    frameLevel = whoInset:GetFrameLevel() + 10,
                     columns = {
                         { name="title", type="fontstring", width=85,
                           font="GameFontNormalSmall", color="main",
@@ -1028,9 +1190,11 @@ DFUI:NewMod("Social", 5, function()
                         { name="class", type="fontstring", width=78,
                           font="GameFontNormalSmall", color="next_",
                           anchor="LEFT", offsetX=4 },
-                        { name="zoneText", type="fontstring", width=120,
+                        -- 收窄(120→86)让 zone 框[213,299]不压 class 框[125,203]；
+                        -- justifyH="LEFT" 与前三列一致左对齐排表格，溢出由 TruncateToWidth 截断
+                        { name="zoneText", type="fontstring", width=86,
                           font="GameFontNormalSmall", color="next_",
-                          anchor="RIGHT", offsetX=-8 },
+                          anchor="RIGHT", justifyH="LEFT", offsetX=-8 },
                     },
                     onLeftClick   = onWhoLeftClick,
                     onRightClick  = onWhoRightClick,
@@ -1038,18 +1202,22 @@ DFUI:NewMod("Social", 5, function()
                         if row.name and ChatFrame_SendTell then ChatFrame_SendTell(row.name) end
                     end,
                     onWheel = function()
-                        if WhoList_Update then WhoList_Update() end
+                        -- 自管翻页：arg1=1 上滚（offset 减）/ -1 下滚（offset 加）
+                        local numTotal = (GetNumWhoResults and GetNumWhoResults()) or 0
+                        local maxOff = math.max(0, numTotal - visibleRowsWho)
+                        whoOffset = whoOffset - (arg1 or 0)
+                        if whoOffset < 0 then whoOffset = 0 elseif whoOffset > maxOff then whoOffset = maxOff end
+                        refreshWhoRows()
                     end,
                 })
             end
 
             local FIXED_ROW_H_WHO = 18
             local COLHDR_OFFSET_WHO = 24  -- 列头完全在 inset 顶部内侧，row1 起点下移 24px
-            local visibleRowsWho = 0
             local function layoutWhoRows()
-                -- 同 Friend layoutRows：GetTop-GetBottom 优先，GetHeight fallback
-                local t, b = sfWho:GetTop(), sfWho:GetBottom()
-                local h = (t and b and (t-b) > 0) and (t-b) or sfWho:GetHeight()
+                -- 基准换 whoInset（DFUI 自有容器，几何可控）：GetTop-GetBottom 优先，GetHeight fallback
+                local t, b = whoInset:GetTop(), whoInset:GetBottom()
+                local h = (t and b and (t-b) > 0) and (t-b) or whoInset:GetHeight()
                 if not h or h <= 0 then visibleRowsWho = 0; return false end
                 local availH = h - COLHDR_OFFSET_WHO
                 visibleRowsWho = math.floor(availH / FIXED_ROW_H_WHO)
@@ -1060,8 +1228,8 @@ DFUI:NewMod("Social", 5, function()
                     if i <= visibleRowsWho then
                         local y = -((i - 1) * FIXED_ROW_H_WHO + COLHDR_OFFSET_WHO)
                         row:ClearAllPoints()
-                        row:SetPoint("TOPLEFT",  sfWho, "TOPLEFT",  0, y)
-                        row:SetPoint("TOPRIGHT", sfWho, "TOPRIGHT", 0, y)
+                        row:SetPoint("TOPLEFT",  whoInset, "TOPLEFT",  0, y)
+                        row:SetPoint("TOPRIGHT", whoInset, "TOPRIGHT", -24, y)  -- 右留 24px 给 vanilla scrollbar 金箭头，列表/zoneText 不压箭头
                         row:SetHeight(FIXED_ROW_H_WHO)
                     else
                         row:Hide()
@@ -1073,15 +1241,12 @@ DFUI:NewMod("Social", 5, function()
             refreshWhoRows = function()
                 for i = 1, WHO_ROWS do hideVanillaWhoBtn(i) end
                 if not layoutWhoRows() then return end
-                local off = (FauxScrollFrame_GetOffset and FauxScrollFrame_GetOffset(sfWho)) or 0
+                local off = whoOffset
                 local numTotal = (GetNumWhoResults and GetNumWhoResults()) or 0
-                -- 新查询结果数骤减时旧偏移残留并越界 → 下面 idx=off+i 全部 > numTotal → 整列被 Hide → 面板看似查不到
-                -- 钳回合法范围（与下方 scrollbar maxV 同口径）；结果 ≤ 可见行数时 maxOff=0，自动回到顶部
+                -- 自管 offset：新查询结果骤减时旧偏移越界 → 钳回合法范围；结果 ≤ 可见行数时 maxOff=0 回到顶部
                 local maxOff = math.max(0, numTotal - visibleRowsWho)
-                if off > maxOff then
-                    off = maxOff
-                    if FauxScrollFrame_SetOffset then FauxScrollFrame_SetOffset(sfWho, off) end
-                end
+                if off > maxOff then off = maxOff end
+                whoOffset = off
                 for i = 1, visibleRowsWho do
                     local row = _G["DFUI_WhoRow"..i]
                     local idx = off + i
@@ -1100,7 +1265,8 @@ DFUI:NewMod("Social", 5, function()
                             else row.lvl:SetTextColor(1, 1, 1) end
                             row.class:SetText(class or "")
                             row.class:SetTextColor(cr, cg, cb)
-                            row.zoneText:SetText(zone or "")
+                            local whoVar = (whoSortType == "guild" and guild) or (whoSortType == "race" and race) or zone
+                            row.zoneText:SetText(DFUI.TruncateToWidth(whoVar or "", 84))  -- 84 = zone 框 86 − 2px
                             row.zoneText:SetTextColor(1, 1, 1)
                             row:SetSelected(mySelectedWhoIdx == idx)
                             row:Show()
@@ -1111,23 +1277,30 @@ DFUI:NewMod("Social", 5, function()
                         row.whoIdx = nil; row:Hide()
                     end
                 end
-                -- 覆盖 vanilla scrollbar maxV：vanilla WHOS_TO_DISPLAY=17，visibleRowsWho 实际可能 ≠ 17
-                local sb = sfWho.GetName and getglobal(sfWho:GetName().."ScrollBar")
-                if sb and sb.SetMinMaxValues then
-                    local maxV = math.max(0, (numTotal - visibleRowsWho) * FIXED_ROW_H_WHO)
-                    sb:SetMinMaxValues(0, maxV)
+                -- 第4列列头文字跟当前分类（防 WhoFrame OnShow 重置 vanilla 列头）
+                if WhoFrameColumnHeader2 and WhoFrameColumnHeader2.GetFontString then
+                    local h2fs = WhoFrameColumnHeader2:GetFontString()
+                    if h2fs then h2fs:SetText(WHO_SORT_LABEL[whoSortType] or "地区") end
                 end
             end
 
-            if hooksecurefunc then hooksecurefunc("WhoList_Update", refreshWhoRows) end
+            -- vanilla WhoList_Update 会 Show/SetText 原生 WhoFrameButton；必须让 DFUI 的
+            -- hideVanillaWhoBtn 在它之后收尾，否则有查询时 vanilla 残留文字会盖住自制列表
+            -- （空查询走 OnShow 不经 WhoList_Update 所以正常）。故 append=true（old-before-new）。
+            if hooksecurefunc then hooksecurefunc("WhoList_Update", refreshWhoRows, true) end
 
             local refreshFrameWho = CreateFrame("Frame")
             refreshFrameWho:RegisterEvent("WHO_LIST_UPDATE")
-            refreshFrameWho:SetScript("OnEvent", function() refreshWhoRows() end)
+            refreshFrameWho:SetScript("OnEvent", function()
+                -- 新查询结果到达：清旧选中（与 vanilla WhoList_SetSelectedButton(nil) 一致，防加好友/组队误指旧人）
+                mySelectedWhoIdx = nil; mySelectedWhoName = nil
+                if updateWhoButtons then updateWhoButtons() end
+                refreshWhoRows()
+            end)
 
             -- 治本兜底：whoInset OnShow 时延迟一帧刷新
             HookScript(whoInset, "OnShow", function()
-                deferOneFrame(function() safeRefresh(whoInset, sfWho, refreshWhoRows) end)
+                deferOneFrame(function() safeRefresh(whoInset, whoInset, refreshWhoRows) end)
             end)
 
             -- 重锚 WhoFrameColumnHeader1..4 到 whoInset 内 + 列宽匹配 row 列布局
@@ -1143,8 +1316,7 @@ DFUI:NewMod("Social", 5, function()
                         local r = rs[k]
                         if r.GetObjectType and r:GetObjectType() == "Texture" then r:SetTexture(nil) end
                     end
-                    -- 列头 FontString 默认 CENTER 对齐 → 与 row 文字 LEFT 对齐错位
-                    -- 改 LEFT 对齐 + 锚 header.LEFT + 4，与 row 内列起始 X 对齐
+                    -- 列头 FontString 左对齐（与 row 文字对齐）；第4列单独居中见下
                     local fs = h.GetFontString and h:GetFontString()
                     if fs then
                         fs:ClearAllPoints()
@@ -1168,9 +1340,91 @@ DFUI:NewMod("Social", 5, function()
                 WhoFrameColumnHeader4:SetPoint("LEFT", WhoFrameColumnHeader3, "RIGHT", 0, 0)
                 WhoFrameColumnHeader4:SetWidth(78 + 4)
                 WhoFrameColumnHeader2:ClearAllPoints()
-                WhoFrameColumnHeader2:SetPoint("BOTTOMRIGHT", whoInset, "TOPRIGHT", -8, -24)
+                WhoFrameColumnHeader2:SetPoint("BOTTOMRIGHT", whoInset, "TOPRIGHT", -20, -24)
                 WhoFrameColumnHeader2:SetWidth(120)
+                -- 第4列单独居中 + 右侧金箭头（同滚动条风格）作下拉指示
+                local h2fs = WhoFrameColumnHeader2.GetFontString and WhoFrameColumnHeader2:GetFontString()
+                if h2fs then
+                    h2fs:ClearAllPoints()
+                    h2fs:SetPoint("CENTER", WhoFrameColumnHeader2, "CENTER", 0, 0)
+                    h2fs:SetJustifyH("CENTER")
+                end
+                if WhoFrameColumnHeader2.SetHighlightTexture then WhoFrameColumnHeader2:SetHighlightTexture(nil) end
+                local h2arrow = WhoFrameColumnHeader2:CreateTexture(nil, "OVERLAY")
+                h2arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")  -- 确定存在的金箭头素材（同右侧滚动条）；highlight 已清，静态不闪
+                h2arrow:SetWidth(20); h2arrow:SetHeight(20)
+                h2arrow:SetPoint("RIGHT", WhoFrameColumnHeader2, "RIGHT", -2, 0)
+                h2arrow:SetVertexColor(0.98, 0.91, 0.58)
+                -- 箭头按下动画：点列头时切按下纹理 + 下移 1px，松开还原（h2arrow 非 Button 无内置态）
+                WhoFrameColumnHeader2:SetScript("OnMouseDown", function()
+                    h2arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Down")
+                    h2arrow:ClearAllPoints(); h2arrow:SetPoint("RIGHT", WhoFrameColumnHeader2, "RIGHT", -2, -1)
+                end)
+                WhoFrameColumnHeader2:SetScript("OnMouseUp", function()
+                    h2arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+                    h2arrow:ClearAllPoints(); h2arrow:SetPoint("RIGHT", WhoFrameColumnHeader2, "RIGHT", -2, 0)
+                end)
+
+                -- 第4列分类下拉：地区/公会/种族（替代 vanilla WhoFrameDropDown）
+                -- 列头作触发器，点击弹 FriendsDropDown（同右键菜单 API）；选中 → 设 whoSortType + SortWho 排序 + 刷新
+                WhoFrameColumnHeader2:SetScript("OnClick", function()
+                    FriendsDropDown.displayMode = "MENU"
+                    FriendsDropDown.initialize = function()
+                        local opts = { {t="地区",v="zone"}, {t="公会",v="guild"}, {t="种族",v="race"} }
+                        for i = 1, table.getn(opts) do
+                            local o = opts[i]
+                            local info = {}
+                            info.text = o.t
+                            info.checked = (whoSortType == o.v)
+                            info.func = function()
+                                whoSortType = o.v
+                                if SortWho then SortWho(o.v) end  -- 服务器按该列重排
+                                refreshWhoRows()                  -- 即时切第4列显示 + 更新列头文字
+                            end
+                            UIDropDownMenu_AddButton(info)
+                        end
+                    end
+                    ToggleDropDownMenu(1, nil, FriendsDropDown, "WhoFrameColumnHeader2", 0, 0)
+                end)
+
+                -- 隐藏 vanilla WhoFrameDropDown（Header2 的子 Frame、UIDropDownMenu）：它盖在列头上拦截鼠标，
+                -- 导致上面的 OnClick 收不到点击 + 显示出 vanilla 灰下拉。alpha0+EnableMouse(false) 持久解除拦截。
+                if WhoFrameDropDown then
+                    WhoFrameDropDown:Hide(); WhoFrameDropDown:SetAlpha(0); WhoFrameDropDown:EnableMouse(false)
+                end
+                if WhoFrameDropDownButton then
+                    WhoFrameDropDownButton:Hide(); WhoFrameDropDownButton:EnableMouse(false)
+                end
             end
+
+            -- 自建底部三按钮：刷新 / 添加好友 / 组队要求（替代 vanilla WhoFrameWhoButton/AddFriend/GroupInvite）
+            -- 加好友/组队作用于选中行(mySelectedWhoName)，未选中时禁用；刷新用搜索框内容重发 SendWho。
+            local whoBtnRefresh = DFUI.CreateActionButton(whoInset, 68, "刷新", function()
+                dfuiTryWho(whoSearch:GetText())
+            end, 22)
+            -- 三按钮整体水平居中于 whoSearch：总宽 68+6+99+6+99=278，刷新中心偏移 -(278/2-68/2)=-105
+            whoBtnRefresh:SetPoint("TOP", whoSearch, "BOTTOM", -105, -10)
+
+            local whoBtnAdd = DFUI.CreateActionButton(whoInset, 99, "添加好友", function()
+                if mySelectedWhoName and AddFriend then AddFriend(mySelectedWhoName) end
+            end, 22)
+            whoBtnAdd:SetPoint("LEFT", whoBtnRefresh, "RIGHT", 6, 0)
+
+            local whoBtnInvite = DFUI.CreateActionButton(whoInset, 99, "组队邀请", function()
+                if mySelectedWhoName then
+                    if InviteUnit then InviteUnit(mySelectedWhoName)
+                    elseif InviteByName then InviteByName(mySelectedWhoName) end
+                end
+            end, 22)
+            whoBtnInvite:SetPoint("LEFT", whoBtnAdd, "RIGHT", 6, 0)
+
+            -- 选中联动：未选中行时加好友/组队禁用（刷新始终可用）
+            updateWhoButtons = function()
+                local on = mySelectedWhoName ~= nil
+                whoBtnAdd:SetEnabledDF(on)
+                whoBtnInvite:SetEnabledDF(on)
+            end
+            updateWhoButtons()
         end
     end
 
@@ -1195,6 +1449,10 @@ DFUI:NewMod("Social", 5, function()
                 end
             end
             for i = 1, GUILD_ROWS do hideVanillaGuildBtn(i) end
+
+            -- roster 含离线成员：否则 GetNumGuildMembers()/列表只有在线 → "总人数"实为在线数。
+            -- 设标志(持久) + 下方 OnShow 调 GuildRoster() 拉取；client 端再用 guildShowOffline 过滤显示。
+            if SetGuildRosterShowOffline then SetGuildRosterShowOffline(1) end
 
             -- 独立跟踪用户实际点选的公会成员索引（避免 vanilla GuildStatus_Update 自动设 selection）
             local mySelectedGuildIdx = nil
@@ -1234,10 +1492,24 @@ DFUI:NewMod("Social", 5, function()
                 ToggleDropDownMenu(1, nil, FriendsDropDown, "cursor")
             end
 
+            -- 全自制 guild：行挂 guildInset（脱离 vanilla GuildListScrollFrame，免被 FauxScrollFrame_Update 连带 Hide）
+            -- visibleRowsGuild/guildOffset/guildSearchText 提到行创建前声明，供 onWheel 闭包/搜索框捕获
+            local visibleRowsGuild = 0
+            local guildOffset = 0
+            local guildSearchText = ""
+            local guildNumShown = 0  -- 过滤后成员数（refreshGuildRows 维护，onWheel 算 maxOff）
+            local guildShowOffline = true  -- 显示离线成员开关（默认显示；接管 vanilla GuildFrameLFGButton）
+            local updateGuildButtons  -- forward decl：底部三按钮 enable 镜像，按钮创建后赋值
+            -- 底部「成员 N  在线 M」统计（玩家状态那行右侧），refreshGuildRows 实时更新
+            -- 全局名便于运行时诊断/精调位置；锚 guildInset 右下（消除 dropdown 是否存在的分支歧义）
+            local guildTotalsText = guildInset:CreateFontString("DFUI_GuildTotalsText", "OVERLAY", "GameFontNormalSmall")
+            guildTotalsText:SetPoint("BOTTOMRIGHT", guildInset, "BOTTOMRIGHT", -204, 10)  -- 右下基准 -24,4 → 往左180、往上6
+            guildTotalsText:SetJustifyH("RIGHT")
+            guildTotalsText:SetTextColor(1, 1, 1)  -- base 白；标签金/数字白由内联颜色码控制
             for i = 1, GUILD_ROWS do
-                DFUI.CreateSocialRow(sfGuild, {
+                DFUI.CreateSocialRow(guildInset, {
                     name       = "DFUI_GuildRow"..i,
-                    frameLevel = sfGuild:GetFrameLevel() + 10,
+                    frameLevel = guildInset:GetFrameLevel() + 10,
                     columns = {
                         -- 去掉状态点（dot），回收左侧死区：title.offsetX 18→4
                         { name="title",    type="fontstring", width=90,
@@ -1249,9 +1521,11 @@ DFUI:NewMod("Social", 5, function()
                         { name="class",    type="fontstring", width=78,
                           font="GameFontNormalSmall", color="next_",
                           anchor="LEFT", offsetX=4 },
-                        { name="zoneText", type="fontstring", width=112,
+                        -- 收窄(112→80)让 zone 框[213,293]不压 class 框[126,204]；
+                        -- justifyH="LEFT" 与前三列一致左对齐排表格，溢出由 TruncateToWidth 截断
+                        { name="zoneText", type="fontstring", width=80,
                           font="GameFontNormalSmall", color="next_",
-                          anchor="RIGHT", offsetX=-8 },
+                          anchor="RIGHT", justifyH="LEFT", offsetX=-8 },
                     },
                     onLeftClick   = onGuildLeftClick,
                     onRightClick  = onGuildRightClick,
@@ -1259,20 +1533,25 @@ DFUI:NewMod("Social", 5, function()
                         if row.name and ChatFrame_SendTell then ChatFrame_SendTell(row.name) end
                     end,
                     onWheel = function()
-                        if GuildStatus_Update then GuildStatus_Update() end
+                        -- 自管翻页：arg1=1 上滚（offset 减）/ -1 下滚（offset 加）
+                        local maxOff = math.max(0, guildNumShown - visibleRowsGuild)
+                        guildOffset = guildOffset - (arg1 or 0)
+                        if guildOffset < 0 then guildOffset = 0 elseif guildOffset > maxOff then guildOffset = maxOff end
+                        refreshGuildRows()
                     end,
                 })
             end
 
             local FIXED_ROW_H_GUILD = 18
             local COLHDR_OFFSET_GUILD = 24  -- 列头完全在 inset 顶部内侧
-            local visibleRowsGuild = 0
             local function layoutGuildRows()
-                -- 同 Friend layoutRows：GetTop-GetBottom 优先，GetHeight fallback
-                local t, b = sfGuild:GetTop(), sfGuild:GetBottom()
-                local h = (t and b and (t-b) > 0) and (t-b) or sfGuild:GetHeight()
+                -- 基准换 guildInset（DFUI 自有容器）：GetTop-GetBottom 优先，GetHeight fallback
+                local t, b = guildInset:GetTop(), guildInset:GetBottom()
+                local h = (t and b and (t-b) > 0) and (t-b) or guildInset:GetHeight()
                 if not h or h <= 0 then visibleRowsGuild = 0; return false end
-                local availH = h - COLHDR_OFFSET_GUILD
+                -- 底部再留一行高(18px)给 GuildFramePlayerStatusDropDown（玩家状态按钮），
+                -- 避免末行盖住它（与 GuildListScrollFrame 的 18px 预留一致）。减整一行高 → 正好少显示一行
+                local availH = h - COLHDR_OFFSET_GUILD - FIXED_ROW_H_GUILD
                 visibleRowsGuild = math.floor(availH / FIXED_ROW_H_GUILD)
                 if visibleRowsGuild > GUILD_ROWS then visibleRowsGuild = GUILD_ROWS end
                 if visibleRowsGuild < 1 then visibleRowsGuild = 1 end
@@ -1281,8 +1560,8 @@ DFUI:NewMod("Social", 5, function()
                     if i <= visibleRowsGuild then
                         local y = -((i - 1) * FIXED_ROW_H_GUILD + COLHDR_OFFSET_GUILD)
                         row:ClearAllPoints()
-                        row:SetPoint("TOPLEFT",  sfGuild, "TOPLEFT",  0, y)
-                        row:SetPoint("TOPRIGHT", sfGuild, "TOPRIGHT", 0, y)
+                        row:SetPoint("TOPLEFT",  guildInset, "TOPLEFT",  0, y)
+                        row:SetPoint("TOPRIGHT", guildInset, "TOPRIGHT", -24, y)  -- 右留 24px 给金箭头
                         row:SetHeight(FIXED_ROW_H_GUILD)
                     else
                         row:Hide()
@@ -1313,15 +1592,66 @@ DFUI:NewMod("Social", 5, function()
                 return 0.94, 0.75, 0.38
             end
 
+            -- 公会列表两 mode：玩家状态(职业/区域) ↔ 公会状态(注释/最后上线)
+            -- vanilla 用两个互斥子 Frame：GuildPlayerStatusFrame / GuildStatusFrame，后者 IsShown 即公会状态
+            local function isGuildStatusMode()
+                return (GuildStatusFrame and GuildStatusFrame:IsShown()) and true or false
+            end
+            -- 「最后上线」中文格式化（retail 的 RecentTimeDate 在 1.12 不存在，自己写）
+            local function guildLastOnlineText(idx)
+                if not GetGuildRosterLastOnline then return "" end
+                local y, mo, d, h = GetGuildRosterLastOnline(idx)
+                y = y or 0; mo = mo or 0; d = d or 0; h = h or 0
+                if y > 0 then return y.." 年前"
+                elseif mo > 0 then return mo.." 个月前"
+                elseif d > 0 then return d.." 天前"
+                elseif h > 0 then return h.." 小时前"
+                else return "刚刚" end
+            end
+            -- 压制整套 vanilla 公会状态视图 GuildStatusFrame：SetAlpha(0) 的 effective alpha 连其
+            -- ~17 个子(列表 button + 自带列头)一并透明，保留 IsShown 作 mode 信号；EnableMouse(false)
+            -- (含子)防透明子拦鼠标。自建 row 独立显示、接管公会状态数据。
+            local function suppressGuildStatusFrame()
+                if not GuildStatusFrame then return end
+                GuildStatusFrame:SetAlpha(0)
+                GuildStatusFrame:EnableMouse(false)
+                local kids = { GuildStatusFrame:GetChildren() }
+                for j = 1, table.getn(kids) do
+                    if kids[j].EnableMouse then kids[j]:EnableMouse(false) end
+                end
+            end
+
             refreshGuildRows = function()
                 for i = 1, GUILD_ROWS do hideVanillaGuildBtn(i) end
+                suppressGuildStatusFrame()
                 if not layoutGuildRows() then return end
-                local off = (FauxScrollFrame_GetOffset and FauxScrollFrame_GetOffset(sfGuild)) or 0
-                local numTotal = (GetNumGuildMembers and GetNumGuildMembers()) or 0
+                local gMode = isGuildStatusMode()
+                -- 仅名字客户端过滤：构建匹配成员的原始 roster idx 名单（空搜索=全部）
+                local filtered = {}
+                local total = (GetNumGuildMembers and GetNumGuildMembers()) or 0
+                local q = (guildSearchText ~= "" and string.lower(guildSearchText)) or nil
+                local numOnline = 0
+                for gi = 1, total do
+                    local nm, _, _, _, _, _, _, _, onl = GetGuildRosterInfo(gi)
+                    if onl then numOnline = numOnline + 1 end  -- 在线数：不受搜索/显示离线过滤影响
+                    if nm and (guildShowOffline or onl) and (not q or string.find(string.lower(nm), q, 1, true)) then
+                        table.insert(filtered, gi)
+                    end
+                end
+                guildNumShown = table.getn(filtered)
+                if guildTotalsText then
+                    -- 标签金(ffffd100=NORMAL_FONT_COLOR，与"玩家状态"同款) + 数字白(与地区列一致)
+                    guildTotalsText:SetText(string.format("|cffffd100成员|r |cffffffff%d|r  |cffffd100在线|r |cffffffff%d|r", total, numOnline))
+                end
+                local off = guildOffset
+                local maxOff = math.max(0, guildNumShown - visibleRowsGuild)
+                if off > maxOff then off = maxOff end
+                guildOffset = off
                 for i = 1, visibleRowsGuild do
                     local row = _G["DFUI_GuildRow"..i]
-                    local idx = off + i
-                    if idx <= numTotal then
+                    local fidx = off + i
+                    if fidx <= guildNumShown then
+                        local idx = filtered[fidx]  -- 原始 roster idx（点选/详情用对索引）
                         local name, rank, rankIndex, level, class, zone, note, officernote, online, status = GetGuildRosterInfo(idx)
                         if name then
                             row.guildIdx = idx
@@ -1335,16 +1665,28 @@ DFUI:NewMod("Social", 5, function()
                                 local lc = lvl and GetDifficultyColor and GetDifficultyColor(lvl) or nil
                                 if lc then row.lvl:SetTextColor(lc.r, lc.g, lc.b)
                                 else row.lvl:SetTextColor(1, 1, 1) end
-                                row.class:SetText(class or "")
-                                row.class:SetTextColor(cr, cg, cb)
-                                row.zoneText:SetText(zone or "")
-                                row.zoneText:SetTextColor(1, 1, 1)
+                                if gMode then
+                                    row.class:SetText(DFUI.TruncateToWidth(note or "", 76))
+                                    row.class:SetTextColor(0.82, 0.82, 0.82)  -- 注释灰白
+                                    row.zoneText:SetText("在线")
+                                    row.zoneText:SetTextColor(0.1, 1, 0.1)    -- 在线绿
+                                else
+                                    row.class:SetText(class or "")
+                                    row.class:SetTextColor(cr, cg, cb)
+                                    row.zoneText:SetText(DFUI.TruncateToWidth(zone or "", 78))  -- 78 = zone 框 80 − 2px
+                                    row.zoneText:SetTextColor(1, 1, 1)
+                                end
                             else
                                 -- 离线：职业色 + alpha 0.5（与 ShaguTweaks 聊天/Guild 染色风格一致）
                                 row.title:SetText(name); row.title:SetTextColor(cr, cg, cb, 0.5)
                                 row.lvl:SetText(level or ""); row.lvl:SetTextColor(cr, cg, cb, 0.5)
-                                row.class:SetText(class or ""); row.class:SetTextColor(cr, cg, cb, 0.5)
-                                row.zoneText:SetText(zone or ""); row.zoneText:SetTextColor(cr, cg, cb, 0.5)
+                                if gMode then
+                                    row.class:SetText(DFUI.TruncateToWidth(note or "", 76)); row.class:SetTextColor(cr, cg, cb, 0.5)
+                                    row.zoneText:SetText(guildLastOnlineText(idx)); row.zoneText:SetTextColor(cr, cg, cb, 0.5)
+                                else
+                                    row.class:SetText(class or ""); row.class:SetTextColor(cr, cg, cb, 0.5)
+                                    row.zoneText:SetText(DFUI.TruncateToWidth(zone or "", 78)); row.zoneText:SetTextColor(cr, cg, cb, 0.5)
+                                end
                             end
                             row:SetSelected(mySelectedGuildIdx == idx)
                             row:Show()
@@ -1355,15 +1697,25 @@ DFUI:NewMod("Social", 5, function()
                         row.guildIdx = nil; row:Hide()
                     end
                 end
-                -- 覆盖 vanilla scrollbar maxV：vanilla GUILDMEMBERS_TO_DISPLAY=17，visibleRowsGuild 实际可能 ≠ 17
-                local sb = sfGuild.GetName and getglobal(sfGuild:GetName().."ScrollBar")
-                if sb and sb.SetMinMaxValues then
-                    local maxV = math.max(0, (numTotal - visibleRowsGuild) * FIXED_ROW_H_GUILD)
-                    sb:SetMinMaxValues(0, maxV)
+                -- 列头第3/4列随 mode：玩家「职业/区域」↔ 公会「注释/最后上线」（Header4=col3, Header2=col4）
+                if GuildFrameColumnHeader4 and GuildFrameColumnHeader4.GetFontString then
+                    local fs4 = GuildFrameColumnHeader4:GetFontString(); if fs4 then fs4:SetText(gMode and "注释" or "职业") end
                 end
+                if GuildFrameColumnHeader2 and GuildFrameColumnHeader2.GetFontString then
+                    local fs2 = GuildFrameColumnHeader2:GetFontString(); if fs2 then fs2:SetText(gMode and "最后上线" or "区域") end
+                end
+                if updateGuildButtons then updateGuildButtons() end
             end
 
             if hooksecurefunc then hooksecurefunc("GuildStatus_Update", refreshGuildRows) end
+
+            -- 切 mode = vanilla 切换 GuildPlayerStatusFrame/GuildStatusFrame 显隐 → 两者 OnShow 都刷新自建列表+列头
+            if GuildStatusFrame then
+                HookScript(GuildStatusFrame, "OnShow", function() guildOffset = 0; refreshGuildRows() end)
+            end
+            if GuildPlayerStatusFrame then
+                HookScript(GuildPlayerStatusFrame, "OnShow", function() guildOffset = 0; refreshGuildRows() end)
+            end
 
             local refreshFrameGuild = CreateFrame("Frame")
             refreshFrameGuild:RegisterEvent("GUILD_ROSTER_UPDATE")
@@ -1371,6 +1723,8 @@ DFUI:NewMod("Social", 5, function()
 
             -- 治本兜底：guildInset OnShow 时延迟一帧刷新
             HookScript(guildInset, "OnShow", function()
+                if SetGuildRosterShowOffline then SetGuildRosterShowOffline(1) end  -- 防 vanilla dropdown 改回
+                if GuildRoster then GuildRoster() end  -- 拉取含离线的最新 roster（服务器节流安全）
                 deferOneFrame(function() safeRefresh(guildInset, sfGuild, refreshGuildRows) end)
             end)
 
@@ -1395,6 +1749,9 @@ DFUI:NewMod("Social", 5, function()
                 end
                 nukeHdr(GuildFrameColumnHeader1); nukeHdr(GuildFrameColumnHeader2)
                 nukeHdr(GuildFrameColumnHeader3); nukeHdr(GuildFrameColumnHeader4)
+                -- 列头 parent=GuildPlayerStatusFrame，公会状态时会随之隐藏 → reparent guildInset 独立显示
+                GuildFrameColumnHeader1:SetParent(guildInset); GuildFrameColumnHeader2:SetParent(guildInset)
+                GuildFrameColumnHeader3:SetParent(guildInset); GuildFrameColumnHeader4:SetParent(guildInset)
                 -- 设计 B：列头跨越 inset 上边框（DF retail 风格）
                 GuildFrameColumnHeader1:ClearAllPoints()
                 GuildFrameColumnHeader1:SetPoint("BOTTOMLEFT", guildInset, "TOPLEFT", 4, -24)  -- 回收 dot 死区，与 row title offsetX=4 对齐
@@ -1408,6 +1765,145 @@ DFUI:NewMod("Social", 5, function()
                 GuildFrameColumnHeader2:ClearAllPoints()
                 GuildFrameColumnHeader2:SetPoint("BOTTOMRIGHT", guildInset, "TOPRIGHT", -8, -24)
                 GuildFrameColumnHeader2:SetWidth(112)
+            end
+
+            -- 自建公会搜索框：客户端按名字即时过滤成员（无防抖——本地 roster 数据不涉网络）
+            -- 放到 vanilla(Turtle) GuildFrameSearchBox 的原位/大小（左上角），并隐藏 vanilla 那个
+            local guildSearch = CreateFrame("EditBox", "DFUI_GuildSearchBox", guildInset)
+            if GuildFrameSearchBox then
+                guildSearch:SetAllPoints(GuildFrameSearchBox)
+                GuildFrameSearchBox:SetAlpha(0); GuildFrameSearchBox:EnableMouse(false); GuildFrameSearchBox:Hide()
+            else
+                guildSearch:SetHeight(16)
+                guildSearch:SetPoint("TOPLEFT",  guildInset, "BOTTOMLEFT",  6, -12)
+                guildSearch:SetPoint("TOPRIGHT", guildInset, "BOTTOMRIGHT", -6, -12)
+            end
+            guildSearch:SetAutoFocus(false)
+            guildSearch:SetFontObject(GameFontHighlightSmall)
+            guildSearch:SetTextColor(1, 1, 1)
+            guildSearch:SetTextInsets(20, 4, 0, 0)
+
+            local guildSearchBg = CreateFrame("Frame", nil, guildInset)
+            guildSearchBg:SetPoint("TOPLEFT",     guildSearch, "TOPLEFT",     -3,  1)  -- 整体下移2px与显示离线框齐平
+            guildSearchBg:SetPoint("BOTTOMRIGHT", guildSearch, "BOTTOMRIGHT",  3, -5)  -- 保持高度26
+            guildSearchBg:SetFrameLevel(guildInset:GetFrameLevel())
+            guildSearch:SetFrameLevel(guildSearchBg:GetFrameLevel() + 1)
+            CreateInsetBackdrop(guildSearchBg, 0.85)  -- DFUI 黑底+细边框
+
+            local guildSearchIcon = guildSearchBg:CreateTexture(nil, "OVERLAY")
+            guildSearchIcon:SetTexture("Interface\\Common\\UI-Searchbox-Icon")
+            guildSearchIcon:SetWidth(14); guildSearchIcon:SetHeight(14)
+            guildSearchIcon:SetPoint("LEFT", guildSearchBg, "LEFT", 5, 0)
+            guildSearchIcon:SetVertexColor(0.98, 0.91, 0.58)
+
+            local guildSearchPlaceholder = guildSearchBg:CreateFontString(nil, "OVERLAY")
+            guildSearchPlaceholder:SetFont("Fonts\\FRIZQT__.TTF", 13)
+            guildSearchPlaceholder:SetPoint("LEFT", guildSearchBg, "LEFT", 24, 0)
+            guildSearchPlaceholder:SetText("搜索成员")
+            guildSearchPlaceholder:SetTextColor(1, 1, 1)
+
+            local function guildUpdatePlaceholder()
+                if guildSearch:GetText() == "" then guildSearchPlaceholder:Show() else guildSearchPlaceholder:Hide() end
+            end
+            guildUpdatePlaceholder()
+            guildSearch:SetScript("OnTextChanged", function()
+                guildUpdatePlaceholder()
+                guildSearchText = guildSearch:GetText() or ""
+                guildOffset = 0  -- 新过滤回到顶部
+                refreshGuildRows()
+            end)
+            guildSearch:SetScript("OnEscapePressed", function() guildSearch:ClearFocus() end)
+
+            -- 「显示离线」复用 vanilla GuildFrameLFGButton（Turtle 的勾选框，不隐藏、不自制）：
+            -- hook 它的点击 + 读勾选态控制自建列表。勾选=含离线、不勾=只在线。
+            if GuildFrameLFGButton then
+                -- 去掉外层同名容器上「显示离线成员」背后那条框
+                -- （Turtle 复用职业训练师 UI-ClassTrainer-FilterBorder 纹理拼成，与轻量复选框风格不符）
+                local lfgC = GuildFrameLFGButton:GetParent()
+                if lfgC then
+                    local lfgText
+                    local rs = { lfgC:GetRegions() }
+                    for i = 1, table.getn(rs) do
+                        local x = rs[i]
+                        local ot = x.GetObjectType and x:GetObjectType()
+                        if ot == "Texture" and x:GetTexture()
+                           and string.find(x:GetTexture(), "FilterBorder") then
+                            x:Hide()  -- 清掉 Turtle 的职业训练师过滤边框
+                        elseif ot == "FontString" and x:GetText()
+                           and string.find(x:GetText(), "离线") then
+                            lfgText = x  -- 「显示离线成员」文字，用作框的右边界
+                        end
+                    end
+                    -- 直接锚到「勾选框 GuildFrameLFGButton + 文字」，把这两者框住
+                    -- 上/下/左 = 勾选框；右 = 文字右缘（找不到文字则按估算宽度兜底）
+                    local function anchorLfg(obj)
+                        -- 只用 TOPLEFT 单锚 + 宽高，避免 TOPLEFT/BOTTOM/RIGHT 三点水平过约束把框拉歪
+                        obj:SetPoint("TOPLEFT", GuildFrameLFGButton, "TOPLEFT", -93, 3)
+                        obj:SetHeight(26)  -- 固定 26（=搜索框框 20+6）；1.12 初始化时 GetHeight 会返回错值，不能用
+                        local bl = GuildFrameLFGButton:GetLeft()
+                        local tr = lfgText and lfgText:GetRight()
+                        if bl and tr and tr > bl then
+                            obj:SetWidth(tr - bl + 7)   -- 勾选框左 → 文字右
+                        else
+                            obj:SetWidth(118)           -- 兜底估算宽
+                        end
+                    end
+                    -- 黑底画在 lfgC 的 BACKGROUND 层（文字天然在其上、不被盖）
+                    local lfgBgTex = lfgC:CreateTexture(nil, "BACKGROUND")
+                    lfgBgTex:SetTexture("Interface\\Buttons\\WHITE8X8")
+                    lfgBgTex:SetVertexColor(0, 0, 0, 0.85)
+                    anchorLfg(lfgBgTex)
+                    -- 细边框用子框（BORDER 在四周、不盖文字）
+                    local lfgBg = CreateFrame("Frame", nil, lfgC)
+                    anchorLfg(lfgBg)
+                    CreateInsetBackdrop(lfgBg, 0)
+                end
+                if GuildFrameLFGButton.GetChecked then
+                    guildShowOffline = GuildFrameLFGButton:GetChecked() and true or false  -- 初始同步 vanilla 态
+                end
+                HookScript(GuildFrameLFGButton, "OnClick", function()
+                    guildShowOffline = GuildFrameLFGButton:GetChecked() and true or false
+                    guildOffset = 0
+                    refreshGuildRows()
+                end)
+            end
+
+            -- 自建底部三按钮（公会信息/添加成员/公会控制）：DF 红金属风格，与好友/查找统一。
+            -- 替代裸露的 vanilla 三按钮——vanilla 保留功能(透明+禁鼠标，不 Hide 以保 :Click 与 enable 态)，
+            -- 自制按钮转发 vanilla:Click() 复用原逻辑；enable 镜像 vanilla 权限态。
+            if GuildFrameGuildInformationButton and GuildFrameAddMemberButton and GuildFrameControlButton then
+                local gVanilla = { GuildFrameGuildInformationButton, GuildFrameAddMemberButton, GuildFrameControlButton }
+                for i = 1, table.getn(gVanilla) do
+                    gVanilla[i]:SetAlpha(0); gVanilla[i]:EnableMouse(false)
+                end
+                local function clickVanilla(b) if b and b.Click then b:Click() end end
+                -- 锚到 vanilla 三按钮原位+原尺寸：SetAllPoints 跟随（vanilla 即便后续重定位也同步）。
+                -- 创建宽度随意(100)，SetAllPoints 双锚会覆盖为 vanilla 实际位置与尺寸。
+                local gBtnInfo = DFUI.CreateActionButton(guildInset, 100,
+                    (GuildFrameGuildInformationButton:GetText() or "公会信息"),
+                    function() clickVanilla(GuildFrameGuildInformationButton) end, 22)
+                gBtnInfo:SetAllPoints(GuildFrameGuildInformationButton)
+                local gBtnAdd = DFUI.CreateActionButton(guildInset, 100,
+                    (GuildFrameAddMemberButton:GetText() or "添加成员"),
+                    function() clickVanilla(GuildFrameAddMemberButton) end, 22)
+                gBtnAdd:SetAllPoints(GuildFrameAddMemberButton)
+                local gBtnControl = DFUI.CreateActionButton(guildInset, 100,
+                    (GuildFrameControlButton:GetText() or "公会控制"),
+                    function() clickVanilla(GuildFrameControlButton) end, 22)
+                gBtnControl:SetAllPoints(GuildFrameControlButton)
+
+                -- enable 镜像 vanilla 权限态（添加成员/公会控制按权限启用，公会信息一般常亮）
+                local function vEnabled(b)
+                    if not (b and b.IsEnabled) then return false end
+                    local v = b:IsEnabled()
+                    return (v == 1) or (v == true)
+                end
+                updateGuildButtons = function()
+                    gBtnInfo:SetEnabledDF(vEnabled(GuildFrameGuildInformationButton))
+                    gBtnAdd:SetEnabledDF(vEnabled(GuildFrameAddMemberButton))
+                    gBtnControl:SetEnabledDF(vEnabled(GuildFrameControlButton))
+                end
+                updateGuildButtons()
             end
         end
     end

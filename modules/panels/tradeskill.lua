@@ -371,6 +371,7 @@ DFUI:NewMod("TradeSkill", 5, function()
     local MAX_REAGENTS = 8
     local scrollOffset = 0
     local filterHasMats = false
+    local recipeCache = {}         -- RebuildRecipeData 产出、RenderRecipeButtons 消费：滚动只读缓存不重扫全表
     local tradeSkillOpen = false   -- 事件状态标记
     local craftOpen = false
     local isClosing = false        -- OnHide 重入守卫
@@ -503,13 +504,13 @@ DFUI:NewMod("TradeSkill", 5, function()
     profIcon:SetHeight(52)
 
     local title = panel:CreateFontString(nil, "OVERLAY")
-    title:SetFont("Fonts\\FRIZQT__.TTF", 20)
+    title:SetFont("Fonts\\FRIZQT__.TTF", 16)  -- 专业名缩小 20% (20→16)
     title:SetText("专业技能")
     title:SetTextColor(1.00, 0.82, 0.00)
-    title:SetPoint("TOP", panel, "TOP", 0, -10)
+    title:SetPoint("TOP", panel, "TOP", 0, -4)
 
     local closeBtn = DFUI.CreateRedButton(panel, "close", function() panel:Hide() end)
-    closeBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -4, -4)
+    closeBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -1, -2)
 
     -- ============================================================
     -- 4. 熟练度进度条
@@ -538,7 +539,7 @@ DFUI:NewMod("TradeSkill", 5, function()
     rankBar:SetValue(0)
 
     local rankText = rankBar:CreateFontString(nil, "OVERLAY")
-    rankText:SetFont("Fonts\\FRIZQT__.TTF", 16)
+    rankText:SetFont("Fonts\\FRIZQT__.TTF", 14.4)  -- 专业等级缩小 10% (16→14.4)
     rankText:SetPoint("CENTER", rankBar, "CENTER", 0, 0)
     rankText:SetTextColor(1, 1, 1)
 
@@ -553,9 +554,20 @@ DFUI:NewMod("TradeSkill", 5, function()
     listFrame:SetPoint("BOTTOMRIGHT", leftColumn, "BOTTOMRIGHT", -10, 42)  -- 取消 scrollbar 后收回 12px
     listFrame:SetFrameLevel(panel:GetFrameLevel() + 3)
 
-    local UpdateRecipeList  -- forward decl: 在 L971+ 定义
+    local UpdateRecipeList  -- forward decl: 在 L1070+ 定义（拆为 Rebuild+Render+包装）
+    local RebuildRecipeData    -- 数据层：全表扫描+过滤+图标预取
+    local RenderRecipeButtons  -- 渲染层：仅读缓存（滚动热点路径）
     -- (已取消 CreateMinimalScrollbar 实例化: 视觉/交互问题待重做。滚轮 OnMouseWheel 仍可用 L1727)
     local recipeScrollbar = nil
+
+    -- Layer C 图标常驻池: 每个唯一图标路径各建一个持久隐藏 1×1 纹理, **持有引用**防纹理缓存逐出。
+    -- 根因(上滚卡/下滚不卡)：旧方案单一 warmTex 轮流 SetTexture 只持有最后一张引用，其余预热后变无引用→
+    -- 进时间缓存。下滚(刚预热,时间缓存命中)顺；回头上滚时顶部图标的时间缓存已过期被逐出→需重新解码 BLP→卡。
+    -- 实证：旧 warmTex 也是隐藏纹理而下滚不卡，证明隐藏 SetTexture 确实触发加载，问题仅在"没保住引用"。
+    -- 持久池为每张图标常驻一个 Texture 引用→引用计数>0→永不逐出→双向滚动都命中常驻。可整层回退，零视觉/零每帧开销。
+    local iconKeep = {}    -- [图标路径] = 持久隐藏 Texture (常驻引用，跨专业累积，面板生命周期内保留)
+    local warmQueue = {}   -- 待建常驻纹理的图标路径 (分帧处理，避免打开瞬间集中解码造成单帧卡)
+    local warmDone = {}    -- 去重: 已入队/已建池的路径
 
     -- 折叠全部按钮（模拟原版 "全部" header 行）
     local collapseAllBtn = CreateFrame("Button", nil, listFrame)
@@ -884,7 +896,7 @@ DFUI:NewMod("TradeSkill", 5, function()
     -- 9-slice TexCoord (按钮内容区 atlas 比例)
     local BTN_TC_L = {2/128,  14/128, 2/32, 22/32}  -- leftCap 12px (含 atlas 左 cap)
     local BTN_TC_M = {14/128, 64/128, 2/32, 22/32}  -- middle 50px atlas, 拉伸到任意宽度
-    local BTN_TC_R = {64/128, 76/128, 2/32, 22/32}  -- rightCap 12px
+    local BTN_TC_R = {64/128, 78/128, 2/32, 22/32}  -- rightCap：右边界 76→78 补全最右边框线（同 CreateActionButton AB_TC_R）
 
     local function CreateSimpleButton(parent, width, text)
         local btn = CreateFrame("Button", nil, parent)
@@ -1067,7 +1079,7 @@ DFUI:NewMod("TradeSkill", 5, function()
 
     local UpdateDetail  -- 前向声明，供 UpdateRecipeList 内部引用
 
-    UpdateRecipeList = function()  -- V21 改 local function → 赋值给 L489 forward decl 的 UpdateRecipeList
+    RebuildRecipeData = function()  -- 数据层：全表扫描→过滤→图标预取→写入 recipeCache。仅数据变化时调用，不在滚动路径
         if not currentMode then return end
         local numItems = 0
         if currentMode == "tradeskill" then
@@ -1138,16 +1150,45 @@ DFUI:NewMod("TradeSkill", 5, function()
         --   末位展开 header 若其后子项全被搜索过滤 → pending=true 不被清 → cleanItems 过滤掉空 header (正确 UX)
         --   第十轮 #1.14 已修"连续 header"场景；末位空 header 应该消失而非保留显示。
 
-        -- 去掉无子项的 header
+        -- 去掉无子项的 header；同时把所有滚动派生量预计算进缓存（渲染阶段直接读，不再跨 C 边界/拼字符串/查表——滚动热点）
+        -- 注意：displayName/skillKey/color/isFav 仅在此刷新；新增"非滚动"刷新点必须走 Rebuild(UpdateRecipeList)，否则缓存陈旧
         local cleanItems = {}
         for _, item in ipairs(visibleItems) do
             if not item.pending then
+                if not item.isHeader then
+                    if currentMode == "tradeskill" then
+                        local ok, tex = pcall(GetTradeSkillIcon, item.index)
+                        if ok then item.icon = tex end
+                    elseif currentMode == "craft" then
+                        local ok, tex = pcall(GetCraftIcon, item.index)
+                        if ok then item.icon = tex end
+                    end
+                    -- Layer A: 预计算 displayName（等价旧 Render 的 gsub+拼接）
+                    local displayName = item.name
+                    if item.subName and item.subName ~= "" then
+                        local localSub = string.gsub(item.subName, "^Rank ", "等级 ")
+                        displayName = displayName .. " (" .. localSub .. ")"
+                    end
+                    if item.numAvail and item.numAvail > 0 then
+                        displayName = displayName .. " [" .. item.numAvail .. "]"
+                    end
+                    item.displayName = displayName
+                    -- Layer A: 预计算难度 atlas key（仅 tradeskill 模式）
+                    if currentMode == "tradeskill" then
+                        if item.skillType == "optimal" then item.skillKey = "icon-skill-high"
+                        elseif item.skillType == "medium" then item.skillKey = "icon-skill-medium"
+                        elseif item.skillType == "easy" or item.skillType == "trivial" then item.skillKey = "icon-skill-low"
+                        else item.skillKey = nil end
+                    else
+                        item.skillKey = nil
+                    end
+                    -- Layer A: 难度色（DIFFICULTY_COLORS 子表引用，零新建表）+ 收藏态
+                    item.color = DIFFICULTY_COLORS[item.skillType] or DIFFICULTY_COLORS.default
+                    item.isFav = IsFavorite(item.name)
+                end
                 table.insert(cleanItems, item)
             end
         end
-
-        local maxOffset = math.max(0, table.getn(cleanItems) - MAX_RECIPE_BUTTONS)
-        if scrollOffset > maxOffset then scrollOffset = maxOffset end
 
         -- 过滤后检查 selectedIndex 是否仍可见，不可见则自动重选
         if selectedIndex then
@@ -1167,9 +1208,41 @@ DFUI:NewMod("TradeSkill", 5, function()
             end
         end
 
+        recipeCache = cleanItems
+
+        -- Layer C: 把未预热的图标路径入队（warmDone 去重），由 panel:OnUpdate 分帧载入
+        for i = 1, table.getn(cleanItems) do
+            local ic = cleanItems[i].icon
+            if ic and not warmDone[ic] then
+                table.insert(warmQueue, ic)
+                warmDone[ic] = true
+            end
+        end
+
+        -- 折叠按钮状态（依赖完整数据集，归数据层）
+        local anyCollapsed = false
+        for _, item in ipairs(cleanItems) do
+            if item.isHeader and not item.isExpanded then anyCollapsed = true; break end
+        end
+        collapseAllText:SetText(anyCollapsed and "+" or "-")
+    end
+
+    -- Layer B layout mode 枚举：与 (isHeader, 有无产物图标, 有无难度图标) 一一对应；同 mode 锚点字节级相同 → 可跳过重锚
+    local LMODE_HEADER       = 1
+    local LMODE_ICON_SKILL   = 2
+    local LMODE_ICON_ONLY    = 3
+    local LMODE_NOICON_SKILL = 4
+    local LMODE_NOICON       = 5
+
+    RenderRecipeButtons = function()  -- 渲染层：仅读 recipeCache 按 scrollOffset 绘制 20 个按钮（滚动只调这个）
+        -- clamp 必须在渲染层：滚动改了 scrollOffset 但不 Rebuild，缺它会越界
+        local maxOffset = math.max(0, table.getn(recipeCache) - MAX_RECIPE_BUTTONS)
+        if scrollOffset > maxOffset then scrollOffset = maxOffset end
+        if scrollOffset < 0 then scrollOffset = 0 end
+
         for i = 1, MAX_RECIPE_BUTTONS do
             local btn = recipeButtons[i]
-            local item = cleanItems[scrollOffset + i]
+            local item = recipeCache[scrollOffset + i]
             if item then
                 btn.recipeIndex = item.index
                 btn.recipeName = item.name
@@ -1182,89 +1255,95 @@ DFUI:NewMod("TradeSkill", 5, function()
                     btn.recipeIcon:Hide()
                     btn.skillIcon:Hide()
                     btn.favStar:Hide()
-                    -- 名称锚定 LEFT 18 (留出左侧 +/- 14px + 间距 4)
-                    btn.nameText:ClearAllPoints()
-                    btn.nameText:SetPoint("LEFT", btn, "LEFT", 18, 0)
-                    btn.nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
+                    -- B4 名称锚定 LEFT 18 (留出左侧 +/- 14px + 间距 4)；仅 layout mode 变化时重锚
+                    if btn._lastLayoutMode ~= LMODE_HEADER then
+                        btn.nameText:ClearAllPoints()
+                        btn.nameText:SetPoint("LEFT", btn, "LEFT", 18, 0)
+                        btn.nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
+                        btn._lastLayoutMode = LMODE_HEADER
+                    end
                     btn.nameText:SetText(item.name)
                     local hc = DIFFICULTY_COLORS.header
                     btn.nameText:SetTextColor(hc[1], hc[2], hc[3])
-                    btn.nameText:SetFont("Fonts\\FRIZQT__.TTF", 17)
+                    -- B3 字号仅变化时 SetFont
+                    if btn._lastFontSize ~= 17 then
+                        btn.nameText:SetFont("Fonts\\FRIZQT__.TTF", 17)
+                        btn._lastFontSize = 17
+                    end
                     -- V24 3-slice retail header 背景
                     btn.headerLeft:Show()
                     btn.headerMid:Show()
                     btn.headerRight:Show()
                 else
-                    -- 配方行: 产物图标 + 名称
+                    -- 配方行: 产物图标 + 名称（Render 仅读 Rebuild 预计算字段，不再拼字符串/查表/跨 C 边界）
                     btn.collapseIcon:Hide()
                     btn.headerLeft:Hide()
                     btn.headerMid:Hide()
                     btn.headerRight:Hide()
-                    local texture
-                    if currentMode == "tradeskill" then
-                        texture = GetTradeSkillIcon(item.index)
-                    elseif currentMode == "craft" then
-                        texture = GetCraftIcon(item.index)
-                    end
-                    -- 难度图标: 仅 tradeskill 模式 + 已知 skillType 才显示
-                    local skillKey = nil
-                    if currentMode == "tradeskill" then
-                        if item.skillType == "optimal" then skillKey = "icon-skill-high"
-                        elseif item.skillType == "medium" then skillKey = "icon-skill-medium"
-                        elseif item.skillType == "easy" or item.skillType == "trivial" then skillKey = "icon-skill-low"
-                        end
-                    end
+                    local texture = item.icon       -- A: 预取自 RebuildRecipeData
+                    local skillKey = item.skillKey  -- A: 难度 atlas key，预计算自 RebuildRecipeData
+                    -- B2 难度图标: 仅 skillKey 变化时 ApplyAtlas (同 key 纹理/尺寸不变)
                     if skillKey then
-                        ApplyAtlas(btn.skillIcon, skillKey, false)
-                        btn.skillIcon:SetWidth(13); btn.skillIcon:SetHeight(15)
+                        if btn._lastSkillKey ~= skillKey then
+                            ApplyAtlas(btn.skillIcon, skillKey, false)
+                            btn.skillIcon:SetWidth(13); btn.skillIcon:SetHeight(15)
+                            btn._lastSkillKey = skillKey
+                        end
                         btn.skillIcon:Show()
                     else
                         btn.skillIcon:Hide()
                     end
-
+                    -- B1 产物图标: 仅纹理路径变化时 SetTexture (消除重复纹理绑定)
                     if texture then
-                        btn.recipeIcon:SetTexture(texture)
+                        if btn._lastIcon ~= texture then
+                            btn.recipeIcon:SetTexture(texture)
+                            btn._lastIcon = texture
+                        end
                         btn.recipeIcon:Show()
-                        if skillKey then
+                    else
+                        btn.recipeIcon:Hide()
+                    end
+                    -- B4 锚定: 5 种 layout mode，仅 mode 变化时重锚 (同 mode 锚点字节级相同)
+                    local lmode
+                    if texture then
+                        lmode = skillKey and LMODE_ICON_SKILL or LMODE_ICON_ONLY
+                    else
+                        lmode = skillKey and LMODE_NOICON_SKILL or LMODE_NOICON
+                    end
+                    if btn._lastLayoutMode ~= lmode then
+                        if lmode == LMODE_ICON_SKILL then
                             btn.skillIcon:ClearAllPoints()
                             btn.skillIcon:SetPoint("LEFT", btn.recipeIcon, "RIGHT", 2, 0)
                             btn.nameText:ClearAllPoints()
                             btn.nameText:SetPoint("LEFT", btn.skillIcon, "RIGHT", 2, 0)
                             btn.nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
-                        else
+                        elseif lmode == LMODE_ICON_ONLY then
                             btn.nameText:ClearAllPoints()
                             btn.nameText:SetPoint("LEFT", btn.recipeIcon, "RIGHT", 4, 0)
                             btn.nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
-                        end
-                    else
-                        btn.recipeIcon:Hide()
-                        if skillKey then
+                        elseif lmode == LMODE_NOICON_SKILL then
                             btn.skillIcon:ClearAllPoints()
                             btn.skillIcon:SetPoint("LEFT", btn, "LEFT", 4, 0)
                             btn.nameText:ClearAllPoints()
                             btn.nameText:SetPoint("LEFT", btn.skillIcon, "RIGHT", 3, 0)
                             btn.nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
-                        else
+                        else  -- LMODE_NOICON
                             btn.nameText:ClearAllPoints()
                             btn.nameText:SetPoint("LEFT", btn, "LEFT", 20, 0)
                             btn.nameText:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
                         end
+                        btn._lastLayoutMode = lmode
                     end
-                    local displayName = item.name
-                    if item.subName and item.subName ~= "" then
-                        local localSub = string.gsub(item.subName, "^Rank ", "等级 ")
-                        displayName = displayName .. " (" .. localSub .. ")"
+                    -- A: 读预计算的 displayName / color / isFav (V10 已删 SkillUps 后缀)
+                    btn.nameText:SetText(item.displayName)
+                    btn.nameText:SetTextColor(item.color[1], item.color[2], item.color[3])
+                    -- B3 字号仅变化时 SetFont
+                    if btn._lastFontSize ~= 16 then
+                        btn.nameText:SetFont("Fonts\\FRIZQT__.TTF", 16)
+                        btn._lastFontSize = 16
                     end
-                    if item.numAvail and item.numAvail > 0 then
-                        displayName = displayName .. " [" .. item.numAvail .. "]"
-                    end
-                    -- V10 删除 SkillUps 数字后缀 (+1/+1~2/+1~3) 简化视觉
-                    btn.nameText:SetText(displayName)
-                    local dc = DIFFICULTY_COLORS[item.skillType] or DIFFICULTY_COLORS.default
-                    btn.nameText:SetTextColor(dc[1], dc[2], dc[3])
-                    btn.nameText:SetFont("Fonts\\FRIZQT__.TTF", 16)
                     -- 收藏星标
-                    if IsFavorite(item.name) then btn.favStar:Show() else btn.favStar:Hide() end
+                    if item.isFav then btn.favStar:Show() else btn.favStar:Hide() end
                 end
                 SetButtonSelected(btn, not item.isHeader and item.index == selectedIndex)
                 btn:Show()
@@ -1279,17 +1358,21 @@ DFUI:NewMod("TradeSkill", 5, function()
                 btn.headerRight:Hide()
                 btn.collapseIcon:Hide()
                 btn.favStar:Hide()
+                -- B 缓存失效: 空槽复位，避免下次复用此按钮时脏值跳过必要的 SetTexture/ApplyAtlas/锚定
+                btn._lastIcon = nil
+                btn._lastSkillKey = nil
+                btn._lastFontSize = nil
+                btn._lastLayoutMode = nil
                 btn:Hide()
             end
         end
 
-        -- 折叠按钮状态
-        local anyCollapsed = false
-        for _, item in ipairs(cleanItems) do
-            if item.isHeader and not item.isExpanded then anyCollapsed = true; break end
-        end
-        collapseAllText:SetText(anyCollapsed and "+" or "-")
-        -- (scrollbar 已取消, 不再同步 UpdateThumb)
+    end
+
+    -- 兼容包装：数据真变化的调用点（搜索/过滤/折叠/事件刷新）走这里；滚动只调 RenderRecipeButtons
+    UpdateRecipeList = function()
+        RebuildRecipeData()
+        RenderRecipeButtons()
     end
 
     UpdateDetail = function()
@@ -1684,7 +1767,7 @@ DFUI:NewMod("TradeSkill", 5, function()
         else
             scrollOffset = scrollOffset + 3
         end
-        UpdateRecipeList()
+        RenderRecipeButtons()  -- 滚动不改数据，只重绘缓存（clamp 在 Render 内）
     end)
 
     -- ============================================================
@@ -1885,6 +1968,11 @@ DFUI:NewMod("TradeSkill", 5, function()
         end
         -- 释放背景画显存引用
         detailBg:SetTexture("")
+        -- B 缓存失效: 重开绝不脏值 (Layer C 的 iconKeep/warmDone/warmQueue 跨开关持久保留，使图标常驻不重复解码)
+        for i = 1, MAX_RECIPE_BUTTONS do
+            local b = recipeButtons[i]
+            b._lastIcon = nil; b._lastSkillKey = nil; b._lastFontSize = nil; b._lastLayoutMode = nil
+        end
         isClosing = false
     end)
 
@@ -1895,6 +1983,22 @@ DFUI:NewMod("TradeSkill", 5, function()
             panel.pendingUpdate = false
             if panel:IsShown() then
                 UpdateRankBar(); UpdateRecipeList(); UpdateDetail()
+            end
+        end
+        -- Layer C: 分帧为图标建持久常驻纹理 (每帧最多 6 张)，各保留一个引用防逐出 → 上滚回看也命中常驻
+        if table.getn(warmQueue) > 0 then
+            local budget = 6
+            while budget > 0 and table.getn(warmQueue) > 0 do
+                local ic = table.remove(warmQueue)
+                if not iconKeep[ic] then
+                    local t = listFrame:CreateTexture(nil, "BACKGROUND")
+                    t:SetWidth(1); t:SetHeight(1)
+                    t:SetPoint("BOTTOMLEFT", listFrame, "BOTTOMLEFT", 0, 0)
+                    t:SetTexture(ic)   -- 触发解码+载入；隐藏但持有引用 → 常驻
+                    t:Hide()
+                    iconKeep[ic] = t
+                end
+                budget = budget - 1
             end
         end
     end)

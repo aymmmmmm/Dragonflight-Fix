@@ -831,22 +831,25 @@ function DFUI.CreateSocialRow(parent, opts)
     row:EnableMouseWheel(true)
     row:SetScript("OnMouseWheel", function()
         local p = row:GetParent()
-        if not p or not p.SetVerticalScroll then return end
-        local cur = p:GetVerticalScroll() or 0
-        local step = 18  -- 一行高度（与 FIXED_ROW_H 一致）
-        local newScroll = cur - arg1 * step  -- arg1=1 上滚（scroll 减）；arg1=-1 下滚（加）
-        if newScroll < 0 then newScroll = 0 end
-        -- 限制 max：从 ScrollBar 拿 maxValues
-        local pname = p.GetName and p:GetName()
-        local sb = pname and getglobal(pname.."ScrollBar")
-        if sb and sb.GetMinMaxValues then
-            local _, maxV = sb:GetMinMaxValues()
-            if maxV and newScroll > maxV then newScroll = maxV end
+        -- parent 是 vanilla ScrollFrame（friend/guild）：走 SetVerticalScroll；
+        -- parent 是普通 Frame（who 全自制，offset 自管）：跳过滚动逻辑，仅靠 onWheel 翻页
+        if p and p.SetVerticalScroll then
+            local cur = p:GetVerticalScroll() or 0
+            local step = 18  -- 一行高度（与 FIXED_ROW_H 一致）
+            local newScroll = cur - arg1 * step  -- arg1=1 上滚（scroll 减）；arg1=-1 下滚（加）
+            if newScroll < 0 then newScroll = 0 end
+            -- 限制 max：从 ScrollBar 拿 maxValues
+            local pname = p.GetName and p:GetName()
+            local sb = pname and getglobal(pname.."ScrollBar")
+            if sb and sb.GetMinMaxValues then
+                local _, maxV = sb:GetMinMaxValues()
+                if maxV and newScroll > maxV then newScroll = maxV end
+            end
+            p:SetVerticalScroll(newScroll)
+            -- 同步 scrollbar value（让 scrollbar 视觉跟随，虽然我们 nuke 了视觉但其他逻辑可能依赖）
+            if sb and sb.SetValue then sb:SetValue(newScroll) end
         end
-        p:SetVerticalScroll(newScroll)
-        -- 同步 scrollbar value（让 scrollbar 视觉跟随，虽然我们 nuke 了视觉但其他逻辑可能依赖）
-        if sb and sb.SetValue then sb:SetValue(newScroll) end
-        -- 调用 opts.onWheel 手动触发对应列表 *_Update（绕开 vanilla broken OnVerticalScroll）
+        -- 调用 opts.onWheel：friend/guild 触发 *_Update；who 自管 offset 翻页
         if opts.onWheel then opts.onWheel() end
     end)
 
@@ -930,4 +933,139 @@ function DFUI.CreateSocialRow(parent, opts)
     end
 
     return row
+end
+
+-- ============================================================
+-- DFUI.CreateActionButton — DF 风格文字操作按钮（红金属 9-slice + 金色 OUTLINE 文字）
+-- 抽自 tradeskill.lua CreateSimpleButton，素材复用 professions btn_*.tga（128×32 POT）
+-- 增 onClick 参数 + :SetEnabledDF(bool) 禁用态（变暗 + 屏蔽 hover/点击）
+-- 用法：local b = DFUI.CreateActionButton(parent, width, "文字", function(btn) ... end)
+-- ============================================================
+local AB_TEX  = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\panels\\df\\professions\\"
+local AB_UP   = AB_TEX .. "btn_up.tga"
+local AB_DOWN = AB_TEX .. "btn_down.tga"
+local AB_HL   = AB_TEX .. "btn_hl.tga"
+local AB_TC_L = {2/128,  14/128, 2/32, 22/32}
+local AB_TC_M = {14/128, 64/128, 2/32, 22/32}
+local AB_TC_R = {64/128, 78/128, 2/32, 22/32}  -- 右边界 76→78：76/128 卡在像素76左缘会切掉最右边框线，抠到 78 含全右边框
+
+function DFUI.CreateActionButton(parent, width, text, onClick, height)
+    local btn = CreateFrame("Button", nil, parent)
+    local h = height or 24
+    btn:SetWidth(width)
+    btn:SetHeight(h)
+    btn:SetFrameLevel(parent:GetFrameLevel() + 5)
+    btn:RegisterForClicks("LeftButtonUp")
+
+    local function makeSlice(layer, tex, blend)
+        local L = btn:CreateTexture(nil, layer)
+        L:SetTexture(tex); L:SetTexCoord(AB_TC_L[1], AB_TC_L[2], AB_TC_L[3], AB_TC_L[4])
+        L:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+        L:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0); L:SetWidth(12)
+        if blend then L:SetBlendMode(blend) end
+        local R = btn:CreateTexture(nil, layer)
+        R:SetTexture(tex); R:SetTexCoord(AB_TC_R[1], AB_TC_R[2], AB_TC_R[3], AB_TC_R[4])
+        R:SetPoint("TOPRIGHT", btn, "TOPRIGHT", 0, 0)
+        R:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0); R:SetWidth(12)
+        if blend then R:SetBlendMode(blend) end
+        local M = btn:CreateTexture(nil, layer)
+        M:SetTexture(tex); M:SetTexCoord(AB_TC_M[1], AB_TC_M[2], AB_TC_M[3], AB_TC_M[4])
+        M:SetPoint("TOPLEFT", L, "TOPRIGHT", 0, 0)
+        M:SetPoint("BOTTOMRIGHT", R, "BOTTOMLEFT", 0, 0)
+        if blend then M:SetBlendMode(blend) end
+        return {L, M, R}
+    end
+
+    local normal = makeSlice("BACKGROUND", AB_UP)
+    local hl     = makeSlice("HIGHLIGHT", AB_HL, "ADD")
+    btn:SetScript("OnMouseDown", function()
+        if btn.dfDisabled then return end
+        for _, t in ipairs(normal) do t:SetTexture(AB_DOWN) end
+    end)
+    btn:SetScript("OnMouseUp", function()
+        for _, t in ipairs(normal) do t:SetTexture(AB_UP) end
+    end)
+
+    local label = btn:CreateFontString(nil, "OVERLAY")
+    label:SetFont("Fonts\\FRIZQT__.TTF", math.floor(h / 24 * 16 + 0.5), "OUTLINE")
+    label:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    label:SetText(text)
+    label:SetTextColor(1.00, 0.82, 0.00)
+    btn.label = label
+
+    if onClick then
+        btn:SetScript("OnClick", function()
+            if btn.dfDisabled then return end
+            onClick(btn)
+        end)
+    end
+
+    -- 禁用态：变暗 + 屏蔽 hover 高光/点击（不覆盖 vanilla Enable/Disable，避免冲突）
+    function btn:SetEnabledDF(on)
+        self.dfDisabled = not on
+        local nv = on and 1 or 0.4
+        for _, t in ipairs(normal) do t:SetVertexColor(nv, nv, nv) end
+        for _, t in ipairs(hl) do t:SetAlpha(on and 1 or 0) end
+        if on then self.label:SetTextColor(1.00, 0.82, 0.00)
+        else self.label:SetTextColor(0.55, 0.50, 0.35) end
+    end
+
+    return btn
+end
+
+-- ============================================================
+-- DFUI.TruncateToWidth(text, maxW, font) — 像素级 UTF-8 截断 + 省略号
+-- ============================================================
+-- 1.12 无原生省略号截断。手动按 UTF-8 字符边界步进，用隐藏 FontString 测宽
+-- （复用本项目已验证的 FontString:GetStringWidth，参考 tradeskill.lua / loot.lua）。
+-- text 渲染宽 ≤ maxW → 原样返回；否则截到「再加一字符就超 maxW−省略号宽」并接 …
+-- 客户端中文为 UTF-8（汉字 3 字节，lead byte 0xE0-0xEF）；font 缺省与 social row 一致。
+local _dfuiMeasureFS = {}   -- 按 font 缓存测量 FontString（不同字体/字号宽度不同）
+local function dfuiGetMeasureFS(font)
+    font = font or "GameFontNormalSmall"
+    local fs = _dfuiMeasureFS[font]
+    if not fs then
+        fs = UIParent:CreateFontString(nil, "ARTWORK", font)
+        fs:Hide()
+        _dfuiMeasureFS[font] = fs
+    end
+    return fs
+end
+
+function DFUI.TruncateToWidth(text, maxW, font)
+    if not text or text == "" or not maxW or maxW <= 0 then return text or "" end
+    local fs = dfuiGetMeasureFS(font)
+    fs:SetText(text)
+    if (fs:GetStringWidth() or 0) <= maxW then return text end
+    -- 省略号：优先单字符 …（U+2026），字体缺字形(测宽 0)则退回三点 ...
+    local ell = "…"
+    fs:SetText(ell)
+    local ellW = fs:GetStringWidth() or 0
+    if ellW <= 0 then ell = "..."; fs:SetText(ell); ellW = fs:GetStringWidth() or 0 end
+    local budget = maxW - ellW
+    if budget <= 0 then return ell end
+    local out, i, n = "", 1, string.len(text)
+    while i <= n do
+        local b = string.byte(text, i)
+        local clen = 1                          -- UTF-8 lead byte → 字符字节数
+        if     b >= 240 then clen = 4
+        elseif b >= 224 then clen = 3           -- 中文 BMP
+        elseif b >= 192 then clen = 2 end
+        local ch = string.sub(text, i, i + clen - 1)
+        fs:SetText(out .. ch)
+        if (fs:GetStringWidth() or 0) > budget then break end
+        out = out .. ch
+        i = i + clen
+    end
+    if out == "" then return ell end
+    return out .. ell
+end
+
+-- DFUI.MeasureWidth(text, font) — 测文本渲染像素宽（颜色码 |cff..|r 不计宽）。
+-- 复用 TruncateToWidth 的测量 FontString。用于给 status 后缀预留宽度等。
+function DFUI.MeasureWidth(text, font)
+    if not text or text == "" then return 0 end
+    local fs = dfuiGetMeasureFS(font)
+    fs:SetText(text)
+    return fs:GetStringWidth() or 0
 end

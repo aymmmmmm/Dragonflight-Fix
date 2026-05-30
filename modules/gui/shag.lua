@@ -166,7 +166,7 @@ DFUI:NewMod("Gui-shag", 3, function()
                     countFont:SetFont(self.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(11), "OUTLINE")
                     countFont:SetPoint("LEFT", catTitle, "RIGHT", 8, 0)
                     countFont:SetText("(" .. elemCount .. ")")
-                    countFont:SetTextColor(0.54, 0.48, 0.35)
+                    countFont:SetTextColor(1, 0.82, 0)
 
                     local sep = catPanel:CreateTexture(nil, "ARTWORK")
                     sep:SetTexture("Interface\\Buttons\\WHITE8X8")
