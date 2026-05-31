@@ -1,0 +1,4 @@
+# 发布 zip（GitHub source archive / git archive）排除开发资料，
+# 文件仍保留在仓库中，不影响 clone。
+art/** export-ignore
+*.bak export-ignore
