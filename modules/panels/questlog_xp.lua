@@ -5,74 +5,101 @@ DFUI:NewDefaults("QuestLogXP", {
 })
 
 DFUI:NewMod("QuestLogXP", 6, function()
-    if not _G.DFUI_QuestXPCache then _G.DFUI_QuestXPCache = {} end
-    local cache = _G.DFUI_QuestXPCache
-    local LibXP = _G.DFUI_LibQuestXP
+    local DB    = _G.DFUI_QuestXPDB     -- [id]={满额经验,任务等级,满级金币铜}
+    local NAMES = _G.DFUI_QuestXPNames  -- [名称]=id 或 {id,...}
 
-    local function extractXP(text)
-        if not text then return nil end
-        if string.find(text, "经验") or string.find(text, "[Ee]xperience") or string.find(text, " XP") then
-            local _, _, n = string.find(text, "(%d[%d,]*)")
-            if n then
-                n = string.gsub(n, ",", "")
-                return tonumber(n)
-            end
-        end
-        return nil
+    -- ===== Turtle 自定义经验衰减（源码 QuestDef.cpp Quest::XPValue）=====
+    -- 放宽到任务等级 +25 才衰减，保底 10%（永不归 0），向上取整
+    local function scaleXP(fullXP, pLevel, qLevel)
+        if not fullXP or fullXP == 0 then return 0 end
+        if not qLevel or qLevel <= 0 then return fullXP end -- 无等级特殊任务不衰减
+        local diff = pLevel - qLevel
+        if diff <= 25 then return fullXP
+        elseif diff <= 27 then return math.ceil(fullXP * 0.8)
+        elseif diff == 28 then return math.ceil(fullXP * 0.6)
+        elseif diff == 29 then return math.ceil(fullXP * 0.4)
+        elseif diff == 30 then return math.ceil(fullXP * 0.2)
+        else return math.ceil(fullXP * 0.1) end
     end
 
-    local function scanPanelForXP(panel)
-        if not panel then return nil end
-        local regions = {panel:GetRegions()}
-        for i = 1, table.getn(regions) do
-            local r = regions[i]
-            if r and r.GetObjectType and r:GetObjectType() == "FontString" then
-                local xp = extractXP(r:GetText())
-                if xp then return xp end
-            end
+    -- 玩家当前等级下该任务实得信息：{kind="xp"/"money", value=N} 或 nil(未知)
+    local function resolve(qid, qLevel)
+        if not qid or not DB then return nil end
+        local e = DB[qid]
+        if not e then return nil end
+        local fullXP = e[1] or 0
+        local lvl    = qLevel or e[2]
+        local money  = e[3] or 0
+        local pLevel = UnitLevel("player")
+        local maxLevel = MAX_PLAYER_LEVEL or 60
+        if pLevel >= maxLevel then
+            return { kind = "money", value = money }
         end
-        return nil
+        return { kind = "xp", value = scaleXP(fullXP, pLevel, lvl) }
     end
 
-    local function captureFromQuestFrame()
-        local title = GetTitleText and GetTitleText()
-        if not title or title == "" then return end
-
-        local xp = scanPanelForXP(QuestFrameDetailPanel)
-                or scanPanelForXP(QuestFrameProgressPanel)
-                or scanPanelForXP(QuestFrameRewardPanel)
-        if xp then cache[title] = xp end
+    -- 铜 -> "Xg Ys Zc"，0 返回 nil
+    local function formatMoney(c)
+        if not c or c <= 0 then return nil end
+        local g = math.floor(c / 10000)
+        local s = math.floor((c - g * 10000) / 100)
+        local cc = c - g * 10000 - s * 100
+        local out = ""
+        if g > 0 then out = out .. g .. "g" end
+        if s > 0 then out = out .. (out ~= "" and " " or "") .. s .. "s" end
+        if cc > 0 then out = out .. (out ~= "" and " " or "") .. cc .. "c" end
+        return out
     end
 
-    local captureDirty = false
-    local capFrame = CreateFrame("Frame")
-    capFrame:RegisterEvent("QUEST_DETAIL")
-    capFrame:RegisterEvent("QUEST_PROGRESS")
-    capFrame:RegisterEvent("QUEST_COMPLETE")
-    capFrame:SetScript("OnEvent", function() captureDirty = true end)
-    capFrame:SetScript("OnUpdate", function()
-        if captureDirty then
-            captureDirty = false
-            captureFromQuestFrame()
-        end
-    end)
-
-    -- 先 db，后 title 缓存；返回 number 或 nil
-    local function resolveXP(qlogid, title)
-        local xp
-        if LibXP and pfDatabase and pfDatabase.GetQuestIDs then
+    -- ===== ID 优先：pfQuest 解析（很贵，按标题缓存）=====
+    local qidByTitle = {}
+    local function resolveQID(qlogid, title)
+        local q = qidByTitle[title]
+        if q ~= nil then return q or nil end
+        local qid
+        if pfDatabase and pfDatabase.GetQuestIDs then
             local qids = pfDatabase:GetQuestIDs(qlogid)
             if qids and type(qids) == "table" and table.getn(qids) > 0 then
-                xp = LibXP.GetXPByQuestID(qids[1])
+                qid = qids[1]
             end
         end
-        if not xp then xp = cache[title] end
-        return xp
+        qidByTitle[title] = qid or false
+        return qid
     end
 
-    -- GetQuestIDs 很贵，滚动会频繁触发刷新，按任务标题缓存解析结果
-    local xpByTitle = {}
+    -- ===== 按名兜底：pfQuest 没装/解析失败时，用任务日志标题(中/英)查 name 索引 =====
+    local function resolveByName(title, level)
+        if not NAMES or not title then return nil end
+        local v = NAMES[title]
+        if not v then return nil end
+        if type(v) == "number" then return v end
+        for i = 1, table.getn(v) do          -- 同名多条：按运行时任务等级选
+            local id = v[i]
+            local e = DB and DB[id]
+            if e and e[2] == level then return id end
+        end
+        return v[1]                            -- 无等级匹配则取第一条
+    end
 
+    -- 生成行尾文本：ID优先 -> 按名兜底 -> 扫描兜底 -> 未知
+    local function resolveText(qlogid, title, level)
+        local qid = resolveQID(qlogid, title)
+        if not (qid and DB and DB[qid]) then   -- pfQuest 拿不到 / ID 不在表里
+            local nid = resolveByName(title, level)
+            if nid then qid = nid end
+        end
+        local info = resolve(qid, level)
+        if info then
+            if info.kind == "money" then
+                local m = formatMoney(info.value)
+                return m and ("(+" .. m .. ")") or "(+0xp)"
+            end
+            return "(+" .. info.value .. "xp)"
+        end
+        return "(+?xp)"
+    end
+
+    -- ===== 渲染 =====
     local function ensureFS(button)
         local fs = button.dfuiXP
         if not fs then
@@ -102,12 +129,7 @@ DFUI:NewMod("QuestLogXP", 6, function()
                 if questIndex > n or isHeader or not title or title == "" or not nameFS then
                     fs:Hide()
                 else
-                    local xp = xpByTitle[title]
-                    if xp == nil then
-                        xp = resolveXP(questIndex, title)
-                        xpByTitle[title] = xp or false
-                    end
-                    fs:SetText(xp and xp > 0 and ("(+"..xp.."xp)") or "(+?xp)")
+                    fs:SetText(resolveText(questIndex, title, level))
 
                     -- 难度色（按任务等级）
                     local c = level and level > 0 and GetDifficultyColor and GetDifficultyColor(level)
