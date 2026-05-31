@@ -57,20 +57,8 @@ DFUI:NewMod("QuestLogXP", 6, function()
         end
     end)
 
-    local xpLabel = QuestLogDetailScrollChildFrame:CreateFontString(
-        "DFUI_QuestLogXPText", "OVERLAY", "QuestFont"
-    )
-    xpLabel:Hide()
-
-    local function updateXPDisplay()
-        if not QuestLogFrame:IsVisible() then return end
-
-        local qlogid = GetQuestLogSelection()
-        if not qlogid or qlogid == 0 then xpLabel:Hide(); return end
-
-        local title = GetQuestLogTitle(qlogid)
-        if not title or title == "" then xpLabel:Hide(); return end
-
+    -- 先 db，后 title 缓存；返回 number 或 nil
+    local function resolveXP(qlogid, title)
         local xp
         if LibXP and pfDatabase and pfDatabase.GetQuestIDs then
             local qids = pfDatabase:GetQuestIDs(qlogid)
@@ -78,63 +66,62 @@ DFUI:NewMod("QuestLogXP", 6, function()
                 xp = LibXP.GetXPByQuestID(qids[1])
             end
         end
-
         if not xp then xp = cache[title] end
-
-        local rewardTitle = QuestLogRewardTitleText
-        if not (rewardTitle and rewardTitle:IsShown()) then
-            xpLabel:Hide()
-            return
-        end
-
-        local bodyFS = QuestLogObjectivesText or QuestLogQuestDescription or rewardTitle
-        local r, g, b = bodyFS:GetTextColor()
-        xpLabel:SetTextColor(r, g, b)
-        xpLabel:SetText("经验值: " .. (xp or "?"))
-
-        local lowest = rewardTitle
-        local lowestY = rewardTitle:GetBottom()
-        for i = 1, 10 do
-            local item = _G["QuestLogItem"..i]
-            if item and item:IsShown() then
-                local y = item:GetBottom()
-                if y and lowestY and y < lowestY then
-                    lowest = item
-                    lowestY = y
-                end
-            end
-        end
-        local children = {QuestLogDetailScrollChildFrame:GetChildren()}
-        for i = 1, table.getn(children) do
-            local child = children[i]
-            local name = child and child:IsShown() and child.GetName and child:GetName()
-            if name and string.find(name, "Money") then
-                local y = child:GetBottom()
-                if y and lowestY and y < lowestY then
-                    lowest = child
-                    lowestY = y
-                end
-            end
-        end
-
-        xpLabel:ClearAllPoints()
-        xpLabel:SetPoint("LEFT", rewardTitle, "LEFT", 0, 0)
-        xpLabel:SetPoint("TOP", lowest, "BOTTOM", 0, -8)
-        xpLabel:Show()
+        return xp
     end
 
-    local dirty = true
-    HookScript(QuestLogFrame, "OnShow", function() dirty = true end)
+    -- GetQuestIDs 很贵，滚动会频繁触发刷新，按任务标题缓存解析结果
+    local xpByTitle = {}
 
-    local lastSelection = -1
-    local updater = CreateFrame("Frame")
-    updater:SetScript("OnUpdate", function()
-        if not QuestLogFrame:IsVisible() then return end
-        local cur = GetQuestLogSelection() or 0
-        if cur ~= lastSelection or dirty then
-            lastSelection = cur
-            dirty = false
-            updateXPDisplay()
+    local function ensureFS(button)
+        local fs = button.dfuiXP
+        if not fs then
+            fs = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            fs:SetJustifyH("LEFT")
+            local bf = button:GetFontString() -- 字体与该行文字一致
+            if bf then fs:SetFont(bf:GetFont()) end
+            button.dfuiXP = fs
         end
-    end)
+        return fs
+    end
+
+    local function updateListXP()
+        if not QuestLogFrame:IsVisible() then return end
+        local n = GetNumQuestLogEntries()
+        local offset = FauxScrollFrame_GetOffset(QuestLogListScrollFrame)
+        for i = 1, QUESTS_DISPLAYED do
+            local button = _G["QuestLogTitle"..i]
+            if button then
+                local fs = ensureFS(button)
+                local questIndex = i + offset
+                local title, level, _, isHeader
+                if questIndex <= n then
+                    title, level, _, isHeader = GetQuestLogTitle(questIndex)
+                end
+                local nameFS = button:GetFontString()
+                if questIndex > n or isHeader or not title or title == "" or not nameFS then
+                    fs:Hide()
+                else
+                    local xp = xpByTitle[title]
+                    if xp == nil then
+                        xp = resolveXP(questIndex, title)
+                        xpByTitle[title] = xp or false
+                    end
+                    fs:SetText(xp and xp > 0 and ("(+"..xp.."xp)") or "(+?xp)")
+
+                    -- 难度色（按任务等级）
+                    local c = level and level > 0 and GetDifficultyColor and GetDifficultyColor(level)
+                    if c then fs:SetTextColor(c.r, c.g, c.b) else fs:SetTextColor(1, 0.82, 0) end
+
+                    -- 紧跟任务名结尾：锚到行文字 fontstring 的 LEFT + 文字宽 + 2px
+                    fs:ClearAllPoints()
+                    fs:SetPoint("LEFT", nameFS, "LEFT", (nameFS:GetStringWidth() or 0) + 2, 0)
+                    fs:Show()
+                end
+            end
+        end
+    end
+
+    hooksecurefunc("QuestLog_Update", updateListXP, true)
+    HookScript(QuestLogFrame, "OnShow", updateListXP)
 end)
