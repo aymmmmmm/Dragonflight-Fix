@@ -25,9 +25,9 @@
 
 ## 安装
 
-1. [下载](https://github.com/aymmmmmm/Dragonflight-Fix/archive/refs/heads/main.zip) 并解压
+1. [下载最新版](https://github.com/aymmmmmm/Dragonflight-Fix/releases/latest) 并解压（在 Assets 里点 Source code (zip)）
 2. 将文件夹放入 WoW 目录的 `Interface\AddOns\`
-3. **文件夹必须命名为 `Dragonflight-Fix`**（解压后需将 `Dragonflight-Fix-main` 重命名）
+3. **文件夹必须命名为 `Dragonflight-Fix`**（解压后的文件夹名形如 `Dragonflight-Fix-2.1`，需重命名）
 4. 启动游戏，输入 `/dfui` 打开设置面板
 
 ### 推荐搭配
