@@ -755,7 +755,9 @@ DFUI:NewMod("Character", 5, function()
     --          true =B 方案（atlas 整图 + SetTexCoord 切片）
     local BAR_USE_ATLAS = false
 
-    local function ApplyBarFill(bar)
+    -- texName 默认 fill-white.tga（声望条用，靠 vanilla SetStatusBarColor 按好感度染色）
+    local function ApplyBarFill(bar, texName)
+        texName = texName or "fill-white.tga"
         if BAR_USE_ATLAS then
             -- B 方案：tradeskill.lua:494-498 已验证模式
             -- 先 CreateTexture 设 TexCoord 锁定 atlas 子区域，再 SetStatusBarTexture(obj)
@@ -764,8 +766,10 @@ DFUI:NewMod("Character", 5, function()
             fill:SetTexCoord(0, 1, 163/256, 180/256)  -- white 行 (y=163..180)
             bar:SetStatusBarTexture(fill)
         else
-            -- A 方案：独立切片 fill-white.tga（256×17）
-            bar:SetStatusBarTexture(CHAR_TEX .. "fill-white.tga")
+            -- A 方案：独立切片（256×16 POT）
+            -- ⚠ 必须 POT：1.12 SetStatusBarTexture 对非 POT 文件静默拒绝、保留前一张纹理，
+            --   曾经 256×17 → 永远退回 vanilla UI-Character-Skills-Bar（见 reference-wow112-tga-pot）
+            bar:SetStatusBarTexture(CHAR_TEX .. texName)
         end
     end
 
@@ -782,7 +786,10 @@ DFUI:NewMod("Character", 5, function()
     for i = 1, (SKILLS_TO_DISPLAY or 15) do
         local bar = getglobal("SkillRankFrame" .. i)
         if bar and bar.SetStatusBarTexture then
-            ApplyBarFill(bar)
+            -- 技能条：vanilla 不按状态染色（蓝色烤进原版纹理 UI-Character-Skills-Bar），
+            -- 换白底 fill 会失色看不见 → 改用预上色 fill-blue + 复位 color(1,1,1) 让 DF 蓝如实显示
+            ApplyBarFill(bar, "fill-blue.tga")
+            bar:SetStatusBarColor(1, 1, 1)
             -- SkillRankFrame{i}Border 在 1.12 vanilla 是 Frame（不是 Texture），无 SetTexture
             local border = getglobal("SkillRankFrame" .. i .. "Border")
             if border and border.Hide then border:Hide() end

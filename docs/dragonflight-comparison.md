@@ -1,7 +1,8 @@
 # 三个 Dragonflight WoW UI 插件仓库深度对比分析
 
-> 初版日期：2026-03-25 | 更新日期：2026-04-05
+> 初版日期：2026-03-25 | 更新日期：2026-06-01
 > 基于 GitHub 远程仓库克隆 + 本地代码实际分析
+> 本地 dragonflight-fix 数据以当前 .toc（Version 2.1）为准；Reloaded/Dragonflight3 数据为对比时克隆版本，未重新核对
 
 ## Context
 
@@ -9,7 +10,7 @@
 
 | 仓库 | 作者 | 版本 | 定位 |
 |------|------|------|------|
-| [dragonflight-fix](https://github.com/aymmmmmm/dragonflight-fix) | aymmmmmm | ~~v1.3.3-fix~~ → **v2.0.0** | 中文本地化修复版，基于 DragonflightUI-Reforged |
+| [dragonflight-fix](https://github.com/aymmmmmm/dragonflight-fix) | aymmmmmm | ~~v1.3.3-fix → v2.0.0~~ → **v2.1**（.toc Version: 2.1） | 中文本地化修复版，基于 DragonflightUI-Reforged |
 | [-DragonflightReloaded](https://github.com/paokkerkir/-DragonflightReloaded) | paokkerkir | v2.3.5 | Reloaded 版本，功能完整 |
 | [-Dragonflight3](https://github.com/Flaxic-LUA/-Dragonflight3) | Guzruul (Flaxic-LUA) | Beta | 全新重写，工业级架构 |
 
@@ -21,13 +22,13 @@
 
 | 维度 | dragonflight-fix | DragonflightReloaded | Dragonflight3 |
 |------|-----------------|---------------------|---------------|
-| Lua 文件数 | ~~38~~ → **51** | 43 | **124** |
-| Lua 代码行数 | ~~16,623~~ → **25,112** | 19,573 | **46,885** |
-| Lua 代码大小 | ~~732 KB~~ → **1,160 KB** | 765 KB | **2,424 KB** |
-| .toc 加载文件数 | ~~31~~ → **57**（含 GUI） | 60 | 92+ |
-| 项目总大小 | ~~37 MB~~ → **75 MB** | 41 MB | **70 MB** |
+| Lua 文件数（实测）| ~~38 → 51~~ → **81**（磁盘总数，含未加载的 LibQuestXP 子库等死代码） | 43 | **124** |
+| Lua 代码行数 | ~~16,623 → 25,112~~（行数/大小待重新统计） | 19,573 | **46,885** |
+| Lua 代码大小 | ~~732 KB → 1,160 KB~~（待重新统计） | 765 KB | **2,424 KB** |
+| .toc 加载文件数（实测）| ~~31 → 57~~ → **77**（含 GUI） | 60 | 92+ |
+| 项目总大小 | ~~37 MB → 75 MB~~（待重新统计） | 41 MB | **70 MB** |
 
-**变化**：dragonflight-fix 代码量增长 **51%**（+8,489 行），已超过 DragonflightReloaded，接近 Dragonflight3 的一半。
+**变化**：dragonflight-fix 文件数与加载项较 v2.0.0 再度大幅增长（51→81 Lua 文件、57→77 .toc 加载项），新增了完整面板美化、拾取模块、libhealth 等（见下文）。行数/大小/总体积待重新统计（标"待实证"）。
 
 ### 1.2 核心架构模式
 
@@ -36,35 +37,44 @@
 │                         架构层级对比                                 │
 ├──────────────────┬──────────────────┬───────────────────────────────┤
 │ dragonflight-fix │ Reloaded         │ Dragonflight3                 │
-│ (v2.0.0 DFUI)   │ (DFRL)           │ (DF)                          │
+│ (v2.1 DFUI)     │ (DFRL)           │ (DF)                          │
 ├──────────────────┼──────────────────┼───────────────────────────────┤
-│ core/ (6文件)    │ core/ (6文件)    │ core/ (7文件)                 │
+│ core/ (6加载)    │ core/ (6文件)    │ core/ (7文件)                 │
 │  error/core/     │  error/core/     │  namespace/env/polyfill/      │
 │  tools/statusbar │  tools/statusbar │  init/slash/compat            │
 │  compat/first    │  compat/first    │                               │
+│  (serialize.lua  │                  │                               │
+│   在盘未入.toc)  │                  │                               │
 │                  │                  │                               │
-│ libs/ (5个)      │ libs/ (3个)      │ libs/ (8个独立库)             │
+│ libs/ (6个加载)  │ libs/ (3个)      │ libs/ (8个独立库)             │
 │  libtipscan      │  libtipscan      │  events/cast/tipscan/spell/   │
 │  libspell        │  libspell        │  debuff/healcomm/health/guid  │
 │  libdebuff       │  libdebuff       │                               │
 │  libguid ★       │                  │                               │
 │  libevents ★     │                  │                               │
+│  libhealth ★(新) │                  │                               │
+│  (LibQuestXP/    │                  │                               │
+│   未入.toc=死码) │                  │                               │
 │                  │                  │                               │
-│ data/ (3文件)    │ data/ (2文件)    │ tables/ (含迁移系统)          │
+│ data/ (4文件)    │ data/ (2文件)    │ tables/ (含迁移系统)          │
 │  tables          │  tables+debuffs  │ + tools/ (9文件)              │
 │  debuffs         │                  │                               │
 │  talents_desc ★  │                  │                               │
+│  questxp (新)    │                  │                               │
 │                  │                  │                               │
-│ modules/         │ modules/         │ mods/ (92个Lua文件)           │
-│ (37个Lua文件)    │ (37个Lua文件)    │ + mixins/ + locale/           │
+│ modules/ (含     │ modules/         │ mods/ (92个Lua文件)           │
+│  panels 21文件、 │ (37个Lua文件)    │ + mixins/ + locale/           │
+│  loot/track/     │                  │                               │
+│  xprep 等)       │                  │                               │
 ├──────────────────┼──────────────────┼───────────────────────────────┤
 │ 命名空间: DFUI ★ │ 命名空间: DFRL   │ 命名空间: DF                  │
-│ SavedVars: 4个   │ SavedVars: 4个   │ SavedVars: 5个                │
+│ SavedVars: 4+2★  │ SavedVars: 4个   │ SavedVars: 5个                │
 │ 加载: .toc直列   │ 加载: .toc直列   │ 加载: XML分层清单             │
 └──────────────────┴──────────────────┴───────────────────────────────┘
 ```
 
-★ = v2.0.0 新增
+★ = v2.0.0 起新增（部分见下文 v2.1 续增）
+fix 的 SavedVars（.toc 实测）：账号级 4 个 `DFUI_PROFILES / DFUI_DB_SETUP / DFUI_BUGS / DFUI_HealthDB`，角色级 2 个 `DFUI_CUR_PROFILE / DFUI_FRAMEPOS`
 
 ### 1.3 关键架构差异
 
@@ -75,11 +85,11 @@
 | 配置 API | `DFUI:GetTempDB/SetTempDB` | `DFRL:GetTempDB/SetTempDB` | `DF_Profiles` + 版本迁移链 (v1→v2→v3) |
 | 回调系统 | `NewCallbacks` (5个) | `NewCallbacks` (5个) | `NewCallbacks` + 元数据驱动 UI 生成 |
 | 兼容层 | `compat.lua` (34项) | `compat.lua` | **`polyfill.lua`** (SetSize/GetSize/print 等 API 补丁) |
-| 配置导入导出 | ✅ 序列化+校验和 ★ | ❌ | ❌ |
+| 配置导入导出 | ✅ 序列化+校验和 ★（运行期实现在已加载的 `core/core.lua`：DFUI:SerializeProfile/DeserializeProfile + Checksum；同名 `core/serialize.lua` 在盘但未入 .toc=未加载副本） | ❌ | ❌ |
 | 错误系统 | 自定义错误处理（节流） | 自定义错误处理（节流） | **环境沙盒 (`setfenv`) + 错误收集器** |
 | GUID 追踪 | ✅ libguid ★ | ❌ | ✅ libguid |
 | 自定义事件 | ✅ libevents ★ | ❌ | ✅ libevents |
-| 数据持久化 | 4 个 SavedVariables | 4 个 SavedVariables | 5 个 SavedVariables |
+| 数据持久化 | 账号级 4 + 角色级 2 个 SavedVariables ★ | 4 个 SavedVariables | 5 个 SavedVariables |
 
 ---
 
@@ -87,7 +97,7 @@
 
 ### 2.1 功能矩阵
 
-| 功能模块 | fix (v2.0.0) | Reloaded | Dragonflight3 |
+| 功能模块 | fix (v2.1) | Reloaded | Dragonflight3 |
 |---------|-----|----------|---------------|
 | **动作条系统** | ✅ 56 项配置 | ✅ 56+ 项配置 + 距离检测 | ✅ 多条 + 宠物条 + 姿态条 |
 | **施法条** | ✅ 火花/闪光动画 | ✅ 动画完整 | ✅ 通道 + 跳跃释放 |
@@ -97,7 +107,7 @@
 | **背包系统** | ✅ | ✅ | ✅ 统一背包 + 搜索 + 自动售灰 |
 | **小地图** | ✅ | ✅ + 坐标收集器 | ✅ 标记收集器 |
 | **聊天系统** | ✅ 含暗色模式 ★ | ✅ | ✅ **Intellisense + 学习数据** |
-| **菜单系统** | ✅ + 声音管理 ★ | ✅ 8 按钮 | ✅ |
+| **菜单系统** | ✅（声音相关引用在已加载的 menu.lua 内；独立 `modules/menu/sounds.lua` 存在但未入 .toc=未加载） | ✅ 8 按钮 | ✅ |
 | **经验/声望条** | ✅ | ✅ | ✅ |
 | **框架移动** | ✅ | ✅ Ctrl+Shift+Alt | ✅ **编辑模式 + 网格对齐** |
 | **配置界面** | ✅ 9 个 GUI 模块 + 导入导出 ★ | ✅ 9 个 GUI 模块 | ✅ 标签系统 + 性能监测 |
@@ -111,10 +121,13 @@
 | **职业配色管理** | ✅ 三套预设 ★ | ❌ | ✅ |
 | **Tooltip 增强** | ✅ 距离+目标的目标 ★ | ✅ tooltip.lua | ✅ 距离 + 目标 + 生命值条 |
 | **暗黑血球系统** | ✅ orbs.lua ★ | ❌ | ❌ |
+| **面板美化** | ✅ **21 个 panels 子模块** ★(v2.1) | ❌ | ✅ **21+ 子模块** |
+| **拾取窗口** | ✅ loot.lua + roll.lua ★(v2.1) | ❌ | ⚠️ 待核 |
+| **连击点可视化** | ✅ combopoints.lua ★(v2.1) | ❌ | ⚠️ 待核 |
+| **健康值估算** | ✅ libhealth.lua ★(v2.1) | ❌ | ✅ libhealth |
+| **更新提醒** | ✅ track.lua ★(v2.1) | ⚠️ 待核 | ⚠️ 待核 |
 | **姓名板** | ❌ | ⚠️ 基于版本检查 | ✅ **Debuff 显示** |
-| **面板美化** | ❌ | ❌ | ✅ **21+ 子模块** |
 | **HealComm** | ❌ | ❌ | ✅ 治疗通信库 |
-| **健康值估算** | ❌ | ❌ | ✅ libhealth |
 | **施法追踪库** | ❌ | ❌ | ✅ libcast |
 | **开发工具** | ❌ | ❌ | ✅ Frame Inspector + SafeBoot |
 | **减益数据库** | ✅ 933 条 | ✅ 933 条减益数据 | ✅ libdebuff |
@@ -136,6 +149,22 @@
 | 11 | 配置导入导出 | 自研 | 序列化+校验和+跨角色同步 |
 | 12 | 命名空间重构 | 自研 | DFRL → DFUI，SavedVariables 全面更名 |
 
+### 2.2.1 v2.1 续增功能清单（对比 v2.0.0，依当前 .toc 实测）
+
+| # | 功能 | 文件 | 说明 |
+|---|------|------|------|
+| 1 | 完整面板美化 | `modules/panels/`（21 个 Lua） | paperdoll/character/bank/merchant/spellbook/social/mail/trade/trainer/tradeskill/questlog/inspect/macro/keybinding/dressup/gossip/help/openmail/questframe/questlog_xp/scrollbar |
+| 2 | 拾取窗口重做 | `modules/loot/loot.lua` + `roll.lua` | DF 风格拾取窗（跟随光标/自动拾取/品质边框）+ 团队 roll 框 |
+| 3 | 连击点可视化 | `modules/ui/combopoints.lua` | 原计划 2.4 项，已落地 |
+| 4 | libhealth 血量估算 | `libs/libhealth.lua` + `DFUI_HealthDB` | 原列为 DF3 独有/借鉴目标，已自带 |
+| 5 | 更新提醒 | `modules/track/track.lua` | UpdateNotifier，可配置提醒间隔天数 |
+| 6 | 经验/声望条增强 | `modules/xprep/xprep.lua` | Xprep（暗色强度/配色/背景透明度等可调） |
+| 7 | 距离指示动作条 | `modules/bars/range.lua` | RangeIndicator（暗色/淡入淡出），动作条距离提示已自带 |
+| 8 | 任务经验数据 | `data/questxp.lua`（DFUI 自维护，DFUI_QuestXPDB） | 任务奖励经验查询；实际数据全部来自自维护的 questxp.lua。磁盘上的 `libs/LibQuestXP/` 未入 .toc、无任何已加载文件引用（1.12=Lua 5.0 无 require），为未生效死代码 |
+| 9 | PvP 单位框架 | `modules/unit/pvp.lua` | 单位框架子模块 |
+
+> 注：上表均依据 .toc 加载项与各文件头部声明核实存在；各功能的运行期完整度（如面板美化覆盖到的具体控件、loot roll 实际表现）待游戏内实证。
+
 ### 2.3 各仓库独有功能（更新后）
 
 #### dragonflight-fix 独有
@@ -148,15 +177,14 @@
 - **动画状态条框架** — statusbar.lua 含脉冲/切割/渐变动画
 
 #### DragonflightReloaded 独有
-- **距离检测动作条** — 动作按钮距离指示
 - **ShaguTweaks 深度集成** — 完整兼容性管理面板
+- ~~距离检测动作条~~ — fix 现已有 `modules/bars/range.lua`（RangeIndicator），不再为 Reloaded 独有
 
 #### Dragonflight3 独有
 - **Polyfill 兼容层** — 为 Vanilla 1.12.1 补全现代 API
-- **21+ 面板美化** — 人物/装备/法术书/天赋/社交等系统面板
 - **Frame 检查器** — `/df inspect` 实时显示框架信息
 - **安全启动模式** — `/df safeboot` 禁用所有模块调试
-- **HealComm/Health/Cast 库** — 团队治疗通信 + 怪物血量估算 + 施法追踪
+- **HealComm/Cast 库** — 团队治疗通信 + 施法追踪（注：怪物血量估算 libhealth fix 现已自带，不再独有）
 - **编辑模式网格对齐** — 拖拽调整所有 UI 框架
 - **配置版本迁移系统** — v1→v2→v3 自动迁移
 - **聊天 Intellisense** — 智能补全 + 学习系统
@@ -201,10 +229,11 @@ DragonflightUI-Reforged (原始项目, 作者: Guzruul)
 4. **天赋系统独一无二** — 规划/模拟功能三者中唯一拥有
 5. **功能综合度最高** — 融合了 Reloaded 的 Buff 系统 + DF3 的实用模块 + 自研特色功能
 6. **配置可迁移** — 导入导出+校验和，唯一支持跨角色配置同步
+7. **面板美化已补齐**（v2.1）— `modules/panels/` 21 个子模块覆盖人物/装备/银行/法术书/社交/邮件等系统面板，已与 DF3 同量级
+8. **拾取/连击点/血量估算已补齐**（v2.1）— loot+roll、combopoints、libhealth 均自带
 
 ### DragonflightReloaded 优势
 1. **版本最成熟** — v2.3.5，21 次提交迭代
-2. **距离检测动作条** — fix 和 DF3 未集成
 
 ### Dragonflight3 优势
 1. **架构最先进** — Polyfill、XML 分层加载、版本迁移
@@ -223,26 +252,24 @@ DragonflightUI-Reforged (原始项目, 作者: Guzruul)
 | 中文玩家日常使用 | **dragonflight-fix** | 唯一完整中文化 + 功能最综合 |
 | 需要精细 Buff/天赋系统 | **dragonflight-fix** | 多精度计时 + 天赋规划独有 |
 | 团队副本（治疗预测等） | **Dragonflight3** | HealComm / Raid 框架 / libhealth |
-| 全面 UI 替换 + 面板美化 | **Dragonflight3** | 面板美化覆盖最广 (21+ 面板) |
+| 全面 UI 替换 + 面板美化 | **dragonflight-fix** 或 **Dragonflight3** | 两者面板美化均 21+ 子模块；fix 额外含完整中文（fix 覆盖具体控件待游戏内实证） |
 | 二次开发/学习架构 | **Dragonflight3** | 工业级架构，代码质量最高 |
 
 ---
 
 ## 六、仍可从其他仓库借鉴的功能
 
-完成 v2.0.0 后，以下功能仍是 dragonflight-fix 缺失的高价值项：
+截至 v2.1，面板美化 / libhealth / 连击点 / 拾取窗口已自行补齐，从原借鉴清单移除；以下仍为缺失的高价值项：
 
 | 优先级 | 来源 | 功能 | 说明 |
 |--------|------|------|------|
-| P1 | Dragonflight3 | 姓名板系统 | 职业着色 + Debuff 显示，fix 完全缺失 |
-| P1 | Dragonflight3 | HealComm 治疗预测 | 团队副本核心需求 |
-| P2 | Dragonflight3 | 面板美化 | 银行/法术书/角色面板等 |
-| P2 | Dragonflight3 | libhealth 怪物血量 | 目标框架增强 |
-| P2 | Dragonflight3 | libcast 施法追踪 | 目标施法条 |
-| P2 | Dragonflight3 | 挥击计时器 | 近战核心功能 |
-| P2 | Dragonflight3 | CC 控制监视 | PvP 实用 |
+| P1 | Dragonflight3 | 姓名板系统 | 职业着色 + Debuff 显示，fix 仍缺失（.toc 无对应模块） |
+| P1 | Dragonflight3 | HealComm 治疗预测 | 团队副本核心需求，fix 仍缺失 |
+| P2 | Dragonflight3 | libcast 施法追踪 | 目标施法条，fix 仍缺失 |
+| P2 | Dragonflight3 | 挥击计时器 | 近战核心功能，fix 仍缺失（无 swingtimer.lua） |
+| P2 | Dragonflight3 | CC 控制监视 | PvP 实用，fix 仍缺失（无 nocontrol.lua） |
 | P3 | Dragonflight3 | 编辑模式网格对齐 | 框架拖拽增强 |
-| P3 | Dragonflight3 | 配置版本迁移 | 升级不丢配置 |
+| P3 | Dragonflight3 | 配置版本迁移 | 升级不丢配置（fix 仍未实现迁移链） |
 
 ---
 
@@ -252,7 +279,7 @@ DragonflightUI-Reforged (原始项目, 作者: Guzruul)
 
 | 远程文档 | 本地存在 | 时效性 | 说明 |
 |---------|---------|--------|------|
-| dragonflight-comparison.md | ✅ | ❌ 严重过时 → **已重写**（本文件） | 原文基于 v1.3.3，现已更新至 v2.0.0 |
+| dragonflight-comparison.md | ✅ | ✅ 已校（本文件） | 原文基于 v1.3.3 → v2.0.0，现已按 .toc（Version 2.1）核对更新 |
 | aura-timer-design.md | ✅ | ⚠️ 已更新 | 补充了 SnapshotAndDetectNewAuras 间接路径说明 |
 | dragonflight-fix-talent-planning.md | ✅ | ⚠️ 已更新 | 变量名 DFRL→DFUI，行数 591→1077，删除过时行号 |
 | frame-position-export-design.md | ✅ | ❌ 未实现 → **已标注** | AbsToRel/RelToAbs 设计未实现，标注为设计稿 |
@@ -278,16 +305,20 @@ DragonflightUI-Reforged (原始项目, 作者: Guzruul)
 | **2.1** 挥击计时器 | 新建 swingtimer.lua | ❌ 未实现 |
 | **2.2** CC 控制监视 | 新建 nocontrol.lua | ❌ 未实现 |
 | **2.3** 距离显示器 | 新建 distance.lua | ❌ 未实现 |
-| **2.4** 连击点可视化 | 新建 combopoints.lua | ❌ 未实现 |
+| **2.4** 连击点可视化 | 新建 combopoints.lua | ✅ 已完成（v2.1，modules/ui/combopoints.lua） |
 | **2.5** HealComm | 新建 libhealcomm.lua | ❌ 未实现 |
-| **2.6** 怪物血量 | 新建 libhealth.lua | ❌ 未实现 |
+| **2.6** 怪物血量 | 新建 libhealth.lua | ✅ 已完成（v2.1，libs/libhealth.lua + DFUI_HealthDB） |
 | **2.7** 施法追踪 | 新建 libcast.lua | ❌ 未实现 |
-| **3.x** 视觉增强 | 环境边框/暗化/姓名板/面板 | ❌ 未实现 |
+| **3.x** 视觉增强 | 环境边框/暗化/姓名板/面板 | ⚠️ 部分完成（panels 21 子模块已实现；姓名板/环境边框仍缺） |
 | **4.x** 自身优化 | BUG修复/错误处理/字体去重 | ⚠️ 部分完成（字体统一等） |
 | **—** 天赋规划 | 自研功能（不在原计划中） | ✅ **超额完成** |
 | **—** 暗黑血球 | 自研功能（不在原计划中） | ✅ **超额完成** |
 | **—** 配置导入导出 | 自研功能（不在原计划中） | ✅ **超额完成** |
 | **—** 命名空间重构 | DFRL→DFUI | ✅ **超额完成** |
 | **—** 天赋描述数据库 | talents_desc.lua | ✅ **超额完成** |
+| **—** 面板美化（v2.1）| modules/panels/ 21 子模块 | ✅ **超额完成** |
+| **—** 拾取窗口（v2.1）| modules/loot/loot.lua + roll.lua | ✅ **超额完成** |
+| **—** 更新提醒（v2.1）| modules/track/track.lua | ✅ **超额完成** |
+| **—** 经验/声望条（v2.1）| modules/xprep/xprep.lua | ✅ **超额完成** |
 
-**总结**：Phase 0 + Phase 1（8 项中 7 项）已完成。Phase 2-4 尚未启动。额外自研了 5 项计划外功能。
+**总结**（v2.1）：Phase 0 + Phase 1（8 项中 7 项，仅 1.6 配置迁移未实现）已完成；Phase 2 中 2.4 连击点、2.6 libhealth 已落地，其余（挥击/CC/distance/HealComm/libcast）仍未实现；Phase 3 的面板美化已大量完成，姓名板等仍缺。额外自研功能已扩展至 9+ 项。

@@ -12,6 +12,10 @@ setfenv(1, DFUI:GetEnv())
 local TEX = DFUI:GetInfoOrCons("tex")
 local PROF_TEX = TEX .. "panels\\df\\professions\\"
 
+-- 图标兜底：Craft API 对某些专业(如 Turtle 自定义"生存")返回 nil 图标时，
+-- 用 vanilla 问号占位，避免空白/隐藏导致"没图标"观感
+local DEFAULT_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+
 local CLASS_ICON_COORDS = DFUI_CLASS_ICON_COORDS
 
 -- API 专业名/法术名 → 背景画 key（PROF_BG_KEY）
@@ -219,7 +223,7 @@ end
 --   listFrame   : 列表 frame, sb 锚 listFrame TOPRIGHT/BOTTOMRIGHT
 --   onScrollDelta: function(dRows) — 点上下箭头时调用 (-1 或 +1)
 --   onScrollAbs : function(ratio)  — 拖动 thumb 时调用 (0..1)
--- 返回: sb (含 sb.thumb / sb.track / sb:UpdateThumb(scrollOffset, maxOffset, visibleRows, totalRows))
+-- 返回: sb (含 sb.thumb / sb.track / sb.UpdateThumb(scrollOffset, maxOffset, visibleRows, totalRows))  -- 点调用,无 self
 -- ============================================================
 local function CreateMinimalScrollbar(parent, listFrame, onScrollDelta, onScrollAbs)
     local sb = CreateFrame("Frame", nil, parent)
@@ -551,13 +555,14 @@ DFUI:NewMod("TradeSkill", 5, function()
     -- listFrame 顶移 28px 让出顶部 checkbox 区域 (-10 → -38)
     -- bottom 也调整 (原 72 = checkbox 14px + 下间距 58, 现 checkbox 上移后底部不需要 = 14)
     listFrame:SetPoint("TOPLEFT", leftColumn, "TOPLEFT", 12, -60)  -- V17 -38→-60 下移 22px
-    listFrame:SetPoint("BOTTOMRIGHT", leftColumn, "BOTTOMRIGHT", -10, 42)  -- 取消 scrollbar 后收回 12px
+    listFrame:SetPoint("BOTTOMRIGHT", leftColumn, "BOTTOMRIGHT", -10, 42)  -- 无滚动条，列表占满左栏宽
     listFrame:SetFrameLevel(panel:GetFrameLevel() + 3)
 
     local UpdateRecipeList  -- forward decl: 在 L1070+ 定义（拆为 Rebuild+Render+包装）
     local RebuildRecipeData    -- 数据层：全表扫描+过滤+图标预取
     local RenderRecipeButtons  -- 渲染层：仅读缓存（滚动热点路径）
-    -- (已取消 CreateMinimalScrollbar 实例化: 视觉/交互问题待重做。滚轮 OnMouseWheel 仍可用 L1727)
+    -- 制造面板不接自定义滚动条：CreateRetailScrollbar 多轮尝试效果差，已移除接线。
+    -- 列表仅靠滚轮 OnMouseWheel 滚动（L~1764）。工厂函数与素材保留备用，见尝试记录。
     local recipeScrollbar = nil
 
     -- Layer C 图标常驻池: 每个唯一图标路径各建一个持久隐藏 1×1 纹理, **持有引用**防纹理缓存逐出。
@@ -1280,7 +1285,7 @@ DFUI:NewMod("TradeSkill", 5, function()
                     btn.headerLeft:Hide()
                     btn.headerMid:Hide()
                     btn.headerRight:Hide()
-                    local texture = item.icon       -- A: 预取自 RebuildRecipeData
+                    local texture = item.icon or DEFAULT_ICON  -- A: 预取自 RebuildRecipeData；nil 兜底问号
                     local skillKey = item.skillKey  -- A: 难度 atlas key，预计算自 RebuildRecipeData
                     -- B2 难度图标: 仅 skillKey 变化时 ApplyAtlas (同 key 纹理/尺寸不变)
                     if skillKey then
@@ -1419,7 +1424,7 @@ DFUI:NewMod("TradeSkill", 5, function()
         end
         detailFrame:Show()
 
-        detailIcon:SetTexture(texture)
+        detailIcon:SetTexture(texture or DEFAULT_ICON)
         detailName:SetText(name)
         detailSubText:SetText(""); detailSubText:Hide()
 
@@ -1525,7 +1530,7 @@ DFUI:NewMod("TradeSkill", 5, function()
                     rName, rTex, rCount, pCount = GetCraftReagentInfo(selectedIndex, i)
                 end
                 if rName then
-                    slot.icon:SetTexture(rTex)
+                    slot.icon:SetTexture(rTex or DEFAULT_ICON)
                     slot.nameText:SetText(rName)
                     pCount = pCount or 0
                     slot.countText:SetText("(" .. pCount .. "/" .. rCount .. ")")
@@ -1776,6 +1781,8 @@ DFUI:NewMod("TradeSkill", 5, function()
     local tabPool = {}
     local tabPoolSize = 0
     local knownProfessions = {}
+    local pendingTab        -- 用户点击意图打开的 tab（OpenProfession 用它高亮，不依赖 GetCraftName）
+    local activeTab         -- 当前已激活的 tab 引用（防重复点击 → 避免对已开专业再施法 = toggle 关闭面板）
 
     local function ReleaseAllTabs()
         for i = 1, tabPoolSize do
@@ -1785,6 +1792,8 @@ DFUI:NewMod("TradeSkill", 5, function()
         panel.Tabs = {}
         panel.selectedTab = nil
         tabPoolSize = 0
+        pendingTab = nil
+        activeTab = nil
     end
 
     local function AcquireTab(text, onClick, tabWidth, spacing)
@@ -1859,14 +1868,20 @@ DFUI:NewMod("TradeSkill", 5, function()
         for i, prof in ipairs(knownProfessions) do
             local captured = prof
             local displayName = PROF_DISPLAY_NAME[prof.name] or prof.name
-            local tab = AcquireTab(displayName, function()
-                -- 已选中的 tab 不重复施法（避免 CLOSE 关闭面板）
-                if activeProfName and captured.name == activeProfName then return end
+            local tab
+            tab = AcquireTab(displayName, function()
+                -- 防重复：点已激活的 tab 不再施法（对已开专业再施法 = toggle 关闭面板）
+                -- 用 tab 引用判断，不靠 GetCraftName 字符串（生存等自定义专业 API 名会乱报成"烹饪"）
+                if activeTab == tab then return end
+                activeTab = tab    -- 立即标记（不等 CRAFT_SHOW 回调），防快速双击在事件回调前再次施法→关闭
+                pendingTab = tab
                 CastSpell(captured.spellIndex, BOOKTYPE_SPELL)
             end, nil, (i == 1 and 2 or 4))
+            -- 首建时按当前专业名高亮（外部施法打开的回退；点 tab 打开由 OpenProfession 用 pendingTab 处理）
             if currentName and prof.name == currentName then
                 tab:SetSelected(true)
                 panel.selectedTab = tab
+                activeTab = tab
             end
         end
     end
@@ -1896,12 +1911,14 @@ DFUI:NewMod("TradeSkill", 5, function()
         -- SetTexCoord 重设保险 (1.12 SetTexture 通常不重置 TexCoord, 但保险起见)
         local bgKey = PROF_BG_KEY[apiName] or PROF_BG_KEY[activeProfName] or "default"
         detailBg:SetTexture(PROF_TEX .. "bg_" .. bgKey .. ".tga")
-        detailBg:SetTexCoord(0, 339/512, 0, 275/512)
         if bgKey == "survival" then
-            detailBg:SetVertexColor(0.55, 0.85, 0.6, 1)
+            -- bg_survival 取自 DF specialization-background 系列(铭文)，内容区 708×522，UV 来自 _html_dict 字典
+            detailBg:SetTexCoord(0.000977, 0.692383, 0.000977, 0.510742)
         else
-            detailBg:SetVertexColor(1, 1, 1, 1)
+            -- 其余取自 recipe-background 系列，内容区 676×549
+            detailBg:SetTexCoord(0, 339/512, 0, 275/512)
         end
+        detailBg:SetVertexColor(1, 1, 1, 1)
 
         -- 扫描法术书专业（需在设置图标前完成，避免首次打开没 texture）
         if not profScanned then
@@ -1914,8 +1931,17 @@ DFUI:NewMod("TradeSkill", 5, function()
         UpdateRankBar()
         if table.getn(panel.Tabs) == 0 then
             CreateProfessionTabs()
+        end
+        -- 高亮：优先用"用户点击的 tab"(pendingTab)——不依赖 GetCraftName 字符串，
+        -- 对生存等 API 名乱报的自定义专业也能正确高亮 + 标记激活（防重复点击关闭）
+        if pendingTab then
+            if panel.selectedTab then panel.selectedTab:SetSelected(false) end
+            pendingTab:SetSelected(true)
+            panel.selectedTab = pendingTab
+            activeTab = pendingTab
+            pendingTab = nil
         else
-            -- Tab 已存在，只更新选中状态（保留点击动画）
+            -- 外部施法/首次打开：回退按当前专业名匹配
             if panel.selectedTab then panel.selectedTab:SetSelected(false) end
             panel.selectedTab = nil
             local activeDisplay = activeProfName and (PROF_DISPLAY_NAME[activeProfName] or activeProfName)
@@ -1923,6 +1949,7 @@ DFUI:NewMod("TradeSkill", 5, function()
                 if tab.Text and activeDisplay and tab.Text:GetText() == activeDisplay then
                     tab:SetSelected(true)
                     panel.selectedTab = tab
+                    activeTab = tab
                 end
             end
         end
@@ -1956,6 +1983,8 @@ DFUI:NewMod("TradeSkill", 5, function()
         elseif currentMode == "craft" then CloseCraft() end
         currentMode = nil
         activeProfName = nil
+        activeTab = nil
+        pendingTab = nil
         -- P0-#2 完整复位 UI 状态：避免重开继承前次过滤/选中/滚动位置
         selectedIndex = nil
         scrollOffset = 0

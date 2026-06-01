@@ -1,8 +1,19 @@
 # 面板已知问题
 
-> 最后更新：2026-04-12
+> 最后更新：2026-06-01
 
-## 一、CraftFrame（宠物训练 Beast Training）— 训练点数不显示
+> ⚠️ **架构说明（2026-06）**：本文档第一～四节记录的是**早期"换皮 vanilla CraftFrame/TradeSkillFrame"方案**下的问题。该方案已被**全自制专业面板**取代——当前 `modules/panels/tradeskill.lua` 不再 reskin 暴雪原生框体，而是自建配方列表/详情/材料格/按钮（`currentMode`/`recipeButtons`/`UpdateRecipeList` 等），全代码无 `SkinProfessionFrame`、`listBorder`、`TradeSkillSearchBox`/`CraftFrameSearchBox` 重锚、`CraftFrame_Update`/`TradeSkillFrame_Update` hook 等旧符号。故第一～四节的根因/待办**多数已随旧架构作废**，逐节状态见下。自制专业面板的设计见 `profession-panel-design.md` / `profession-panel-debug.md`。
+
+## 一、CraftFrame（宠物训练 Beast Training）— 训练点数不显示 ✅ 已解决（全自制面板）
+
+### 解决方式（当前实现）
+
+全自制面板不再依赖 Blizzard `CraftFramePointsText`，改为自建 FontString `trainingPointsText`（`tradeskill.lua:962-966`），锚在制作/学习按钮区（`SetPoint("RIGHT", cancelBtn, "LEFT", -12, 0)`），金色字。仅宠物训练模式且 `GetPetTrainingPoints()` 返回 `total>0` 时显示，文本 `"训练点: "..(total-spent)`（`tradeskill.lua:1595-1605`）。面板 `RegisterEvent("UNIT_PET_TRAINING_POINTS")`（`tradeskill.lua:2016`），事件回调刷新（`tradeskill.lua:2047`）。下方早期诊断记录仅作历史留存。
+
+---
+
+<details>
+<summary>历史诊断记录（旧"换皮 CraftFrame"方案，已作废）</summary>
 
 ### 问题描述
 
@@ -68,13 +79,17 @@ pfUI 将 PointsText 锚定到 CreateButton 左侧。
 
 ### 待尝试方案
 
-1. **在 customBg 上自建 FontString** — 完全不依赖 Blizzard 元素，自行创建文字显示训练点数，监听 `UNIT_PET_TRAINING_POINTS` 事件实时更新
+1. **在 customBg 上自建 FontString** — 完全不依赖 Blizzard 元素，自行创建文字显示训练点数，监听 `UNIT_PET_TRAINING_POINTS` 事件实时更新（← **此方案已采纳并落地**，见上方"解决方式"）
 2. **排查 Blizzard 元素不可见的深层原因** — 检查 FontString 的 font、alpha、width/height、parent visibility 等属性，确认是否有其他隐藏机制
 3. **Hook CraftFrame_Update** — 在 Blizzard 的更新函数执行后，强制设置锚点和显示
 
+</details>
+
 ---
 
-## 二、TradeSkill / CraftFrame — 滚动条下箭头超出内边框 ⚠️ 已知取舍
+## 二、TradeSkill / CraftFrame — 滚动条下箭头超出内边框 ⚠️ 已随旧换皮架构作废
+
+> 当前自制专业面板自建滚动列表（`recipeButtons` + 自管 `scrollOffset`），无 `listBorder`/`cfg.listBottomY`/`TradeSkillSearchBox` 重锚等旧符号，本节描述的内边框/箭头/搜索框取舍**不再适用**，保留作历史。
 
 ### 改动历程
 
@@ -96,7 +111,9 @@ pfUI 将 PointsText 锚定到 CreateButton 左侧。
 
 ---
 
-## 三、CraftFrame（附魔/宠物训练）— 搜索栏位置 ✅ 已修复
+## 三、CraftFrame（附魔/宠物训练）— 搜索栏位置 ✅ 已修复（注：旧换皮方案，今已被全自制面板取代）
+
+> 此节记录的是旧"换皮 CraftFrame"方案下对 vanilla `CraftFrameSearchBox`/`TradeSkillSearchBox` 的重锚结论。当前自制专业面板**不再使用** vanilla 搜索框，自建搜索逻辑。下文的元素名排查经验对"识别 Turtle 服务端注入元素"仍有参考价值，故保留。
 
 ### 根因
 
@@ -125,7 +142,9 @@ ShaguPlates `turtle-wow.lua` 的 Profession 皮肤会在 ADDON_LOADED 后覆盖 
 
 ---
 
-## 四、TradeSkillFrame — 下拉筛选框/折叠按钮/复选框布局未生效
+## 四、TradeSkillFrame — 下拉筛选框/折叠按钮/复选框布局未生效 ⚠️ 已随旧换皮架构作废
+
+> 当前自制专业面板自建过滤/折叠/复选交互，不再 reanchor vanilla `TradeSkillSubClassDropDown`/`TradeSkillInvSlotDropDown`/`TradeSkillCollapseAllButton`/`MatsCheckButton`。本节及其全部"待排查方向"针对的是已废弃的旧换皮代码，保留作历史。
 
 ### 问题描述
 
@@ -188,3 +207,5 @@ questlog, social, macro, bank, dressup, gossip, inspect, keybinding, mail, merch
 - character — SkillRankFrame（技能页）
 - social — WhoFrameEditBox
 - tradeskill — InputBox
+
+> 注：`AddSubBorder` 函数本身仍保留在 `core/tools.lua:86`（其他面板/降级路径仍用），此处仅指上述三处面板**移除了对它的调用**。当前 social.lua 已不调 AddSubBorder（who 改自建 `DFUI_WhoSearchBox`，`WhoFrameEditBox` 直接 `:Hide()`），tradeskill.lua 全自制无 InputBox 描边调用，character.lua SkillRankFrame 走进度条填充方案。

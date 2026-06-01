@@ -93,7 +93,7 @@ API 翻译速查：
 
 | 文件 | 行数 | 功能 | 移植难度 |
 |------|------|------|---------|
-| `modules/unit/auras.lua` | 1,648 | 完整 Buff/Debuff UI 系统 | 需中文本地化 |
+| `modules/unit/auras.lua` | 2,383（fix 现状）<br>1,648（原 Reloaded 源） | 完整 Buff/Debuff UI 系统 | 需中文本地化 |
 
 **auras.lua 功能清单：**
 - Buff Bar（顶部右侧玩家 buff 显示，可替换默认 BuffFrame）
@@ -103,6 +103,7 @@ API 翻译速查：
 - 冷却螺旋覆盖层
 - 50+ 配置项（图标大小/间距/行数/排序等）
 - SuperWoW GUID 支持（可选，非强制）
+- fix 在原 Reloaded 基础上大幅扩展：新增 `buffDurations` 中文增益时长表（`auras.lua:158`）、Nampower AURA_CAST 事件桥接学习时长（`auras.lua:101-111`）等，故现状 2,383 行 ≫ 原 1,648 行
 
 **操作步骤：**
 1. 在 fix 中创建 `libs/` 目录
@@ -141,10 +142,10 @@ FROM: -DragonflightReloaded/modules/unit/auras.lua
 | 项目 | 详情 |
 |------|------|
 | **来源** | Dragonflight3 `mods/general/cooldowns.lua` (~200 行) |
-| **新增功能** | 动作按钮直接显示冷却秒数，按时段着色（<10s红 / 10-59s黄 / 1-5m白 / 5m+灰），可选显示秒数精度 |
+| **新增功能** | 动作按钮直接显示冷却秒数，按时段着色（<10s红 / 10-59s黄 / 1-5m绿 / 5m+灰，见 `cooldowns.lua:21-30` GetColor）。秒数精度不可配置：仅 showText/fontSize/minDuration 三项（`cooldowns.lua:6-11`），剩余<1秒时硬编码 `%.1f`（`cooldowns.lua:41-42`） |
 | **当前状态** | fix 完全没有冷却数字显示 |
 | **自含度** | 1/5（完全独立） |
-| **移植难度** | 低 (~150 行修改，Hook ActionButton_OnUpdate) |
+| **移植难度** | 低 (~150 行修改)。注：最终实现并非 Hook ActionButton_OnUpdate，而是 `hooksecurefunc('CooldownFrame_SetTimer', ...)`（`cooldowns.lua:93`） |
 | **用户价值** | **极高** — 几乎所有 WoW 玩家都需要，替代 OmniCC 等独立插件 |
 
 **源文件路径：**
@@ -178,7 +179,7 @@ MODIFY: dragonflight-fix/modules/unit/mini.lua (引用统一颜色表)
 | 项目 | 详情 |
 |------|------|
 | **来源** | Dragonflight3 `mods/general/itemcompare.lua` (~150 行) |
-| **新增功能** | Shift 悬停装备时并排显示已穿戴物品 Tooltip，自动映射 16 个装备槽 |
+| **新增功能** | Shift 悬停装备时并排显示已穿戴物品 Tooltip，slotTable 映射到 20 个不同装备槽（`itemcompare.lua:35-67`：AmmoSlot/BackSlot/ChestSlot/FeetSlot/Finger0Slot/Finger1Slot/HandsSlot/HeadSlot/LegsSlot/MainHandSlot/NeckSlot/RangedSlot/SecondaryHandSlot/ShirtSlot/ShoulderSlot/TabardSlot/Trinket0Slot/Trinket1Slot/WaistSlot/WristSlot） |
 | **自含度** | 1/5（完全独立） |
 | **移植难度** | 极低 (~100 行修改) |
 | **用户价值** | 高 — 装备对比是每个玩家的刚需 |
@@ -229,7 +230,7 @@ MODIFY: dragonflight-fix/modules/ui/tooltip.lua
 |------|------|
 | **来源** | Dragonflight3 `core/init.lua` 第 19-85 行 |
 | **新增功能** | 数据库版本管理 + 升级时自动合并新模块默认值 + 保留用户配置 |
-| **当前状态** | fix 使用静态 `DBversion = "1.0"`，升级时重置所有配置 |
+| **当前状态** | fix 设有 `DFUI.DBversion = "2.0"`（core.lua:23）但仅赋值不做版本比对/合并；另有一次性命名空间迁移 DFRL/DFF→DFUI（core.lua:649-659）。升级时无新默认值合并逻辑 |
 | **自含度** | 1/5（完全独立） |
 | **移植难度** | 极低 (200-300 行新增) |
 | **用户价值** | 高 — 避免每次升级丢失配置，对持续开发至关重要 |
@@ -274,9 +275,11 @@ CREATE: dragonflight-fix/libs/libevents.lua
 
 ---
 
-### Phase 3: 战斗增强 + 实用工具（P2 - 可以）
+### Phase 3: 战斗增强 + 实用工具（P2 - 可以）— 部分已完成
 
-#### 3.1 挥击计时器 ★ 新增
+> 已完成：3.5 怪物血量估算库（libhealth）、3.8 连击点可视化（combopoints）。其余（挥击计时器/CC监视/距离显示/HealComm/libcast/编辑模式网格/自动截图/卖出价值）尚未移植。
+
+#### 3.1 挥击计时器 ★ 新增 — ❌ 未实现
 
 | 项目 | 详情 |
 |------|------|
@@ -339,13 +342,13 @@ FROM: -Dragonflight3/libs/libhealcomm.lua
 CREATE: dragonflight-fix/libs/libhealcomm.lua
 ```
 
-#### 3.5 怪物血量估算库
+#### 3.5 怪物血量估算库 — ✅ 已完成
 
 | 项目 | 详情 |
 |------|------|
-| **来源** | Dragonflight3 `libs/libhealth.lua` (244 行) |
-| **功能** | 伤害值 + HP% 反推怪物最大 HP / 滚动平均 10 样本 / 8种战斗日志模式 |
-| **移植难度** | 极低 (~80 行改动) |
+| **来源** | Dragonflight3 `libs/libhealth.lua`（已落地为 fix 自研“置信加权收敛版 v2”） |
+| **功能** | UNIT_COMBAT 伤害值 + HP% 反推怪物最大 HP / 跨击杀收敛 + 置信加权 / 离群门控 / 置信不足回退百分比 |
+| **当前实现** | `libs/libhealth.lua`（.toc 已加载），接口 `DFUI.libhealth`，独立 SavedVariable `DFUI_HealthDB`（schema v2: {est, conf, kills}） |
 | **用户价值** | 中 |
 
 #### 3.6 施法追踪库
@@ -366,21 +369,14 @@ CREATE: dragonflight-fix/libs/libhealcomm.lua
 | **移植难度** | 低 (100-200 行修改) |
 | **用户价值** | 中 |
 
-#### 3.8 连击点可视化 ★ 新增
+#### 3.8 连击点可视化 — ✅ 已完成
 
 | 项目 | 详情 |
 |------|------|
 | **来源** | Dragonflight3 `mods/general/combopoints.lua` (~100 行) |
-| **新增功能** | 5 个连击点图标，可配置大小和颜色，盗贼/德鲁伊专用 |
-| **自含度** | 1/5（完全独立） |
-| **移植难度** | 极低 (~60 行修改) |
+| **功能** | 5 个连击点图标（empty/full 双纹理），可配置缩放/颜色/Y 轴偏移，隐藏原生 ComboFrame |
+| **当前实现** | `modules/ui/combopoints.lua`（.toc 已加载），配置项 ComboPoints（缩放/颜色/Y偏移），纹理 media\tex\generic\combo_*.blp |
 | **用户价值** | 中 — 盗贼/猫德专属但很实用 |
-
-**源文件路径：**
-```
-FROM: -Dragonflight3/mods/general/combopoints.lua
-CREATE: dragonflight-fix/modules/ui/combopoints.lua
-```
 
 #### 3.9 自动截图 ★ 新增
 
@@ -522,8 +518,8 @@ CREATE: dragonflight-fix/modules/ui/combopoints.lua
     ├──────────────────────────────────────────────────────┤
     │  P2: ★挥击计时器 (SuperWoW)                           │
     │  P2: ★CC控制监视 / ★距离显示器 (UnitXP)              │
-    │  P2: HealComm / libhealth / libcast                   │
-    │  P2: ★连击点 / ★自动截图 / ★卖出价值                 │
+    │  P2: HealComm / libcast ；libhealth ✅已完成          │
+    │  P2: ★连击点 ✅已完成 / ★自动截图 / ★卖出价值        │
     │  P2: 编辑模式网格                                      │
     ├──────────────────────────────────────────────────────┤
     │  P3: ★环境边框 / ★全局暗化                            │

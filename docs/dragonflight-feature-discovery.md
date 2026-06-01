@@ -1,6 +1,7 @@
 # Dragonflight 三仓库功能深度挖掘报告
 
 > 生成日期：2026-03-25 | 基于完整代码库逐文件分析
+> 状态复核：2026-06-01 — 原标「新发现」的 4 项（cooldowns / itemcompare / colors / combopoints）已落地为 `modules/ui/*.lua`，状态列已更新为 ✅ 已移植。其余「新发现」条目尚未在 Fix 仓核到对应实现，仍为待移植。
 
 本文档记录从 DragonflightReloaded 和 Dragonflight3 中发现的**所有可借鉴功能**，包括原优化指南已列出的和新发现的「隐藏宝石」。
 
@@ -25,9 +26,9 @@
 
 | 文件 | 行数 | 功能 | 已列入原计划 | 移植难度 |
 |------|------|------|:---:|---------|
-| **cooldowns.lua** | ~200 | 动作按钮冷却数字显示，按时段着色（<10s红/10-59s黄/1-5m白/5m+灰），可选秒数 | ❌ **新发现** | 低 |
-| **itemcompare.lua** | ~150 | Shift悬停装备时并排显示已穿戴物品Tooltip，自动映射16个装备槽 | ❌ **新发现** | 极低 |
-| **colors.lua** | ~250 | 职业配色方案管理：Vanilla/TBC/Dragonflight三套预设，资源条着色（法力/怒气/焦点/能量） | ❌ **新发现** | 低 |
+| **cooldowns.lua** | 148 | 动作按钮冷却数字显示，按时段着色（<10s红/10-59s黄/1-5m绿/5m+灰），可选最小显示时长 | ✅ **已移植** modules/ui/cooldowns.lua | 低 |
+| **itemcompare.lua** | 181 | Shift悬停装备时并排显示已穿戴物品Tooltip，自动映射装备槽（含 ShoppingTooltip 双框/多语言 INVTYPE 补全） | ✅ **已移植** modules/ui/itemcompare.lua | 极低 |
+| **colors.lua** | 141 | 职业配色方案管理：Vanilla/TBC/Dragonflight三套预设，能量颜色（法力/怒气/集中/能量），经 DFUI.classColors/powerColors 全局表供其他模块引用 | ✅ **已移植** modules/ui/colors.lua | 低 |
 | **nocontrol.lua** | ~700 | CC控制监视：8种CC类型分类、职业特定法术列表、可用中断提示、脉冲发光效果 | ❌ **新发现** | 低-中 |
 | **distance.lua** | ~400 | 实时距离显示器：目标肖像、侧边范围条（近战/远程模式）、按范围着色、依赖UnitXP | ❌ **新发现** | 中 |
 | **dock.lua** | ~880 | 屏幕边缘停靠信息栏：6个小部件位置（FPS/经验/金币/区域/好友/公会/耐久/弹药/背包/战斗状态），3种发光模式 | ❌ **新发现** | 中-高 |
@@ -36,7 +37,7 @@
 | **autoscreenshot.lua** | ~130 | 自动截图：升级/PvP等级变化/Boss击杀/声誉提升时触发，可配置延迟 | ❌ **新发现** | 极低 |
 | **sellvalue.lua** | ~180 | 卖出价值：Tooltip显示NPC买卖价格，Shift显示详细信息，基于物品ID查询 | ❌ **新发现** | 低 |
 | **hoverbind.lua** | ~150 | 悬停绑定：鼠标悬停按钮时按键绑定，支持修饰键（Alt/Ctrl/Shift），ESC移除 | ❌ **新发现** | 低 |
-| **combopoints.lua** | ~100 | 连击点可视化：5个连击点图标，可配置大小和颜色 | ❌ **新发现** | 极低 |
+| **combopoints.lua** | 97 | 连击点可视化：5个连击点图标（combo_empty/full.blp），可配置缩放/颜色/Y偏移，隐藏原生 ComboFrame | ✅ **已移植** modules/ui/combopoints.lua | 极低 |
 | **questtracker.lua** | ~200 | 任务追踪器增强：显示任务等级和难度颜色，目标进度百分比，pfQuest集成 | ❌ **新发现** | 低 |
 | **tweaks.lua** | ~130 | 游戏小技巧：姿态舞蹈（自动切换以施法）、自动下坐骑 | ❌ **新发现** | 极低 |
 | **thirdparty.lua** | ~300 | 第三方兼容层：检测Questie/Atlas/AtlasLoot/CT_RaidAssist等，自动修复帧冲突 | ❌ **新发现** | 低 |
@@ -148,8 +149,8 @@
 | 功能 | 来源 | 状态 |
 |------|------|------|
 | Buff/Debuff显示+计时器 | Reloaded auras.lua | 原计划Phase 1 |
-| **冷却时间数字** | DF3 cooldowns.lua | **新发现，建议Phase 2** |
-| **物品比较** | DF3 itemcompare.lua | **新发现，建议Phase 2** |
+| **冷却时间数字** | DF3 cooldowns.lua | ✅ **已移植** modules/ui/cooldowns.lua |
+| **物品比较** | DF3 itemcompare.lua | ✅ **已移植** modules/ui/itemcompare.lua |
 | 聊天增强（URL/时间戳） | DF3 chat.lua | 原计划Phase 2 |
 | 配置版本迁移 | DF3 init.lua | 原计划Phase 2 |
 
@@ -161,7 +162,7 @@
 | **挥击计时器** | DF3 swingtimer.lua | **新发现，建议Phase 3（SuperWoW）** |
 | **距离显示器** | DF3 distance.lua | **新发现，建议Phase 3（UnitXP）** |
 | 姓名板系统 | DF3 nameplates/ | 原计划Phase 4 |
-| **连击点可视化** | DF3 combopoints.lua | **新发现，盗贼/德鲁伊专用** |
+| **连击点可视化** | DF3 combopoints.lua | ✅ **已移植** modules/ui/combopoints.lua（盗贼/德鲁伊专用） |
 
 ### 3.3 视觉/沉浸感增强
 
@@ -169,7 +170,7 @@
 |------|------|------|
 | **环境边框** | DF3 ambient.lua | **新发现** |
 | **全局暗化主题** | DF3 darkui.lua | **新发现** |
-| **职业配色统一管理** | DF3 colors.lua | **新发现，建议Phase 2** |
+| **职业配色统一管理** | DF3 colors.lua | ✅ **已移植** modules/ui/colors.lua |
 | 面板美化（银行/法术书等） | DF3 panels/ | 原计划Phase 4 |
 | **Turtle专属面板皮肤** | DF3 turtlepanels.lua | **新发现** |
 

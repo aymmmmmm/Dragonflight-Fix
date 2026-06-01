@@ -83,6 +83,7 @@ modules\track\track.lua
 modules\loot\loot.lua
 modules\loot\roll.lua
 # modules\test.lua
+modules\dftex.lua
 
 
 # GUI

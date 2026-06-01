@@ -28,9 +28,9 @@
 
 | 文件 | 行数 | 函数数 | 说明 |
 |------|------|--------|------|
-| `loot.lua` | 649 | 14 + 2回调 | 主拾取框体 + 自动拾取渐隐 |
-| `roll.lua` | 476 | 12 | 投骰框体 + 追踪系统（由 loot.lua 调用初始化） |
-| **合计** | **1125** | **28** | |
+| `loot.lua` | 648 | 16 局部函数 + 2 回调 | 主拾取框体 + 自动拾取渐隐 |
+| `roll.lua` | 474 | InitLootRoll + 10 局部函数 | 投骰框体 + 追踪系统（由 loot.lua 调用初始化） |
+| **合计** | **1122** | — | |
 
 ### 配置项（10个）
 
@@ -174,41 +174,43 @@ WoW 原生 `UI-GroupLoot-Dice/Coin/Pass` 纹理内置 padding 不一致。方案
 
 ## 五、关键代码位置（最终版本）
 
-### loot.lua (649行)
+### loot.lua (648行)
 
 | 功能 | 位置 | 说明 |
 |------|------|------|
 | 模块注册 + defaults | 4-15 | 10个配置项 |
-| SafeQualityColor | 62 | nil 安全品质色 |
-| PositionFrameAtCursor | 66 | 鼠标跟随 + 边界检测 |
-| StopFade / StartFade | 86-116 | 自动拾取渐隐状态机 |
-| SetupSlotVisuals | ~122-204 | 槽位视觉构建 |
-| ApplySlotQuality | ~206-222 | 品质边框/高亮应用 |
-| CreateSlot | ~224-280 | LootButton 交互槽位 |
-| AutoLootAll | ~282-292 | 自动拾取 |
-| HandleBindConfirm | ~294-306 | BoP 自动确认 |
-| UpdateLootFrame | ~308-420 | 核心渲染 |
-| RelayoutSlots | ~422-468 | 手动拾取后重排 |
-| OnEvent | ~473-558 | 事件分发 |
-| Init | ~564-614 | 初始化 |
-| Callbacks | ~636-649 | scale/mousecursor 回调 |
+| SafeQualityColor | 61 | nil 安全品质色 |
+| PositionFrameAtCursor | 65 | 鼠标跟随 + 边界检测 |
+| StopFade / StartFade | 85-116 | 自动拾取渐隐状态机 |
+| SetupSlotVisuals | 121-205 | 槽位视觉构建 |
+| ApplySlotQuality | 207-218 | 品质边框/高亮应用 |
+| CreateSlot | 223-276 | LootButton 交互槽位 |
+| AutoLootAll | 281-288 | 自动拾取 |
+| HandleBindConfirm | 293-302 | BoP 自动确认 |
+| ResizeFrame | 307-322 | 框体尺寸 + 标题随最高品质染色 |
+| HideLastDivider | 325-333 | 隐藏最后可见槽位的分割线 |
+| UpdateLootFrame | 338-433 | 核心渲染 |
+| RelayoutSlots | 438-466 | 手动拾取后重排 |
+| OnEvent | 471-557 | 事件分发 |
+| Init | 562-613 | 初始化 |
+| Callbacks | 633-648 | scale/mousecursor 回调 |
 
-### roll.lua (476行)
+### roll.lua (474行)
 
 | 功能 | 位置 | 说明 |
 |------|------|------|
 | DFUI.InitLootRoll | 5 | 入口函数 |
 | 常量 | 9-15 | ROLL_WIDTH=330, ROLL_HEIGHT=104, ICON_SIZE=40 |
 | 聊天模式匹配 | 44-71 | SimplifyPattern + 黑名单 |
-| RefreshCounts | ~85-101 | 刷新按钮计数 |
-| AddCache | ~103-135 | 缓存写入 + 去重 + 60秒过期 |
-| CreateRollButton | ~138-176 | 按钮工厂 + 计数叠加 + 玩家名单 Tooltip |
-| CreateRollFrame | ~182-332 | 投骰框体 + DF边框 + 关闭按钮 |
-| UpdateRollFrame | ~337-384 | 数据填充 + 品质色边框 + 中文绑定文字 + 计数初始化 |
-| OnCancelRoll | ~389-398 | 取消投骰 + 清理 itemname |
-| OnStartRoll | ~403-411 | 开始投骰 |
-| GroupLootFrame_OpenNewFrame | ~431-443 | 全局函数替换 + 缓存清空 |
-| rollScanner | ~454-477 | CHAT_MSG_LOOT 监听 + 三模式匹配 |
+| RefreshCounts | 85-100 | 刷新按钮计数 |
+| AddCache | 103-133 | 缓存写入 + 去重 + 60秒过期 |
+| CreateRollButton | 138-174 | 按钮工厂 + 计数叠加 + 玩家名单 Tooltip |
+| CreateRollFrame | 179-326 | 投骰框体 + DF边框 + 关闭按钮 |
+| UpdateRollFrame | 331-378 | 数据填充 + 品质色边框 + 中文绑定文字 + 计数初始化 |
+| OnCancelRoll | 383-392 | 取消投骰 + 清理 itemname |
+| OnStartRoll | 397-406 | 开始投骰 |
+| GroupLootFrame_OpenNewFrame | 425-437 | 全局函数替换 + 缓存清空 |
+| rollScanner | 449-471 | CHAT_MSG_LOOT 监听 + 三模式匹配 |
 
 ---
 

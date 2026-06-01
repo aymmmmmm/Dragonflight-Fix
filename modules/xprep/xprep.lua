@@ -447,21 +447,21 @@ DFUI:NewMod("Xprep", 1, function()
             if not Setup.repBarTrackingFrame then
                 Setup.repBarTrackingFrame = CreateFrame("Frame")
                 Setup.repBarTrackingFrame:RegisterEvent("CHAT_MSG_COMBAT_FACTION_CHANGE")
+                -- 用 WoW 内置本地化模板提取阵营名，兼容任意客户端语言(zhCN/enUS)
+                -- FACTION_STANDING_INCREASED 形如 "Your reputation with %s has increased by %d."
+                -- 1.12=Lua5.0 无 string.match，用 string.find 捕获取第三返回值
+                local repPattern = string.gsub(FACTION_STANDING_INCREASED, "%%d", "%%d+")
+                repPattern = string.gsub(repPattern, "%%s", "(.+)")
                 Setup.repBarTrackingFrame:SetScript("OnEvent", function()
                     if not Setup.repAutoTrack then return end
-                    local startPos, endPos = string.find(arg1, "Your ", 1, true)
-                    if startPos then
-                        local restStart = string.find(arg1, " reputation has increased", endPos + 1, true)
-                        if restStart then
-                            local factionName = string.sub(arg1, endPos + 1, restStart - 1)
-
-                            for i = 1, GetNumFactions() do
-                                local name = GetFactionInfo(i)
-                                if name == factionName then
-                                    SetWatchedFactionIndex(i)
-                                    Setup:UpdateRepBar()
-                                    break
-                                end
+                    local _, _, factionName = string.find(arg1, repPattern)
+                    if factionName then
+                        for i = 1, GetNumFactions() do
+                            local name = GetFactionInfo(i)
+                            if name == factionName then
+                                SetWatchedFactionIndex(i)
+                                Setup:UpdateRepBar()
+                                break
                             end
                         end
                     end

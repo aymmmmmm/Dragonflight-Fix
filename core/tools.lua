@@ -566,41 +566,31 @@ end
 --       width         = 18,                   -- 可选
 --       xOffset       = 18,                   -- 可选，sb 锚到 listFrame 右外侧偏移
 --   })
---   sb:UpdateThumb(scrollOffset, maxOffset, visibleRows, totalRows)
+--   sb.UpdateThumb(scrollOffset, maxOffset, visibleRows, totalRows)  -- 点调用（非 method，无 self）
 -- ============================================================
-local RSB_TEX       = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\"
-local RSB_TRACK_TB  = RSB_TEX .. "panels\\df\\professions\\scroll_track_tb.tga"   -- 128×64
-local RSB_TRACK_MID = RSB_TEX .. "interface\\minimalscrollbarvertical.tga"        -- 64×1024 (NEW)
-local RSB_THUMB_TB  = RSB_TEX .. "panels\\df\\professions\\scroll_thumb_tb.tga"   -- 64×64
-local RSB_THUMB_MID = RSB_TEX .. "panels\\df\\professions\\scroll_thumb_mid.tga"  -- 64×1024
-local RSB_ARROW     = RSB_TEX .. "panels\\df\\professions\\uiactionbar_atlas.tga" -- 256×1024
-
-local RSB_ATLAS = {
-    ["track-top"]   = {21/128, 29/128, 39/64,    47/64,    RSB_TRACK_TB},
-    ["track-mid"]   = {1/64,   9/64,   0,        1/1024,   RSB_TRACK_MID},
-    ["track-bot"]   = {11/128, 19/128, 49/64,    57/64,    RSB_TRACK_TB},
-    ["thumb-top"]   = {20/64,  28/64,  54/64,    62/64,    RSB_THUMB_TB},
-    ["thumb-mid"]   = {31/64,  39/64,  100/1024, 600/1024, RSB_THUMB_MID}, -- 中间稳定段（避开 atlas 端部透明渐变）
-    ["thumb-bot"]   = {39/64,  47/64,  31/64,    39/64,    RSB_THUMB_TB},
-    -- normal 态用真 pageuparrow-up / pagedownarrow-up UV（disabled 态 alpha 仅 12% 几乎不可见）
-    ["up-normal"]   = {200/256,217/256,458/1024, 472/1024, RSB_ARROW},
-    ["up-hover"]    = {181/256,198/256,458/1024, 472/1024, RSB_ARROW},
-    ["up-down"]     = {234/256,251/256,390/1024, 404/1024, RSB_ARROW},
-    ["down-normal"] = {234/256,251/256,358/1024, 372/1024, RSB_ARROW},
-    ["down-hover"]  = {234/256,251/256,337/1024, 351/1024, RSB_ARROW},
-    ["down-down"]   = {234/256,251/256,321/1024, 335/1024, RSB_ARROW},
-}
-
-local function rsbApply(tex, key)
-    local a = RSB_ATLAS[key]
-    tex:SetTexture(a[5])
-    tex:SetTexCoord(a[1], a[2], a[3], a[4])
-end
+local RSB_TEX = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\interface\\buttons\\"
+-- ui-scrollbar 整图系列：每部件一张独立 TGA，零 UV 切片（根治 atlas 切片显示不全）
+local RSB_UP_UP       = RSB_TEX .. "ui-scrollbar-scrollupbutton-up"
+local RSB_UP_DOWN     = RSB_TEX .. "ui-scrollbar-scrollupbutton-down"
+local RSB_UP_HILIGHT  = RSB_TEX .. "ui-scrollbar-scrollupbutton-highlight"
+local RSB_UP_DISABLED = RSB_TEX .. "ui-scrollbar-scrollupbutton-disabled"
+local RSB_DN_UP       = RSB_TEX .. "ui-scrollbar-scrolldownbutton-up"
+local RSB_DN_DOWN     = RSB_TEX .. "ui-scrollbar-scrolldownbutton-down"
+local RSB_DN_HILIGHT  = RSB_TEX .. "ui-scrollbar-scrolldownbutton-highlight"
+local RSB_DN_DISABLED = RSB_TEX .. "ui-scrollbar-scrolldownbutton-disabled"
+local RSB_KNOB        = RSB_TEX .. "ui-scrollbar-knob"            -- 32×32 滑块
+local RSB_TRACK_BG    = RSB_TEX .. "ui-sliderbar-background"      -- 8×8 轨道底（拉伸）
 
 function DFUI.CreateRetailScrollbar(parent, listFrame, opts)
     opts = opts or {}
-    local width   = opts.width   or 18
-    local xOff    = opts.xOffset or 18
+    local scale     = opts.scale or 1
+    local width     = (opts.width or 18) * scale  -- sb 宽
+    local arrowH    = 16 * scale                  -- 箭头按钮高
+    local trackW    = 12 * scale                  -- 轨道/滑块宽
+    local inset     = 3 * scale                   -- 轨道左右内缩
+    local gap       = 2 * scale                   -- 箭头与轨道间距
+    local thumbMinH = 30 * scale                  -- 滑块最小高
+    local xOff      = opts.xOffset or width        -- 默认贴 listFrame 右外侧
     local onDelta = opts.onScrollDelta or function() end
     local onAbs   = opts.onScrollAbs   or function() end
 
@@ -610,55 +600,45 @@ function DFUI.CreateRetailScrollbar(parent, listFrame, opts)
     sb:SetPoint("BOTTOMRIGHT", listFrame, "BOTTOMRIGHT", xOff, 0)
     sb:SetFrameLevel(parent:GetFrameLevel() + 5)
 
-    -- 箭头按钮（3 态：normal/hover/down，用 3 个 BACKGROUND texture 切换 Show/Hide）
-    local function makeArrowBtn(point, normKey, hovKey, dnKey)
+    -- 箭头按钮：Button 原生纹理（normal/pushed/highlight/disabled 各一张整图，highlight 自动叠加）
+    local function makeArrowBtn(point, upTex, dnTex, hiTex, disTex)
         local btn = CreateFrame("Button", nil, sb)
-        btn:SetWidth(width); btn:SetHeight(16)
+        btn:SetWidth(width); btn:SetHeight(arrowH)
         btn:SetPoint(point, sb, point, 0, 0)
-        local function tex(key)
-            -- ARTWORK 层（紫色调试证明 Button 内 BACKGROUND 不渲染）
-            local t = btn:CreateTexture(nil, "ARTWORK")
-            rsbApply(t, key)
-            t:SetAllPoints(btn)
-            -- DEBUG 红色
-            t:SetVertexColor(1.0, 0.0, 0.0, 1.0)
-            return t
-        end
-        local norm = tex(normKey)
-        local hov  = tex(hovKey); hov:Hide()
-        local dn   = tex(dnKey);  dn:Hide()
-        btn:SetScript("OnEnter",     function() if not btn.pushed then norm:Hide(); hov:Show() end end)
-        btn:SetScript("OnLeave",     function() if not btn.pushed then hov:Hide();  norm:Show() end end)
-        btn:SetScript("OnMouseDown", function() btn.pushed = true;  norm:Hide(); hov:Hide(); dn:Show() end)
-        btn:SetScript("OnMouseUp",   function() btn.pushed = false; dn:Hide(); norm:Show() end)
+        btn:SetNormalTexture(upTex)
+        btn:SetPushedTexture(dnTex)
+        btn:SetHighlightTexture(hiTex)
+        btn:SetDisabledTexture(disTex)
         return btn
     end
-    local upBtn = makeArrowBtn("TOP",    "up-normal",   "up-hover",   "up-down")
-    local dnBtn = makeArrowBtn("BOTTOM", "down-normal", "down-hover", "down-down")
+    local upBtn = makeArrowBtn("TOP",    RSB_UP_UP, RSB_UP_DOWN, RSB_UP_HILIGHT, RSB_UP_DISABLED)
+    local dnBtn = makeArrowBtn("BOTTOM", RSB_DN_UP, RSB_DN_DOWN, RSB_DN_HILIGHT, RSB_DN_DISABLED)
     upBtn:SetScript("OnClick", function() onDelta(-1) end)
     dnBtn:SetScript("OnClick", function() onDelta(1)  end)
 
     -- track 容器
     local track = CreateFrame("Frame", nil, sb)
-    track:SetWidth(12)
-    track:SetPoint("TOP",    upBtn, "BOTTOM", 0, -2)
-    track:SetPoint("BOTTOM", dnBtn, "TOP",    0,  2)
-    track:SetPoint("LEFT",  sb, "LEFT",  3, 0)
-    track:SetPoint("RIGHT", sb, "RIGHT", -3, 0)
+    track:SetWidth(trackW)
+    track:SetPoint("TOP",    upBtn, "BOTTOM", 0, -gap)
+    track:SetPoint("BOTTOM", dnBtn, "TOP",    0,  gap)
+    track:SetPoint("LEFT",  sb, "LEFT",  inset, 0)
+    track:SetPoint("RIGHT", sb, "RIGHT", -inset, 0)
 
-    -- track 3-slice：暂时去掉，先调通 thumb + 箭头
+    -- track 背景：sliderbar-background 整图拉伸填满轨道（零 UV）
+    local trackBg = track:CreateTexture(nil, "BACKGROUND")
+    trackBg:SetTexture(RSB_TRACK_BG)
+    trackBg:SetAllPoints(track)
+    trackBg:SetVertexColor(0.6, 0.6, 0.6, 0.9)
 
-    -- thumb 3-slice
+    -- thumb：单张 knob 整图（零 UV，拉伸适配 thumb 尺寸）
     local thumb = CreateFrame("Frame", nil, track)
     thumb:EnableMouse(true)
-    thumb:SetWidth(12)
-    thumb:SetHeight(50)
+    thumb:SetWidth(trackW)
+    thumb:SetHeight(thumbMinH)
     thumb:SetPoint("TOP", track, "TOP", 0, 0)
-    -- thumb 只有上下两小块（atlas 真实 8×8，零拉伸保清晰），中间透出 inset 背景
-    local thTop = thumb:CreateTexture(nil, "BACKGROUND"); rsbApply(thTop, "thumb-top")
-    thTop:SetWidth(12); thTop:SetHeight(8); thTop:SetPoint("TOP", thumb, "TOP", 0, 0)
-    local thBot = thumb:CreateTexture(nil, "BACKGROUND"); rsbApply(thBot, "thumb-bot")
-    thBot:SetWidth(12); thBot:SetHeight(8); thBot:SetPoint("BOTTOM", thumb, "BOTTOM", 0, 0)
+    local thumbTex = thumb:CreateTexture(nil, "ARTWORK")
+    thumbTex:SetTexture(RSB_KNOB)
+    thumbTex:SetAllPoints(thumb)
 
     -- 拖动逻辑：OnMouseDown 启动 OnUpdate 跟随鼠标 y, OnMouseUp 停止
     thumb.dragging = false
@@ -683,21 +663,22 @@ function DFUI.CreateRetailScrollbar(parent, listFrame, opts)
 
     sb.thumb = thumb
     sb.track = track
-    sb.thTop = thTop
-    sb.thBot = thBot
     sb.lastMaxOffset = 0
 
-    -- 由滚动逻辑调用：同步 thumb 几何 + 缓存 lastMaxOffset（拖动时算 ratio→scrollOff 用）
+    -- 由滚动逻辑调用：同步 thumb 几何 + 到顶/底禁用对应箭头（disabled 整图）
     sb.UpdateThumb = function(scrollOff, maxOff, visRows, totalRows)
-        sb.lastMaxOffset = maxOff or 0
+        scrollOff = scrollOff or 0
+        maxOff = maxOff or 0
+        sb.lastMaxOffset = maxOff
+        if scrollOff <= 0      then upBtn:Disable() else upBtn:Enable() end
+        if scrollOff >= maxOff  then dnBtn:Disable() else dnBtn:Enable() end
         local trackH = track:GetHeight()
         if not trackH or trackH <= 0 then return end
-        local thumbH = math.max(30, trackH * visRows / math.max(visRows, totalRows))
+        local thumbH = math.max(thumbMinH, trackH * visRows / math.max(visRows, totalRows))
         if thumbH > trackH then thumbH = trackH end
         thumb:SetHeight(thumbH)
-        -- thTop/thBot 固定 8 高（atlas 真实，零拉伸保清晰），中间空
         local thumbMaxY = trackH - thumbH
-        local thumbY = (maxOff and maxOff > 0) and (thumbMaxY * scrollOff / maxOff) or 0
+        local thumbY = (maxOff > 0) and (thumbMaxY * scrollOff / maxOff) or 0
         thumb:ClearAllPoints()
         thumb:SetPoint("TOP", track, "TOP", 0, -thumbY)
     end

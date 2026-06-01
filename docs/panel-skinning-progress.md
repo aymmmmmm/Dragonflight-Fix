@@ -1,8 +1,10 @@
 # 面板美化实施进度
 
-> 最后更新：2026-04-11（专业技能面板美化完成）
+> 最后更新：2026-05-31（社交「查找」全自制重写完成；面板数复核）
 
-## 一、已完成的面板（13 个）
+## 一、已完成的面板（19 个）
+
+> 复核（toc 加载 `modules\panels\*.lua` 共 21 个）：其中 `paperdoll.lua` 是工厂函数、`scrollbar.lua` 是全局滚动条换肤、`questlog_xp.lua` 是任务经验估算（非美化面板），其余 19 个均为已美化面板。下表 Phase 1~3 列出主要面板，第五节「补充已完成」列出后续追加的面板。
 
 ### Phase 1：基础设施 + 高频面板
 
@@ -15,7 +17,7 @@
 | **任务对话** | `modules/panels/questframe.lua` | ✅ 完成 | 木纹+右侧背景 |
 | **NPC 对话** | `modules/panels/gossip.lua` | ✅ 完成 | 木纹+书签 |
 | **任务日志** | `modules/panels/questlog.lua` | ✅ 完成 | 木纹+书签+左右背景 |
-| **社交** | `modules/panels/social.lua` | ✅ 完成 | 4 Tab + Guild 动态禁用 |
+| **社交** | `modules/panels/social.lua` | ✅ 完成 | 4 Tab + Guild 动态禁用；「查找(Who)」已全自制重写（自建搜索框 `DFUI_WhoSearchBox` + 行挂 `whoInset` 脱离 vanilla FauxScrollFrame + `whoOffset` 自管 + 三操作按钮 + `dfuiTryWho` 客户端防抖 `DFUI_WHO_CD`），详见下方 §4.5 与「五、补充已完成」 |
 
 ### Phase 2：中频面板
 
@@ -31,7 +33,7 @@
 | 面板 | 文件 | 状态 | 说明 |
 |------|------|------|------|
 | **帮助** | `modules/panels/help.lua` | ✅ 完成 | frameStyle 2 + 黑色背景 |
-| **专业技能** | `modules/panels/tradeskill.lua` | ✅ 完成 | TradeSkill+Craft 共用，frameStyle 2，宽框体 767x512，ADDON_LOADED 延迟 |
+| **专业技能** | `modules/panels/tradeskill.lua` | ✅ 完成 | TradeSkill+Craft 共用，frameStyle 1（带头像金属框），宽框体 1069x658（`tradeskill.lua:440` `CreatePaperDollFrame(...,1069,658,1)`，文件头与 :438 注释一致），叠加 `PANEL_SCALE=0.85`（:65/:449）后等效屏幕约 908x559，全自制配方列表/详情，ADDON_LOADED 延迟 |
 
 ## 二、已修复的 Bug
 
@@ -88,10 +90,13 @@
 ## 四、2026-04-11 批量改进
 
 ### 4.1 法术书面板（spellbook.lua）
+
+> ⚠️ 历史条目（2026-04-11）：本小节描述的是 4.11 批改时的换皮做法，**已被 §6「全重写」取代**，下表细节不再反映现行代码。现行实现见 `docs/spellbook-ui-design.md`。仅作改动脉络留存，纠正两处与当前代码不符的描述。
+
 | 改动 | 说明 |
 |------|------|
 | 复选框过滤修复 | `this:SetChecked()` → 显式变量引用，避免 setfenv 下 `this` 解析失败 |
-| 原生残留隐藏 | KillFrame 后显式隐藏 SpellBookSkillLineTab1~8、FrameTabButton1~3 |
+| 原生残留隐藏 | （已重写）当前不再用 KillFrame：`spellbook.lua:76` 用 `SoftHideFrame(SpellBookFrame)`（透明保活），并循环 `:Hide()` 隐藏 `SpellBookSkillLineTab1~8` 与 `SpellBookFrameTabButton1~3`（全局名带 `Frame`，旧表误写「FrameTabButton1~3」） |
 | 技能按钮右移 | 左偏移 15 → 50，避免和页面左边缘重叠 |
 | 文字配色 | 白色 → 深棕墨水色 (0.35,0.20,0.08) + 浅棕 (0.50,0.35,0.18)，匹配羊皮纸 |
 | 可拖动 | SetMovable + RegisterForDrag + OnDragStart/OnDragStop |
@@ -99,7 +104,7 @@
 ### 4.2 所有面板统一改动（13个文件）
 | 改动 | 说明 |
 |------|------|
-| 统一内边框 | 12 个面板添加 contentBg(黑色0.3) + contentBorder(UI-Tooltip-Border, edgeSize=16, 色 0.6/0.55/0.5) |
+| ~~统一内边框~~（已撤销） | 4.11 时给 12 个面板加了 contentBg(黑色0.3) + contentBorder(UI-Tooltip-Border, edgeSize=16, 色 0.6/0.55/0.5)，**现已全部移除**——当前 `modules/panels/` 全目录无 `contentBg`/`contentBorder` 调用（已 Grep 复核为 0 命中），详见 `docs/panel-known-issues.md §五`（从 13 个面板移除） |
 | 统一居中 | 17 个面板添加 CenterFrame() 钩子，打开时屏幕居中 |
 
 ### 4.3 工具函数（core/tools.lua）
@@ -109,18 +114,21 @@
 | AddSubBorder(parent, frame, inset) | 仅描边无背景，edgeSize=16，颜色与 contentBorder 统一 |
 
 ### 4.4 专业技能面板（tradeskill.lua）
+
+> ⚠️ 历史条目：本小节为旧「换皮 TradeSkillFrame/CraftFrame」方案下的改动，该方案已被**全自制专业面板**取代（见 `docs/panel-known-issues.md` 架构说明）。下表多数符号（InputBox 描边、ListScrollFrame 重锚等）在当前 `tradeskill.lua` 已不存在，仅作脉络留存。
+
 | 改动 | 说明 |
 |------|------|
-| 可拖动 | SetMovable + RegisterForDrag |
-| 技能列表描边 | ListScrollFrame 手动定位(TOPLEFT -17,9 / BOTTOMRIGHT +26,27)，包住滚动条 |
-| InputBox 描边 | AddSubBorder 给制作数量输入框加描边 |
-| 标题上移 | TitleText 重定位到 TOP, frame, TOP, 0, -8 |
-| FrameLevel 修正 | customBg 从 +1 改为 -1，防止遮挡原生内容 |
+| 可拖动 | SetMovable + RegisterForDrag（当前实现 `tradeskill.lua:445-448` 仍在面板上保留） |
+| 技能列表描边 | （旧换皮）ListScrollFrame 手动定位(TOPLEFT -17,9 / BOTTOMRIGHT +26,27) 包住滚动条——全自制面板自建配方列表，已无此符号 |
+| ~~InputBox 描边~~（已撤销） | 旧换皮用 AddSubBorder 给制作数量输入框加描边；**现已移除**——tradeskill 全自制无 vanilla InputBox 描边调用（`docs/panel-known-issues.md §五` 记载已移除该 AddSubBorder 调用） |
+| 标题上移 | （旧换皮）TitleText 重定位到 TOP, frame, TOP, 0, -8 |
+| FrameLevel 修正 | （旧换皮）customBg 从 +1 改为 -1，防止遮挡原生内容 |
 
 ### 4.5 其他面板小改
 | 面板 | 改动 |
 |------|------|
-| social.lua | WhoFrameEditBox 添加 AddSubBorder 描边 |
+| social.lua | （旧）WhoFrameEditBox 添加描边 —— 已被后续「查找(Who)」全自制重写取代：vanilla `WhoFrameEditBox` 改为 `:Hide()`，新建 `DFUI_WhoSearchBox`（详见「五、补充已完成」） |
 | character.lua | SkillRankFrame 在技能页 OnShow 动态添加描边 |
 
 ### 4.6 新增文档
@@ -142,28 +150,52 @@
 |------|------|------|
 | **滚动条箭头统一** | page_up/down_*.tga 纹理直接替换暴雪滚动条箭头，效果极差 | 动作条翻页箭头纹理不适合用于滚动条小按钮，尺寸和风格完全不同。需要专门为滚动条设计的箭头纹理或方案 |
 
-### 待解决：滚动条/箭头统一
+### 已落地：滚动条/箭头统一（scrollbar.lua）
 
-面板内的滚动条箭头（技能、声望、任务日志、社交等）仍为暴雪默认风格，与 DF 金属面板不搭配。需要重新设计方案：
-- 不能直接复用 page_up/down 纹理（太大、风格不对）
-- 可能需要参考 pfUI 的 SkinScrollbar/SkinArrowButton 做法（创建小方块+简洁箭头）
-- 或者寻找/制作专用的滚动条箭头纹理
+上述"撤回的纹理直替"方案已被独立模块 `modules/panels/scrollbar.lua`（`DFUI:NewMod("Scrollbar", ...)`）取代，思路与 pfUI 一致——着色 + 重纹理而非整图替换：
 
-## 五、未实施的面板
+- `DFUI.SkinArrowButton`：箭头改用 `Interface\ChatFrame\UI-ChatIcon-ScrollDown-*`（up 箭头 TexCoord 垂直翻转），24×24。
+- `DFUI.SkinScrollbar`：隐藏原生轨道 Top/Bottom/Middle，新建近黑轨道背景 + 暖棕边框，滑块改 `WHITE8X8` + 青铜 VertexColor（宽 8）。
+- `DFUI.SkinDropDown`：隐藏 vanilla Left/Middle/Right，套暗色圆角背景框。
+- `DFUI.SkinPageButton`：翻页箭头复位亮金本色（去青铜着色）。
+- 批量目标：`scrollbarTargets`（任务日志/对话/NPC/公会信息/频道/训练师/邮件/帮助/团队/专业附魔）+ `dropdownTargets` + `pageButtonTargets`（商人 32px、邮件 24px）。
+- 角色面板技能/声望滚动条与社交好友/公会滚动条**不接管**，保留 vanilla 原生亮金箭头（由 character.lua / social.lua 各自处理）。
+- 触发：`PLAYER_ENTERING_WORLD` 延迟 0.5s + `ADDON_LOADED` 延迟 0.2s 两路 `ApplyAll()`。
+
+## 六、补充已完成（计入第一节 19 个）
+
+以下面板继 Phase 1~3 之后陆续完成，已计入第一节面板总数。源码均在 `modules/panels/` 并由 `Dragonflight-Fix.toc` 加载。
+
+| 面板 | 文件 | 状态 | 说明 |
+|------|------|------|------|
+| **法术书** | `spellbook.lua` | ✅ 已完成 | 全重写，详见 `docs/spellbook-ui-design.md` |
+| **宏编辑器** | `macro.lua` | ✅ 已完成 | 18 个宏按钮美化 + 内边框 |
+| **按键绑定** | `keybinding.lua` | ✅ 已完成 | frameStyle 2 + 内边框 |
+| **观察面板** | `inspect.lua` | ✅ 已完成 | 内边框 + 居中 |
+| **读信面板** | `openmail.lua` | ✅ 已完成 | frameStyle 2 + 内边框 |
+
+### 社交「查找(Who)」全自制重写（social.lua）
+
+vanilla 寄生方案（行挂 `WhoListScrollFrame` 这一 FauxScrollFrame）会在结果 ≤17 时被 `FauxScrollFrame_Update` 连带 `Hide()` → 具名搜索列表全灭。已改为完全自制（自己查、自己显示，用户已认可）：
+
+- 行 parent 改挂 `whoInset`（`CreateRetailInset` 创建），脱离 vanilla 滚动框，不再被连带隐藏。
+- 滚动偏移自管：upvalue `whoOffset`，滚轮 `onWheel` 自增减后调 `refreshWhoRows`。
+- 自建搜索框 `DFUI_WhoSearchBox`（parent=`whoInset`）替代 vanilla `WhoFrameEditBox`（后者改 `:Hide()`）。
+- 底部三操作按钮用 `DFUI.CreateActionButton` 工厂重建。
+- 客户端防抖 `dfuiTryWho(text)`：`GetTime()-dfuiLastWho < DFUI_WHO_CD`（默认 5s，`/script DFUI_WHO_CD=N` 可调）则拦下不发，避免连点 `SendWho` 重置 Turtle 服务器 who 节流。
+- 列头/上下箭头/`WhoFrameTotals` 重锚到 `whoInset`，vanilla `WhoFrame` 透明保活作数据载体。
+- 留尾：好友/公会列表仍寄生 `FriendsFrameFriendsScrollFrame`/`GuildListScrollFrame`，同 FauxScrollFrame-Hide 隐患未暴露，可按 who 模板一致化（待游戏内实证）。
+
+## 七、未实施的面板
 
 | 面板 | 复杂度 | 说明 |
 |------|--------|------|
-| SpellBookFrame（法术书） | ✅ 已完成 | 660 行全重写，详见 `docs/spellbook-ui-design.md` |
-| MacroFrame（宏编辑器） | ✅ 已完成 | 18 个宏按钮美化 + 内边框 |
-| KeyBindingFrame（按键绑定） | ✅ 已完成 | frameStyle 2 + 内边框 |
-| InspectFrame（观察面板） | ✅ 已完成 | 内边框 + 居中 |
-| OpenMailFrame（读信面板） | ✅ 已完成 | frameStyle 2 + 内边框 |
-| WorldMapFrame（世界地图） | 未实施 | Map 模块已有部分实现 |
+| WorldMapFrame（世界地图） | 未实施 | Map 模块已有部分实现，详见 `docs/worldmap-panel-design.md` |
 | GameMenu（游戏菜单） | — | Fix 已有 menu.lua |
-| TalentFrame（天赋） | — | Fix 已有 1077 行实现 |
-| LootFrame（拾取） | — | Fix 已有 865 行实现 |
+| TalentFrame（天赋） | — | Fix 已有实现（含天赋规划） |
+| LootFrame（拾取） | — | Fix 已有实现，详见 `docs/loot-module-progress.md` |
 
-## 五、纹理素材
+## 八、纹理素材
 
 ### 从 D3 复制的纹理（`media/tex/`）
 
@@ -185,10 +217,10 @@ panels/
   spellbook_bookmark.blp        ← 书签装饰
 ```
 
-## 六、修改的配置文件
+## 九、修改的配置文件
 
 | 文件 | 修改内容 |
 |------|---------|
-| `Dragonflight-Fix.toc` | 添加 13 个面板文件到加载顺序 |
-| `modules/gui/elem.lua` | moduleMapping 添加 12 个面板模块 |
+| `Dragonflight-Fix.toc` | `modules\panels\*.lua` 共 21 个文件已加入加载顺序（含工厂 paperdoll、全局换肤 scrollbar、任务经验 questlog_xp） |
+| `modules/gui/elem.lua` | moduleMapping 添加面板模块（待实证：具体条数以源码为准） |
 | `modules/ui/ui.lua` | 删除旧面板代码 + 暗色模式回调，保留 SpellBook 覆盖 |

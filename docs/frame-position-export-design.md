@@ -30,7 +30,7 @@ New (relative):
 
 - `rx` = x / GetScreenWidth()
 - `ry` = y / GetScreenHeight()
-- `v = 2` ��� version marker to distinguish from old format
+- `v = 2` — version marker to distinguish from old format
 
 Serialized form: `{rx=0.3906;ry=0.5208;v=2}`
 

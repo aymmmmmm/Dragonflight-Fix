@@ -424,7 +424,9 @@ DFUI:NewMod("Bags", 1, function()
                     _G["CharacterBag" .. i .. "Slot"]:Hide()
                 end
 
-                KeyRingButton:Hide()
+                if KeyRingButton then
+                    KeyRingButton:Hide()
+                end
                 DFUI.bagToggleButton:Hide()
             end
         end

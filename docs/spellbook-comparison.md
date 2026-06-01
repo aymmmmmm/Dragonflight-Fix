@@ -87,6 +87,9 @@
 
 ## 六、可选方案
 
+> 实施结果（截至本次核对）：最终走了 **方案 C** —— 用 DFUI 框架重写。现 `modules/panels/spellbook.lua`（约 1190 行）以 `DFUI.CreatePaperDollFrame` 做外框（550×580，`SetScale(.9)`），透明保活原生 `SpellBookFrame` 参与 left 区 UIPanel 互斥，并实现：被动/等级过滤复选框、新学法术金色 glow 高亮（跨会话持久化 known/new 集合）、键位绑定提示、动态底部 Tab + 右侧竖向收藏 Tab（坐骑/小伙伴/玩具）、宠物 Tab、滚轮翻页、冷却显示、拖拽到动作条。**搜索、未学技能采集、天赋树暂未实现**。下列方案 A/B/D 仅留作历史记录。
+
+
 ### 方案 A：直接安装 ModernSpellBook
 - 作为独立插件放入 AddOns/
 - 优点：零工作量，功能最全

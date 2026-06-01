@@ -1,6 +1,7 @@
 # 面板美化设计方案
 
-> 日期：2026-04-05
+> 日期：2026-04-05（原始设计计划）
+> 复核：2026-06-01 —— 计划已基本落地，下文标注为「✅ 已实现」「⚠️ 与代码不符」处为复核补正。
 
 ## 一、目标
 
@@ -8,7 +9,9 @@
 
 ## 二、当前状态
 
-Fix 已美化 3 个面板：GameMenu、TalentFrame、LootFrame。其余 17 个面板保持暴雪默认外观，与 DF 风格的单位框架、动作条形成视觉割裂。
+✅ **计划已落地**：`modules/panels/` 下共 21 个 `.lua`，其中 18 个面板调用 `DFUI.CreatePaperDollFrame` 工厂换皮（paperdoll.lua 是工厂本体；scrollbar.lua、questlog_xp.lua 不调用工厂）。全部在 `Dragonflight-Fix.toc`（第 47-67 行）注册加载。下文「实现顺序 / 文件结构」描述的面板基本全部完成。
+
+> 历史原文（设计当时）：Fix 已美化 3 个面板：GameMenu、TalentFrame、LootFrame，其余面板保持暴雪默认外观。此状态已过时。
 
 ## 三、美化前后对比
 
@@ -45,42 +48,44 @@ Fix 已美化 3 个面板：GameMenu、TalentFrame、LootFrame。其余 17 个�
 ### 4.1 函数签名
 
 ```lua
--- modules/panels/paperdoll.lua
-function DFUI.CreatePaperDollFrame(name, parent, width, height)
+-- modules/panels/paperdoll.lua:82（实际 376 行，非计划中的 ~150 行）
+function DFUI.CreatePaperDollFrame(name, parent, width, height, frameStyle)
 ```
+
+⚠️ 复核补正：实际签名多一个 `frameStyle` 参数（1=带头像金属框，左上角留 54x54 头像槽；2=无头像金属框；3=备用金属纹理 UIFrameMetal2x2）。
 
 ### 4.2 创建的元素
 
+⚠️ 复核补正：四角/四边均为局部变量，统一收进 `frame.edges` 数组（8 个元素，无单独命名字段）；**没有** `frame.topLeft` / `frame.bottomLeft` 等具名字段。实际挂到 frame 上的字段只有 `frame.Bg`、`frame.portrait`（仅 frameStyle==1）、`frame.edges`、`frame.Tabs`、`frame.selectedTab`。
+
 ```
-PaperDollFrame 结构
-├── frame.Bg          ← 深色岩石背景纹理 (BACKGROUND 层)
-├── frame.topLeft     ← 左上金属角 75x75 (OVERLAY 层)
-├── frame.topRight    ← 右上金属角 75x75
-├── frame.bottomLeft  ← 左下金属角 32x32
-├── frame.bottomRight ← 右下金属角 32x32
-├── frame.topEdge     ← 顶部金属边
-├── frame.bottomEdge  ← 底部金属边
-├── frame.leftEdge    ← 左侧金属边
-├── frame.rightEdge   ← 右侧金属边
-├── frame.Tabs = {}   ← 标签页容器
-└── frame:AddTab(text, onClick, width)  ← 添加标签页方法
+PaperDollFrame 结构（实际，对照 paperdoll.lua:82-375）
+├── frame.Bg            ← 深色岩石背景纹理 UI-Background-Rock (BACKGROUND -2 层)
+├── frame.portrait      ← 头像槽 54x54（仅 frameStyle==1 创建）
+├── frame.edges = {     ← 8 个边框纹理（局部变量收入此数组，无具名字段）
+│     左上角 75x75 (OVERLAY), 右上角 75x75 (ARTWORK),
+│     左下角 32x32, 右下角 32x32,
+│     顶边, 底边, 左边, 右边 }
+├── frame.Tabs = {}     ← 标签页容器
+├── frame.selectedTab   ← 当前选中 Tab
+└── frame:AddTab(text, onClick, tabWidth, spacing)  ← 添加标签页方法（4 参，非计划的 3 参）
 ```
 
-### 4.3 需要的纹理素材（从 D3 复制）
+### 4.3 工厂函数实际使用的纹理素材
 
-| 素材 | D3 路径 | 用途 |
+路径前缀均为 `Interface\AddOns\Dragonflight-Fix\media\tex\`（paperdoll.lua 内 `local TEX`）。⚠️ 复核补正：以下为 `CreatePaperDollFrame` / `CreateRedButton` 实际 `SetTexture` 的文件，原计划列出的 btn_border / spellbook_* 等不在工厂函数内（部分由各面板自行加载，见 §5）。
+
+| 素材 | 实际路径 | 用途 |
 |------|---------|------|
-| UI-Background-Rock | `media/tex/interface/UI-Background-Rock.*` | 面板深色背景 |
-| UIFrameMetal2x | `media/tex/interface/UIFrameMetal2x.*` | 金属边角/边框 |
-| UIFrameMetal2x2 | `media/tex/interface/UIFrameMetal2x2.*` | 备用金属纹理 |
-| uiframetabs | `media/tex/interface/uiframetabs.*` | Tab 标签页 |
-| btn_border.blp | `media/tex/actionbars/btn_border.blp` | 物品栏边框 |
-| btn_highlight_strong.blp | `media/tex/actionbars/btn_highlight_strong.blp` | 物品栏高亮 |
-| HDActionBarBtn.tga | `media/tex/actionbars/HDActionBarBtn.tga` | 物品栏背景 |
-| spellbook_top_wood.blp | `media/tex/panels/spellbook_top_wood.blp` | 面板顶部木纹 |
-| questlog_left_bg.blp | `media/tex/panels/questlog_left_bg.blp` | 任务面板背景 |
-| questlog_right_bg.blp | `media/tex/panels/questlog_right_bg.blp` | 任务面板背景 |
-| spellbook_bookmark.blp | `media/tex/panels/spellbook_bookmark.blp` | 书签装饰 |
+| UI-Background-Rock.blp | `interface\UI-Background-Rock.blp` | 面板深色岩石背景 |
+| UIFrameMetal2x.blp | `interface\UIFrameMetal2x.blp` | 四角金属（TexCoord 裁切，frameStyle 1/2） |
+| UIFrameMetal2x2.blp | `interface\UIFrameMetal2x2.blp` | 备用金属纹理（frameStyle 3） |
+| UIFrameMetalHorizontal2x.BLP | `interface\UIFrameMetalHorizontal2x.BLP` | 上下水平边 |
+| UIFrameMetalVertical2x.BLP | `interface\UIFrameMetalVertical2x.BLP` | 左右垂直边 |
+| uiframetabs.blp | `interface\uiframetabs.blp` | Tab 标签条（三段拼接 + 选中/高亮态） |
+| redbutton2x.BLP | `interface\redbutton2x.BLP` | 关闭/最小化/最大化按钮（`DFUI.CreateRedButton`） |
+
+> 物品栏边框/高亮由各面板单独 `SetTexture`，例如 bank.lua 用 `actionbars\border.blp`（边框）+ `actionbars\HDActionBarBtn.tga`（高亮/背景），并非工厂函数职责。
 
 ## 五、每个面板的美化逻辑
 
@@ -156,7 +161,7 @@ Step 5: 美化物品栏     — 给 ItemButton 加 DF 边框和高亮（如有�
 美化内容：
 - 隐藏暴雪角色面板纹理
 - 创建 PaperDollFrame
-- 添加 4 个 DF Tab：角色 / 声望 / 技能 / PvP
+- 添加 5 个 DF Tab：角色 / 宠物 / 声望 / 技能 / 荣誉（character.lua:410/417/424/447/455；「宠物」Tab 由 UpdatePetTab 按 HasPetUI 动态显隐）
 - 16 个装备栏加品质颜色边框（绿/蓝/紫/橙）
 - Shift+Click 装备信息 Hook
 
@@ -168,7 +173,7 @@ Step 5: 美化物品栏     — 给 ItemButton 加 DF 边框和高亮（如有�
 美化内容：
 - 隐藏暴雪社交纹理
 - 创建 PaperDollFrame
-- 添加 4 个 DF Tab：好友 / 谁在线 / 公会 / 团队
+- 添加 4 个 DF Tab：好友 / 查找 / 公会 / 团队（social.lua:691/701/710/2042）
 
 触发时机：模块加载时
 ```
@@ -207,9 +212,11 @@ Step 5: 美化物品栏     — 给 ItemButton 加 DF 边框和高亮（如有�
 
 ## 六、文件结构
 
+> ✅ 复核：下列文件均已落地（见 .toc 第 47-67 行），实际还多出 `scrollbar.lua`、`questlog_xp.lua`、`inspect.lua`、`tradeskill.lua`、`spellbook.lua` 等。paperdoll.lua 实际 376 行（非计划 ~150 行）。
+
 ```
 modules/panels/
-├── paperdoll.lua        ← 工厂函数（新建，~150 行）
+├── paperdoll.lua        ← 工厂函数（376 行，含 CreateRedButton + CreatePaperDollFrame + AddTab）
 ├── bank.lua             ← 银行（新建）
 ├── merchant.lua         ← 商人（新建）
 ├── questframe.lua       ← 任务对话（新建）
@@ -240,23 +247,15 @@ media/tex/
 
 ## 七、配置项
 
+⚠️ 复核补正：实际**未**采用计划中的单一 `NewDefaults("Panels", {...})` 集中表。落地方案是**每个面板独立 `NewDefaults` 命名空间**，多数仅一个 `enabled = {true}` 开关。例如 bank.lua:5：
+
 ```lua
-DFUI:NewDefaults("Panels", {
-    enabled = {true, "checkbox", nil, nil, "面板美化", 1, "启用面板美化", nil, nil},
-    bankFrame = {true, "checkbox", nil, "enabled", "面板美化", 2, "银行", nil, nil},
-    merchantFrame = {true, "checkbox", nil, "enabled", "面板美化", 3, "商人", nil, nil},
-    questFrame = {true, "checkbox", nil, "enabled", "面板美化", 4, "任务对话", nil, nil},
-    gossipFrame = {true, "checkbox", nil, "enabled", "面板美化", 5, "NPC对话", nil, nil},
-    questLogFrame = {true, "checkbox", nil, "enabled", "面板美化", 6, "任务日志", nil, nil},
-    characterFrame = {true, "checkbox", nil, "enabled", "面板美化", 7, "角色面板", nil, nil},
-    socialFrame = {true, "checkbox", nil, "enabled", "面板美化", 8, "社交", nil, nil},
-    mailFrame = {true, "checkbox", nil, "enabled", "面板美化", 9, "邮件", nil, nil},
-    tradeFrame = {true, "checkbox", nil, "enabled", "面板美化", 10, "交易", nil, nil},
-    -- 第三批...
+DFUI:NewDefaults("Bank", {
+    enabled = {true},
 })
 ```
 
-每个面板独立开关，用户可以按需启用/禁用。
+各面板命名空间（实测）：`Bank` / `Character` / `Merchant` / `QuestDialog` / `Gossip` / `QuestLog` / `QuestLogXP` / `Social` / `Mail` / `OpenMail` / `Trade` / `Trainer` / `TradeSkill` / `DressUp` / `Help` / `Inspect` / `Macros` / `SpellBook` / `KeyBinding` / `Scrollbar`。每个面板仍是独立开关，可按需启用/禁用，只是没有统一的「面板美化」父开关。
 
 ## 八、实现顺序
 
@@ -278,12 +277,12 @@ Phase 4: 第三批（低频，6 个面板）
 
 | 项 | D3 | Fix 实现 |
 |----|-----|---------|
-| 工厂函数 | `DF.ui.CreatePaperDollFrame` 在 ui-tools.lua | `DFUI.CreatePaperDollFrame` 独立文件 |
-| 媒体路径 | `media['tex:interface:name']` 元表 | 硬编码路径字符串 |
-| 关闭按钮 | `DF.ui.CreateRedButton` | `DFUI.tools.CreateButton` 或自定义 |
+| 工厂函数 | `DF.ui.CreatePaperDollFrame` 在 ui-tools.lua | `DFUI.CreatePaperDollFrame` 独立文件 modules/panels/paperdoll.lua |
+| 媒体路径 | `media['tex:interface:name']` 元表 | `local TEX` 前缀 + 相对路径字符串拼接 |
+| 关闭按钮 | `DF.ui.CreateRedButton` | `DFUI.CreateRedButton(parent, buttonType, onClick)`（paperdoll.lua:25，buttonType=close/minimize/maximize） |
 | Tab 系统 | 内嵌在 PaperDollFrame 方法 | 同样内嵌 |
 | 配置 | 全局开关 | **每个面板独立开关** |
-| SpellBookFrame | 535 行全新重写 | **已完成** 660 行（详见 spellbook-ui-design.md） |
+| SpellBookFrame | 全新重写（535 行为 D3 设计期估值） | **已完成**，spellbook.lua 当前 1192 行（660 为 Fix 设计期估值，与现状不符；详见 spellbook-ui-design.md） |
 | TalentFrame | 536 行重写 | Fix 已有自己的实现（+天赋规划） |
 
 ## 十、验证
