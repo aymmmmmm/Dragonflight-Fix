@@ -1673,15 +1673,16 @@ DFUI:NewMod("Social", 5, function()
             end
 
             -- 列宽：公会状态与玩家状态【完全统一】（用户取舍：切换 mode 列不跳动 > 官阶完整）
-            -- 名字90/第2列34/第3列60/第4列70 + 列头同步；官阶在 34px 会截断
+            -- 名字90/第2列(lvl)50/第3列(class)59/第4列(zone)68 + 列头同步
+            -- lvl+class 总宽守恒(50+59=109=旧64+45)：玩家模式 lvl 只放数字富余，匀给 class 容下"萨满祭司"4字不换行
             local function applyGuildColWidths(gMode)  -- gMode 保留兼容调用，列宽已两 mode 统一
                 for i = 1, GUILD_ROWS do
                     local row = _G["DFUI_GuildRow"..i]
                     if row and row.lvl then
                         row.title:SetWidth(90)
-                        row.lvl:SetWidth(64)
+                        row.lvl:SetWidth(50)
                         row.lvl:SetJustifyH("LEFT")
-                        row.class:SetWidth(45)
+                        row.class:SetWidth(59)
                         row.zoneText:SetWidth(68)
                     end
                 end
@@ -1695,12 +1696,12 @@ DFUI:NewMod("Social", 5, function()
                 if GuildFrameColumnHeader3 then
                     GuildFrameColumnHeader3:ClearAllPoints()
                     GuildFrameColumnHeader3:SetPoint("LEFT", GuildFrameColumnHeader1, "RIGHT", 0, 0)
-                    GuildFrameColumnHeader3:SetWidth(68)
+                    GuildFrameColumnHeader3:SetWidth(54)  -- =lvl 数据宽 50 + 4
                 end
                 if GuildFrameColumnHeader4 then
                     GuildFrameColumnHeader4:ClearAllPoints()
                     GuildFrameColumnHeader4:SetPoint("LEFT", GuildFrameColumnHeader3, "RIGHT", 0, 0)
-                    GuildFrameColumnHeader4:SetWidth(50)
+                    GuildFrameColumnHeader4:SetWidth(63)  -- =class 数据宽 59 + 4
                 end
                 if GuildFrameColumnHeader2 then
                     GuildFrameColumnHeader2:ClearAllPoints()
@@ -1750,9 +1751,9 @@ DFUI:NewMod("Social", 5, function()
                                 row.title:SetTextColor(cr, cg, cb)
                                 if gMode then
                                     -- 公会：col2=官阶 rank / col3=注释 note / col4=在线
-                                    row.lvl:SetText(DFUI.TruncateToWidth(rank or "", 62))
+                                    row.lvl:SetText(DFUI.TruncateToWidth(rank or "", 48))   -- 跟随 lvl 列缩到 50
                                     row.lvl:SetTextColor(0.82, 0.82, 0.82)    -- 官阶灰白
-                                    row.class:SetText(DFUI.TruncateToWidth(note or "", 48))
+                                    row.class:SetText(DFUI.TruncateToWidth(note or "", 57)) -- 跟随 class 列加宽到 59
                                     row.class:SetTextColor(0.82, 0.82, 0.82)  -- 注释灰白
                                     row.zoneText:SetText("在线")
                                     row.zoneText:SetTextColor(0.1, 1, 0.1)    -- 在线绿
@@ -1763,7 +1764,7 @@ DFUI:NewMod("Social", 5, function()
                                     local lc = lvl and GetDifficultyColor and GetDifficultyColor(lvl) or nil
                                     if lc then row.lvl:SetTextColor(lc.r, lc.g, lc.b)
                                     else row.lvl:SetTextColor(1, 1, 1) end
-                                    row.class:SetText(class or "")
+                                    row.class:SetText(DFUI.TruncateToWidth(class or "", 57))  -- 兜底防超长职业名换行
                                     row.class:SetTextColor(cr, cg, cb)
                                     row.zoneText:SetText(DFUI.TruncateToWidth(zone or "", 66))  -- 78 = zone 框 80 − 2px
                                     row.zoneText:SetTextColor(1, 1, 1)
@@ -1772,12 +1773,12 @@ DFUI:NewMod("Social", 5, function()
                                 -- 离线：职业色 + alpha 0.5（与 ShaguTweaks 聊天/Guild 染色风格一致）
                                 row.title:SetText(name); row.title:SetTextColor(cr, cg, cb, 0.5)
                                 if gMode then
-                                    row.lvl:SetText(DFUI.TruncateToWidth(rank or "", 62)); row.lvl:SetTextColor(cr, cg, cb, 0.5)
-                                    row.class:SetText(DFUI.TruncateToWidth(note or "", 48)); row.class:SetTextColor(cr, cg, cb, 0.5)
+                                    row.lvl:SetText(DFUI.TruncateToWidth(rank or "", 48)); row.lvl:SetTextColor(cr, cg, cb, 0.5)
+                                    row.class:SetText(DFUI.TruncateToWidth(note or "", 57)); row.class:SetTextColor(cr, cg, cb, 0.5)
                                     row.zoneText:SetText(guildLastOnlineText(idx)); row.zoneText:SetTextColor(cr, cg, cb, 0.5)
                                 else
                                     row.lvl:SetText(level or ""); row.lvl:SetTextColor(cr, cg, cb, 0.5)
-                                    row.class:SetText(class or ""); row.class:SetTextColor(cr, cg, cb, 0.5)
+                                    row.class:SetText(DFUI.TruncateToWidth(class or "", 57)); row.class:SetTextColor(cr, cg, cb, 0.5)
                                     row.zoneText:SetText(DFUI.TruncateToWidth(zone or "", 66)); row.zoneText:SetTextColor(cr, cg, cb, 0.5)
                                 end
                             end

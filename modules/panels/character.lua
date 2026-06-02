@@ -789,11 +789,52 @@ DFUI:NewMod("Character", 5, function()
             -- 技能条：vanilla 不按状态染色（蓝色烤进原版纹理 UI-Character-Skills-Bar），
             -- 换白底 fill 会失色看不见 → 改用预上色 fill-blue + 复位 color(1,1,1) 让 DF 蓝如实显示
             ApplyBarFill(bar, "fill-blue.tga")
-            bar:SetStatusBarColor(1, 1, 1)
+            bar:SetStatusBarColor(1, 1, 1, 1)   -- 4 参：必须带 alpha=1，否则顶不掉 vanilla 的 0.5 半透明
             -- SkillRankFrame{i}Border 在 1.12 vanilla 是 Frame（不是 Texture），无 SetTexture
             local border = getglobal("SkillRankFrame" .. i .. "Border")
             if border and border.Hide then border:Hide() end
         end
+    end
+
+    -- 技能条颜色修复（根因实证 2026-06-02）：vanilla SkillFrame_UpdateSkills 每次刷新会把技能条
+    -- statusbarcolor 改成半透明蓝(0,0,1,0.5)，叠在深色 Solid 背景上 fill-blue 看不见（冷启动/滚动/
+    -- 切tab 竞态，谁后跑谁赢→时好时坏）。post-hook 在 vanilla 之后用 4 参 (1,1,1,1) 顶回不透明。
+    -- 按技能分组着色：护甲专精/职业技能/语言 → 灰(fill-white 银灰高光，与 fill-blue 同风格)，
+    -- 其他(武器技能/副职业/…) → 蓝(fill-blue)。一律 4 参 (1,1,1,1) 顶掉 vanilla 半透明蓝。
+    local SKILL_GRAY_TEX = CHAR_TEX .. "fill-white.tga"
+    local SKILL_BLUE_TEX = CHAR_TEX .. "fill-blue.tga"
+    local GRAY_HEADERS = { ["护甲专精"] = true, ["职业技能"] = true, ["语言"] = true }
+    local function FixSkillBarColors()
+        -- 建"技能行索引 → 所属分组名"映射（按当前展开后的列表）
+        local headerOf, cur = {}, nil
+        local numLines = GetNumSkillLines and GetNumSkillLines() or 0
+        for idx = 1, numLines do
+            local nm, isHeader = GetSkillLineInfo(idx)
+            if isHeader then cur = nm else headerOf[idx] = cur end
+        end
+        local offset = 0
+        if SkillListScrollFrame and FauxScrollFrame_GetOffset then
+            offset = FauxScrollFrame_GetOffset(SkillListScrollFrame)
+        end
+        for i = 1, (SKILLS_TO_DISPLAY or 15) do
+            local b = getglobal("SkillRankFrame" .. i)
+            if b and b.SetStatusBarTexture then
+                local hdr = headerOf[offset + i]
+                if hdr and GRAY_HEADERS[hdr] then
+                    b:SetStatusBarTexture(SKILL_GRAY_TEX)
+                else
+                    b:SetStatusBarTexture(SKILL_BLUE_TEX)
+                end
+                b:SetStatusBarColor(1, 1, 1, 1)
+            end
+        end
+    end
+    if type(SkillFrame_UpdateSkills) == "function" then
+        local _origUpdateSkills = SkillFrame_UpdateSkills
+        setglobal("SkillFrame_UpdateSkills", function(a1, a2, a3, a4, a5, a6, a7, a8, a9)
+            _origUpdateSkills(a1, a2, a3, a4, a5, a6, a7, a8, a9)
+            FixSkillBarColors()
+        end)
     end
 
     -- SkillTypeLabel 折叠分组 header（清原生纹理 + 加 DF 深色底）

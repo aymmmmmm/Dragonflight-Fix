@@ -583,9 +583,10 @@ local RSB_TRACK_BG    = RSB_TEX .. "ui-sliderbar-background"      -- 8×8 轨道
 
 function DFUI.CreateRetailScrollbar(parent, listFrame, opts)
     opts = opts or {}
+    local tex       = opts.textures               -- 可选 {up,down,thumb,trackColor}：提供则走 minimal 整图皮肤
     local scale     = opts.scale or 1
     local width     = (opts.width or 18) * scale  -- sb 宽
-    local arrowH    = 16 * scale                  -- 箭头按钮高
+    local arrowH    = (opts.arrowH or 16) * scale -- 箭头按钮高
     local trackW    = 12 * scale                  -- 轨道/滑块宽
     local inset     = 3 * scale                   -- 轨道左右内缩
     local gap       = 2 * scale                   -- 箭头与轨道间距
@@ -601,44 +602,90 @@ function DFUI.CreateRetailScrollbar(parent, listFrame, opts)
     sb:SetFrameLevel(parent:GetFrameLevel() + 5)
 
     -- 箭头按钮：Button 原生纹理（normal/pushed/highlight/disabled 各一张整图，highlight 自动叠加）
-    local function makeArrowBtn(point, upTex, dnTex, hiTex, disTex)
+    -- yPad: 上箭头正值往上、下箭头负值往下，微调箭头与轨道间距
+    local function makeArrowBtn(point, yPad, normalT, pushedT, hiT, disT)
         local btn = CreateFrame("Button", nil, sb)
         btn:SetWidth(width); btn:SetHeight(arrowH)
-        btn:SetPoint(point, sb, point, 0, 0)
-        btn:SetNormalTexture(upTex)
-        btn:SetPushedTexture(dnTex)
-        btn:SetHighlightTexture(hiTex)
-        btn:SetDisabledTexture(disTex)
+        btn:SetPoint(point, sb, point, 0, yPad)
+        btn:SetNormalTexture(normalT)
+        btn:SetPushedTexture(pushedT)
+        btn:SetHighlightTexture(hiT)
+        if disT then btn:SetDisabledTexture(disT) end
         return btn
     end
-    local upBtn = makeArrowBtn("TOP",    RSB_UP_UP, RSB_UP_DOWN, RSB_UP_HILIGHT, RSB_UP_DISABLED)
-    local dnBtn = makeArrowBtn("BOTTOM", RSB_DN_UP, RSB_DN_DOWN, RSB_DN_HILIGHT, RSB_DN_DISABLED)
+    local topPad = (opts.arrowTopPad or 0) * scale
+    local botPad = (opts.arrowBotPad or 0) * scale
+    local upBtn, dnBtn
+    if tex then
+        -- minimal 整图皮肤：单张箭头整图，normal/pushed/highlight 共用（highlight 默认 ADD 叠亮作 hover），禁用靠 alpha
+        upBtn = makeArrowBtn("TOP",     topPad, tex.up,   tex.up,   tex.up,   nil)
+        dnBtn = makeArrowBtn("BOTTOM", -botPad, tex.down, tex.down, tex.down, nil)
+    else
+        upBtn = makeArrowBtn("TOP",     topPad, RSB_UP_UP, RSB_UP_DOWN, RSB_UP_HILIGHT, RSB_UP_DISABLED)
+        dnBtn = makeArrowBtn("BOTTOM", -botPad, RSB_DN_UP, RSB_DN_DOWN, RSB_DN_HILIGHT, RSB_DN_DISABLED)
+    end
     upBtn:SetScript("OnClick", function() onDelta(-1) end)
     dnBtn:SetScript("OnClick", function() onDelta(1)  end)
 
     -- track 容器
     local track = CreateFrame("Frame", nil, sb)
-    track:SetWidth(trackW)
+    track:SetWidth(trackW)   -- 固定细宽；不锚 sb LEFT/RIGHT(否则会跟 sb 变宽)，靠 TOP/BOTTOM 中点锚水平居中
     track:SetPoint("TOP",    upBtn, "BOTTOM", 0, -gap)
     track:SetPoint("BOTTOM", dnBtn, "TOP",    0,  gap)
-    track:SetPoint("LEFT",  sb, "LEFT",  inset, 0)
-    track:SetPoint("RIGHT", sb, "RIGHT", -inset, 0)
 
-    -- track 背景：sliderbar-background 整图拉伸填满轨道（零 UV）
-    local trackBg = track:CreateTexture(nil, "BACKGROUND")
-    trackBg:SetTexture(RSB_TRACK_BG)
-    trackBg:SetAllPoints(track)
-    trackBg:SetVertexColor(0.6, 0.6, 0.6, 0.9)
+    -- track 背景：retail 3-slice（上端盖+中段拉伸+下端盖，各独立小整图、零切片）/ WHITE8X8 染色 / 默认整图
+    if tex and tex.trackTop and tex.trackBot and tex.trackMid then
+        local tcapH = (tex.trackCapH or 6) * scale
+        local trTop = track:CreateTexture(nil, "BACKGROUND")
+        trTop:SetTexture(tex.trackTop); trTop:SetHeight(tcapH)
+        trTop:SetPoint("TOPLEFT",  track, "TOPLEFT",  0, 0)
+        trTop:SetPoint("TOPRIGHT", track, "TOPRIGHT", 0, 0)
+        local trBot = track:CreateTexture(nil, "BACKGROUND")
+        trBot:SetTexture(tex.trackBot); trBot:SetHeight(tcapH)
+        trBot:SetPoint("BOTTOMLEFT",  track, "BOTTOMLEFT",  0, 0)
+        trBot:SetPoint("BOTTOMRIGHT", track, "BOTTOMRIGHT", 0, 0)
+        local trMid = track:CreateTexture(nil, "BACKGROUND")
+        trMid:SetTexture(tex.trackMid)
+        trMid:SetPoint("TOPLEFT",     trTop, "BOTTOMLEFT",  0, 0)
+        trMid:SetPoint("BOTTOMRIGHT", trBot, "TOPRIGHT",    0, 0)
+    else
+        local trackBg = track:CreateTexture(nil, "BACKGROUND")
+        -- minimal 用 WHITE8X8 才能被 trackColor 染色（sliderbar-background 是纯黑，vertexColor 乘黑恒为黑→不可见）
+        trackBg:SetTexture((tex and "Interface\\Buttons\\WHITE8X8") or RSB_TRACK_BG)
+        trackBg:SetAllPoints(track)
+        if tex and tex.trackColor then
+            local c = tex.trackColor
+            trackBg:SetVertexColor(c[1], c[2], c[3], c[4] or 1)
+        else
+            trackBg:SetVertexColor(0.6, 0.6, 0.6, 0.9)
+        end
+    end
 
-    -- thumb：单张 knob 整图（零 UV，拉伸适配 thumb 尺寸）
+    -- thumb：3-slice（上圆头+中段拉伸+下圆头，各独立小整图、零切片）或单张 knob 整图拉伸
     local thumb = CreateFrame("Frame", nil, track)
     thumb:EnableMouse(true)
     thumb:SetWidth(trackW)
     thumb:SetHeight(thumbMinH)
     thumb:SetPoint("TOP", track, "TOP", 0, 0)
-    local thumbTex = thumb:CreateTexture(nil, "ARTWORK")
-    thumbTex:SetTexture(RSB_KNOB)
-    thumbTex:SetAllPoints(thumb)
+    if tex and tex.thumbTop and tex.thumbBot then
+        local capH = (tex.thumbCapH or 7) * scale
+        local tTop = thumb:CreateTexture(nil, "ARTWORK")
+        tTop:SetTexture(tex.thumbTop); tTop:SetHeight(capH)
+        tTop:SetPoint("TOPLEFT",  thumb, "TOPLEFT",  0, 0)
+        tTop:SetPoint("TOPRIGHT", thumb, "TOPRIGHT", 0, 0)
+        local tBot = thumb:CreateTexture(nil, "ARTWORK")
+        tBot:SetTexture(tex.thumbBot); tBot:SetHeight(capH)
+        tBot:SetPoint("BOTTOMLEFT",  thumb, "BOTTOMLEFT",  0, 0)
+        tBot:SetPoint("BOTTOMRIGHT", thumb, "BOTTOMRIGHT", 0, 0)
+        local tMid = thumb:CreateTexture(nil, "ARTWORK")
+        tMid:SetTexture(tex.thumb)
+        tMid:SetPoint("TOPLEFT",     tTop, "BOTTOMLEFT",  0, 0)
+        tMid:SetPoint("BOTTOMRIGHT", tBot, "TOPRIGHT",    0, 0)
+    else
+        local thumbTex = thumb:CreateTexture(nil, "ARTWORK")
+        thumbTex:SetTexture((tex and tex.thumb) or RSB_KNOB)
+        thumbTex:SetAllPoints(thumb)
+    end
 
     -- 拖动逻辑：OnMouseDown 启动 OnUpdate 跟随鼠标 y, OnMouseUp 停止
     thumb.dragging = false
@@ -646,17 +693,18 @@ function DFUI.CreateRetailScrollbar(parent, listFrame, opts)
     thumb:SetScript("OnMouseUp",   function() thumb.dragging = false end)
     thumb:SetScript("OnUpdate", function()
         if not thumb.dragging then return end
+        -- 必须用 UIParent scale：GetCursorPosition 的物理坐标对应根缩放，
+        -- 而 thumb:GetEffectiveScale() 含 panel SetScale(0.85)→坐标错位、拖不到底("拉到一半就停")
+        local uiScale = UIParent:GetEffectiveScale()
+        if uiScale <= 0 then return end
         local _, cy = GetCursorPosition()
-        local scale = thumb:GetEffectiveScale()
+        cy = cy / uiScale                                       -- 物理像素 → UIParent UI 坐标(与 GetTop 同系)
         local trackTop = track:GetTop()
         local trackBot = track:GetBottom()
         if not trackTop or not trackBot then return end
-        local trackH = (trackTop - trackBot) * scale
-        local cursorOnTrack = (trackTop * scale) - cy
-        local thumbH = thumb:GetHeight() * scale
-        local maxY = trackH - thumbH
+        local maxY = (trackTop - trackBot) - thumb:GetHeight()  -- 全程 UIParent UI，不再乘 panel scale
         if maxY <= 0 then return end
-        local ratio = cursorOnTrack / maxY
+        local ratio = (trackTop - cy) / maxY
         if ratio < 0 then ratio = 0 elseif ratio > 1 then ratio = 1 end
         onAbs(ratio)
     end)
@@ -670,10 +718,18 @@ function DFUI.CreateRetailScrollbar(parent, listFrame, opts)
         scrollOff = scrollOff or 0
         maxOff = maxOff or 0
         sb.lastMaxOffset = maxOff
-        if scrollOff <= 0      then upBtn:Disable() else upBtn:Enable() end
-        if scrollOff >= maxOff  then dnBtn:Disable() else dnBtn:Enable() end
-        local trackH = track:GetHeight()
-        if not trackH or trackH <= 0 then return end
+        if tex then
+            -- minimal 皮肤无 disabled 整图，到顶/底用 alpha 表示禁用
+            upBtn:SetAlpha((scrollOff <= 0) and 0.35 or 1)
+            dnBtn:SetAlpha((scrollOff >= maxOff) and 0.35 or 1)
+        else
+            if scrollOff <= 0      then upBtn:Disable() else upBtn:Enable() end
+            if scrollOff >= maxOff  then dnBtn:Disable() else dnBtn:Enable() end
+        end
+        local tT, tB = track:GetTop(), track:GetBottom()
+        if not tT or not tB then return end
+        local trackH = tT - tB   -- 双锚 GetHeight 在 1.12 常返错值，用 GetTop-GetBottom(与拖动一致)否则 thumb 拖不到底
+        if trackH <= 0 then return end
         local thumbH = math.max(thumbMinH, trackH * visRows / math.max(visRows, totalRows))
         if thumbH > trackH then thumbH = trackH end
         thumb:SetHeight(thumbH)

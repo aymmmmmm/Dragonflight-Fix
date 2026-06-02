@@ -123,13 +123,15 @@ DFUI:NewMod("Target", 1, function()
         self.texts.healthValue:SetFont(cfg.font, cfg.healthFontSize, cfg.outline)
         self.texts.healthValue:SetPoint('RIGHT', self.healthBar, 'RIGHT', -5, 0)
 
-        if GetCVar("statusBarText") == "1" then
-            if TargetHPText then
-                TargetHPText:Hide()
-            end
-            if TargetHPPercText then
-                TargetHPPercText:Hide()
-            end
+        -- 永久锁死 Turtle 自定义 HP 文本(挂在 TargetFrameTextureFrame, 血条 Hide 盖不到),
+        -- 不依赖 ShaguTweaks 兜底; 仿 player.lua 写法
+        if TargetHPText then
+            TargetHPText:Hide()
+            TargetHPText.Show = function() end
+        end
+        if TargetHPPercText then
+            TargetHPPercText:Hide()
+            TargetHPPercText.Show = function() end
         end
     end
 

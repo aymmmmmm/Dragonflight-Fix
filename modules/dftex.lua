@@ -85,11 +85,11 @@ end
 -- /dfbar : 进度条根因诊断
 --   1) 活体 dump 错误日志（看 Character mod 是否抛错被 pcall 吞掉 → bar 块没跑）
 --   2) 当前声望/技能条的 StatusBar fill 纹理路径
---   3) 写入回读测试：NPOT(fill-white 256×17) vs POT(rankbar_blue 256×16) 谁能“吃进去”
---   4) 留 NPOT 让你肉眼看渲染 + 滚动/切Tab后再 /dfbar 看是否被 vanilla 改回
+--   3) 写入回读测试：两个真实 DF POT 文件(fill-white 声望 / fill-blue 技能)能否写入并回读一致
+--   4) 滚动/切Tab后再 /dfbar 看 fill 是否被 vanilla 改回（验证 hook 是否压住）
 -- ============================================================
-local FILL_NPOT = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\character\\fill-white.tga"
-local FILL_POT  = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\panels\\df\\professions\\rankbar_fill_blue.tga"
+local FILL_REP   = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\character\\fill-white.tga"
+local FILL_SKILL = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\character\\fill-blue.tga"
 
 local function dfbar_msg(s) DEFAULT_CHAT_FRAME:AddMessage(s) end
 
@@ -116,43 +116,46 @@ end
 
 SLASH_DFBAR1 = "/dfbar"
 SlashCmdList["DFBAR"] = function()
-    -- 1) 错误日志
-    local nDisk = 0
-    if type(DFUI_BUGS) == "table" and type(DFUI_BUGS.entries) == "table" then nDisk = table.getn(DFUI_BUGS.entries) end
-    local nLive = 0
-    if DFUI and DFUI.errors and type(DFUI.errors.list) == "table" then nLive = table.getn(DFUI.errors.list) end
-    dfbar_msg("|cffffcc00[DFBar]|r 错误日志: DFUI_BUGS.entries=" .. nDisk .. "  DFUI.errors.list=" .. nLive)
-    dfbar_dumpErr("BUGS", DFUI_BUGS and DFUI_BUGS.entries)
-    dfbar_dumpErr("live", DFUI and DFUI.errors and DFUI.errors.list)
-
-    -- 2) 当前状态
-    dfbar_msg("|cffffcc00[DFBar]|r 当前 fill 纹理:")
-    local names = { "SkillRankFrame1", "SkillRankFrame2", "ReputationBar1", "ReputationBar2" }
-    for i = 1, table.getn(names) do
-        local nm = names[i]
-        local f = getglobal(nm)
-        if f then
-            local ot = f.GetObjectType and f:GetObjectType() or "?"
-            local shown = f.IsShown and f:IsShown()
-            dfbar_msg("  " .. nm .. " [" .. ot .. "] shown=" .. tostring(shown) .. " fill=" .. dfbar_fillOf(f))
-        else
-            dfbar_msg("  " .. nm .. " = nil")
-        end
+    local function n2(v)
+        if v == nil then return "nil" end
+        if type(v) == "number" then return string.format("%.1f", v) end
+        return tostring(v)
     end
+    -- 一条 bar 的关键状态（单行）：shown / val/max / sbColor(关键:看是否被调透明) / fill 纹理 texW/层
+    local function dumpBar(nm)
+        local f = getglobal(nm)
+        if not f then dfbar_msg("  " .. nm .. " = nil"); return end
+        local val = f.GetValue and f:GetValue()
+        local _, mx
+        if f.GetMinMaxValues then _, mx = f:GetMinMaxValues() end
+        local cr, cg, cb, ca
+        if f.GetStatusBarColor then cr, cg, cb, ca = f:GetStatusBarColor() end
+        local st = f.GetStatusBarTexture and f:GetStatusBarTexture()
+        local tw = st and st.GetWidth and st:GetWidth()
+        local tl = st and st.GetDrawLayer and st:GetDrawLayer()
+        dfbar_msg("  " .. nm .. " shown=" .. tostring(f:IsShown())
+            .. " val/max=" .. n2(val) .. "/" .. n2(mx)
+            .. " sbColor=" .. n2(cr) .. "," .. n2(cg) .. "," .. n2(cb) .. "," .. n2(ca)
+            .. " texW=" .. n2(tw) .. " layer=" .. tostring(tl))
+    end
+    dfbar_msg("|cffffcc00[DFBar]|r 技能/声望条:")
+    dumpBar("SkillRankFrame2")
+    dumpBar("ReputationBar2")
 
-    -- 3) 写入回读测试
-    local probe = getglobal("SkillRankFrame1")
-    if probe and probe.SetStatusBarTexture then
-        probe:SetStatusBarTexture(FILL_NPOT)
-        local g1 = dfbar_fillOf(probe)
-        probe:SetStatusBarTexture(FILL_POT)
-        local g2 = dfbar_fillOf(probe)
-        probe:SetStatusBarTexture(FILL_NPOT) -- 留 NPOT
-        dfbar_msg("|cffffcc00[DFBar]|r 写入测试 @SkillRankFrame1:")
-        dfbar_msg("  setNPOT(fill-white)   回读 = " .. g1)
-        dfbar_msg("  setPOT (rankbar_blue) 回读 = " .. g2)
-        dfbar_msg("  |cff88ff88已留 NPOT。请①看 SkillRankFrame1 是否有填充渲染 ②滚动技能列表或切Tab后再 /dfbar 看 fill 是否被改回 vanilla|r")
-    else
-        dfbar_msg("  SkillRankFrame1 不可写(非 StatusBar?)")
+    -- SkillRankFrame2 只列"可见(shown)"的纹理层 → 找盖在 fill 之上的遮挡源
+    local f2 = getglobal("SkillRankFrame2")
+    if f2 and f2.GetRegions then
+        dfbar_msg("|cffffcc00[DFBar]|r SkillRankFrame2 可见纹理层:")
+        local rs = {f2:GetRegions()}
+        for i = 1, table.getn(rs) do
+            local r = rs[i]
+            if r.GetObjectType and r:GetObjectType() == "Texture" and r.IsShown and r:IsShown() then
+                local vr, vg, vb
+                if r.GetVertexColor then vr, vg, vb = r:GetVertexColor() end
+                dfbar_msg("  " .. tostring(r.GetDrawLayer and r:GetDrawLayer())
+                    .. " vc=" .. n2(vr) .. "," .. n2(vg) .. "," .. n2(vb)
+                    .. " " .. tostring(r:GetTexture()))
+            end
+        end
     end
 end

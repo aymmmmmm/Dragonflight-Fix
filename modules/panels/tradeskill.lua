@@ -48,24 +48,13 @@ local PROF_BG_KEY = {
 -- ============================================================
 local ATLAS_MAIN       = PROF_TEX .. "atlas_main.tga"          -- 2048×1024 (retail professions.blp)
 local RANKBAR_FILL     = PROF_TEX .. "rankbar_fill_blue.tga"   -- 256×16 POT (retail uiframebars.blp ui-frame-bar-fill-blue 切片, T88-B103 蓝色 gradient)
-local SCROLL_THUMB_TB  = PROF_TEX .. "scroll_thumb_tb.tga"     -- 64×64  (DF minimal-scrollbar-small thumb top/bot)
-local SCROLL_THUMB_MID = PROF_TEX .. "scroll_thumb_mid.tga"    -- 64×1024 (thumb middle 段)
-local SCROLL_TRACK_TB  = PROF_TEX .. "scroll_track_tb.tga"     -- 128×64 (track top/bot)
-local UIACTIONBAR_TEX  = PROF_TEX .. "uiactionbar_atlas.tga"   -- 256×1024 (ui-hud-actionbar page arrow ×3态)
 
 local ATLAS_SIZE = {
     [ATLAS_MAIN]       = {2048, 1024},
-    [SCROLL_THUMB_TB]  = {64,   64},
-    [SCROLL_THUMB_MID] = {64,   1024},
-    [SCROLL_TRACK_TB]  = {128,  64},
-    [UIACTIONBAR_TEX]  = {256,  1024},
 }
 
 -- P2-#11 布局常量（散落的魔术数字集中管理，便于调优）
 local LAYOUT = {
-    SCROLL_BAR_WIDTH    = 18,    -- 滚动条宽度 (V21.1 14→18 让滚动条更显眼)
-    SCROLL_ARROW_HEIGHT = 16,    -- 滚动条上下箭头按钮高度
-    SCROLL_THUMB_MIN_H  = 20,    -- 滚动条 thumb 最小高度（避免长列表上缩成一线）
     PANEL_SCALE         = 0.85,  -- 主面板缩放比例
     DETAIL_DESC_WIDTH   = 460,   -- 详情区描述文本宽度（retail SchematicForm 标准）
 }
@@ -84,22 +73,8 @@ local ATLAS = {
     ["icon-skill-high"]        = { 539,  552,  55,  70, ATLAS_MAIN,  13, 15 },
     ["icon-skill-medium"]      = { 604,  617,  55,  70, ATLAS_MAIN,  13, 15 },
     ["icon-skill-low"]         = { 524,  537,  55,  70, ATLAS_MAIN,  13, 15 },
-    -- DF minimal-scrollbar 3-slice thumb + track
-    ["scroll-thumb-top"]       = {  20,   28,  54,  62, SCROLL_THUMB_TB,   8,   8 },
-    ["scroll-thumb-mid"]       = {  31,   39,   1, 716, SCROLL_THUMB_MID,  8, 715 },
-    ["scroll-thumb-bot"]       = {  39,   47,  31,  39, SCROLL_THUMB_TB,   8,   8 },
-    ["scroll-track-top"]       = {  21,   29,  39,  47, SCROLL_TRACK_TB,   8,   8 },
-    ["scroll-track-bot"]       = {  11,   19,  49,  57, SCROLL_TRACK_TB,   8,   8 },
-    -- DF ui-hud-actionbar page arrow ×3态 (17×14, up/down × normal/hover/down)
-    ["arrow-up-normal"]        = { 200,  217, 458, 472, UIACTIONBAR_TEX,  17,  14 },
-    ["arrow-up-hover"]         = { 181,  198, 458, 472, UIACTIONBAR_TEX,  17,  14 },
-    ["arrow-up-down"]          = { 234,  251, 390, 404, UIACTIONBAR_TEX,  17,  14 },
-    ["arrow-down-normal"]      = { 234,  251, 358, 372, UIACTIONBAR_TEX,  17,  14 },
-    ["arrow-down-hover"]       = { 234,  251, 337, 351, UIACTIONBAR_TEX,  17,  14 },
-    ["arrow-down-down"]        = { 234,  251, 321, 335, UIACTIONBAR_TEX,  17,  14 },
-    -- V26 disabled 态箭头 (字典: ui-hud-actionbar-page{up|down}arrow-disabled)
-    ["arrow-up-disabled"]      = { 234,  251, 374, 388, UIACTIONBAR_TEX,  17,  14 },
-    ["arrow-down-disabled"]    = { 234,  251, 305, 319, UIACTIONBAR_TEX,  17,  14 },
+    -- DF 摘要列表背景 (professions-background-summarylist, 268×572 深色皮革衬底, ATLAS_MAIN 中等区域切片可靠)
+    ["background-summarylist"] = {   1,  269,  79, 651, ATLAS_MAIN, 268, 572 },
 }
 
 -- ApplyAtlas: 把 atlas 元素切片到 tex 上
@@ -215,134 +190,9 @@ local function CreateInsetBackdrop(frame, bgAlpha)
     R:SetWidth(EW)
 end
 
--- ============================================================
--- CreateMinimalScrollbar — V21 DF minimal-scrollbar 3-slice + ui-hud-actionbar 小三角箭头
--- 几何: [up-arrow 14h] [track-top 8h] [track-mid 弹性 暗色] [track-bot 8h] [down-arrow 14h]
--- 参数:
---   parent      : 锚定容器 (leftColumn)
---   listFrame   : 列表 frame, sb 锚 listFrame TOPRIGHT/BOTTOMRIGHT
---   onScrollDelta: function(dRows) — 点上下箭头时调用 (-1 或 +1)
---   onScrollAbs : function(ratio)  — 拖动 thumb 时调用 (0..1)
--- 返回: sb (含 sb.thumb / sb.track / sb.UpdateThumb(scrollOffset, maxOffset, visibleRows, totalRows))  -- 点调用,无 self
--- ============================================================
-local function CreateMinimalScrollbar(parent, listFrame, onScrollDelta, onScrollAbs)
-    local sb = CreateFrame("Frame", nil, parent)
-    sb:SetWidth(LAYOUT.SCROLL_BAR_WIDTH)
-    sb:SetPoint("TOPRIGHT", listFrame, "TOPRIGHT", LAYOUT.SCROLL_BAR_WIDTH, 0)
-    sb:SetPoint("BOTTOMRIGHT", listFrame, "BOTTOMRIGHT", LAYOUT.SCROLL_BAR_WIDTH, 0)
-    sb:SetFrameLevel(parent:GetFrameLevel() + 5)
-
-    -- V22.1: 用 BACKGROUND 层 (唯一在 sb 容器内验证工作的层) + atlas SetTexCoord
-    -- 3 态用 3 个 BACKGROUND texture, OnMouseDown/Up + OnEnter/Leave 切换 Show/Hide
-    local function makeArrowBtn(point, normKey, hovKey, dnKey)
-        local btn = CreateFrame("Button", nil, sb)
-        btn:SetWidth(LAYOUT.SCROLL_BAR_WIDTH); btn:SetHeight(LAYOUT.SCROLL_ARROW_HEIGHT)
-        btn:SetPoint(point, sb, point, 0, 0)
-        local function bgTex(key)
-            local a = ATLAS[key]
-            local file = a[5]; local sz = ATLAS_SIZE[file]
-            local t = btn:CreateTexture(nil, "BACKGROUND")
-            t:SetTexture(file)
-            t:SetTexCoord(a[1]/sz[1], a[2]/sz[1], a[3]/sz[2], a[4]/sz[2])
-            t:SetAllPoints(btn)
-            return t
-        end
-        local norm = bgTex(normKey)
-        local hov  = bgTex(hovKey);  hov:Hide()
-        local dn   = bgTex(dnKey);   dn:Hide()
-        btn:SetScript("OnEnter",     function() if not btn.pushed then norm:Hide(); hov:Show() end end)
-        btn:SetScript("OnLeave",     function() if not btn.pushed then hov:Hide();  norm:Show() end end)
-        btn:SetScript("OnMouseDown", function() btn.pushed = true;  norm:Hide(); hov:Hide(); dn:Show() end)
-        btn:SetScript("OnMouseUp",   function() btn.pushed = false; dn:Hide(); norm:Show() end)
-        return btn
-    end
-    -- V26 normal 态用 disabled 版本 (用户指定: ui-hud-actionbar-page{up|down}arrow-disabled)
-    local upBtn = makeArrowBtn("TOP",    "arrow-up-disabled",   "arrow-up-hover",   "arrow-up-down")
-    local dnBtn = makeArrowBtn("BOTTOM", "arrow-down-disabled", "arrow-down-hover", "arrow-down-down")
-    upBtn:SetScript("OnClick", function() onScrollDelta(-1) end)
-    dnBtn:SetScript("OnClick", function() onScrollDelta(1)  end)
-
-    -- track 容器 (up/down 之间)
-    local track = CreateFrame("Frame", nil, sb)
-    track:SetWidth(12)  -- V21.1 8→12
-    track:SetPoint("TOP", upBtn, "BOTTOM", 0, -2)
-    track:SetPoint("BOTTOM", dnBtn, "TOP", 0, 2)
-    track:SetPoint("LEFT", sb, "LEFT", 3, 0)
-    track:SetPoint("RIGHT", sb, "RIGHT", -3, 0)
-
-    -- track 3-slice: top + middle (WHITE8X8 暗色) + bot (12×12 拉伸)
-    local trTop = track:CreateTexture(nil, "BACKGROUND"); ApplyAtlas(trTop, "scroll-track-top", false)
-    trTop:SetWidth(12); trTop:SetHeight(12); trTop:SetPoint("TOP", track, "TOP", 0, 0)
-    local trBot = track:CreateTexture(nil, "BACKGROUND"); ApplyAtlas(trBot, "scroll-track-bot", false)
-    trBot:SetWidth(12); trBot:SetHeight(12); trBot:SetPoint("BOTTOM", track, "BOTTOM", 0, 0)
-    local trMid = track:CreateTexture(nil, "BACKGROUND")
-    trMid:SetTexture("Interface\\Buttons\\WHITE8X8")
-    trMid:SetVertexColor(0.04, 0.04, 0.04, 0.85)
-    trMid:SetPoint("TOPLEFT", trTop, "BOTTOMLEFT", 0, 0)
-    trMid:SetPoint("BOTTOMRIGHT", trBot, "TOPRIGHT", 0, 0)
-
-    -- V22.1 thumb 3-slice: Frame + EnableMouse + BACKGROUND 层 (容器内唯一工作的层)
-    local thumb = CreateFrame("Frame", nil, track)
-    thumb:EnableMouse(true)
-    thumb:SetWidth(12)
-    thumb:SetHeight(50)
-    thumb:SetPoint("TOP", track, "TOP", 0, 0)
-    local thTop = thumb:CreateTexture(nil, "BACKGROUND"); ApplyAtlas(thTop, "scroll-thumb-top", false)
-    thTop:SetWidth(12); thTop:SetHeight(12); thTop:SetPoint("TOP", thumb, "TOP", 0, 0)
-    local thBot = thumb:CreateTexture(nil, "BACKGROUND"); ApplyAtlas(thBot, "scroll-thumb-bot", false)
-    thBot:SetWidth(12); thBot:SetHeight(12); thBot:SetPoint("BOTTOM", thumb, "BOTTOM", 0, 0)
-    local thMid = thumb:CreateTexture(nil, "BACKGROUND")
-    thMid:SetTexture(SCROLL_THUMB_MID)
-    thMid:SetTexCoord(31/64, 39/64, 100/1024, 600/1024)
-    thMid:SetPoint("TOPLEFT", thTop, "BOTTOMLEFT", 0, 0)
-    thMid:SetPoint("BOTTOMRIGHT", thBot, "TOPRIGHT", 0, 0)
-
-    -- 拖动: OnMouseDown 启动 OnUpdate 跟随鼠标 y, OnMouseUp 停止
-    thumb.dragging = false
-    thumb:SetScript("OnMouseDown", function()
-        thumb.dragging = true
-        thumb.dragStartCursorY = nil
-    end)
-    thumb:SetScript("OnMouseUp", function()
-        thumb.dragging = false
-    end)
-    thumb:SetScript("OnUpdate", function()
-        if not thumb.dragging then return end
-        local _, cy = GetCursorPosition()
-        local scale = thumb:GetEffectiveScale()
-        local trackTop = track:GetTop()
-        local trackBot = track:GetBottom()
-        if not trackTop or not trackBot then return end
-        local trackH = (trackTop - trackBot) * scale
-        local cursorOnTrack = (trackTop * scale) - cy
-        local thumbH = thumb:GetHeight() * scale
-        local maxY = trackH - thumbH
-        if maxY <= 0 then return end
-        local ratio = cursorOnTrack / maxY
-        if ratio < 0 then ratio = 0 elseif ratio > 1 then ratio = 1 end
-        onScrollAbs(ratio)
-    end)
-
-    sb.thumb = thumb
-    sb.track = track
-
-    -- UpdateThumb: 由 UpdateRecipeList 调用同步 thumb 几何 + 缓存 maxOff (拖动时换算 ratio→scrollOff 用)
-    sb.lastMaxOffset = 0
-    sb.UpdateThumb = function(scrollOff, maxOff, visRows, totalRows)
-        sb.lastMaxOffset = maxOff or 0
-        local trackH = track:GetHeight()
-        if not trackH or trackH <= 0 then return end
-        local thumbH = math.max(LAYOUT.SCROLL_THUMB_MIN_H, trackH * visRows / math.max(visRows, totalRows))
-        if thumbH > trackH then thumbH = trackH end
-        thumb:SetHeight(thumbH)
-        local thumbMaxY = trackH - thumbH
-        local thumbY = (maxOff and maxOff > 0) and (thumbMaxY * scrollOff / maxOff) or 0
-        thumb:ClearAllPoints()
-        thumb:SetPoint("TOP", track, "TOP", 0, -thumbY)
-    end
-
-    return sb
-end
+-- 注: 旧 CreateMinimalScrollbar 已移除。它对 tall-narrow atlas (64×1024/256×1024) 做 SetTexCoord
+-- 切片，1.12/DXVK 渲染失败（箭头与 thumb 中段空白）。现复用 DFUI.CreateRetailScrollbar 的整图范式
+-- (每部件独立小 POT 整图、整张拉伸、零切片)，接线见下方 recipeScrollbar 创建处。
 
 -- 难度颜色 (针对 DF 深色背景画优化对比度，文字全部加 OUTLINE 保证可读)
 local DIFFICULTY_COLORS = {
@@ -463,15 +313,12 @@ DFUI:NewMod("TradeSkill", 5, function()
     leftColumn:SetPoint("BOTTOM", panel, "BOTTOM", 0, 16)
     leftColumn:SetFrameLevel(panel:GetFrameLevel() + 1)
     -- V25 左栏底色: 程序化生成的暗棕渐变木纹 + 交叉锤子 (模仿 retail craftingorders-categories-background)
-    -- 颜色采样自原 atlas 真像素 (顶 BGR 45,56,67 → 底 BGR 8,14,20), 加细微噪声模拟木纹
-    -- 绕过 ARGB BLP→TGA 解码路径(1.12 不接受), 用程序化生成的纯 BGRA32 TGA
+    -- DF retail 摘要列表背景 professions-background-summarylist：ATLAS_MAIN 切 268×572 深色皮革衬底
+    -- 铺满 leftColumn 含滚动条区；滚动条 level=panel+6 在其上，listFrame=panel+3 在其上，故背景在最底
     local leftColumnBg = leftColumn:CreateTexture(nil, "BACKGROUND")
-    -- 用项目已加载的 UI-Background-Rock.blp (panel.Bg 同源) + SetVertexColor 染暖棕区分
     leftColumnBg:SetPoint("TOPLEFT",     leftColumn, "TOPLEFT",     4, -4)
     leftColumnBg:SetPoint("BOTTOMRIGHT", leftColumn, "BOTTOMRIGHT", -4, 4)
-    leftColumnBg:SetTexture(TEX .. "interface\\leftbg2.tga")
-    -- 暖棕染色, 跟底层 panel.Bg 灰色岩石视觉区分
-    leftColumnBg:SetVertexColor(0.7, 0.55, 0.4)
+    leftColumnBg:SetTexture(PROF_TEX .. "summarylist_bg.tga")  -- summarylist 独立整图(atlas切片不显示,改整图);retail 暗皮革衬底
     -- InsetFrame 金属外框保留, bg 透明让木纹底层显出 (CreateInsetBackdrop bgAlpha=0 已跳过 bg 创建)
     CreateInsetBackdrop(leftColumn, 0)  -- V8 retail InsetFrame 真 edge tile 凹陷
 
@@ -555,15 +402,43 @@ DFUI:NewMod("TradeSkill", 5, function()
     -- listFrame 顶移 28px 让出顶部 checkbox 区域 (-10 → -38)
     -- bottom 也调整 (原 72 = checkbox 14px + 下间距 58, 现 checkbox 上移后底部不需要 = 14)
     listFrame:SetPoint("TOPLEFT", leftColumn, "TOPLEFT", 12, -60)  -- V17 -38→-60 下移 22px
-    listFrame:SetPoint("BOTTOMRIGHT", leftColumn, "BOTTOMRIGHT", -10, 42)  -- 无滚动条，列表占满左栏宽
+    listFrame:SetPoint("BOTTOMRIGHT", leftColumn, "BOTTOMRIGHT", -28, 42)  -- 右缩 28 让出 DF minimal 滚动条
     listFrame:SetFrameLevel(panel:GetFrameLevel() + 3)
 
     local UpdateRecipeList  -- forward decl: 在 L1070+ 定义（拆为 Rebuild+Render+包装）
     local RebuildRecipeData    -- 数据层：全表扫描+过滤+图标预取
     local RenderRecipeButtons  -- 渲染层：仅读缓存（滚动热点路径）
-    -- 制造面板不接自定义滚动条：CreateRetailScrollbar 多轮尝试效果差，已移除接线。
-    -- 列表仅靠滚轮 OnMouseWheel 滚动（L~1764）。工厂函数与素材保留备用，见尝试记录。
-    local recipeScrollbar = nil
+    -- DF minimal 滚动条（整图皮肤，零 UV 切片；素材 media\tex\interface\buttons\minimal-sb-*）
+    -- 根因复盘：旧 CreateMinimalScrollbar 对 tall-narrow atlas 做 SetTexCoord 切片，1.12/DXVK 渲染不出
+    -- (箭头/thumb 中段空白)。现复用 DFUI.CreateRetailScrollbar 的整图范式（每部件独立小图、整张拉伸、零切片）。
+    local SB_TEX = TEX .. "interface\\buttons\\"
+    local recipeScrollbar = DFUI.CreateRetailScrollbar(leftColumn, listFrame, {
+        width  = 22,   -- 箭头横向拉伸(16→22)；轨道靠 trackW 固定细、不跟 sb 宽
+        arrowH = 12,
+        arrowTopPad = 5,  -- 上箭头往上 5px
+        arrowBotPad = 5,  -- 下箭头往下 5px
+        textures = {
+            up         = SB_TEX .. "minimal-sb-arrow-up",
+            down       = SB_TEX .. "minimal-sb-arrow-down",
+            -- thumb 3-slice：中段(圆柱渐变拉伸) + 上下 retail 圆角端盖
+            thumb      = SB_TEX .. "minimal-sb-thumb",
+            thumbTop   = SB_TEX .. "minimal-sb-thumb-top",
+            thumbBot   = SB_TEX .. "minimal-sb-thumb-bot",
+            -- track 3-slice：retail 半透明凹槽（上下圆角端盖 + 中段竖直拉伸）
+            trackTop   = SB_TEX .. "minimal-sb-track-top",
+            trackBot   = SB_TEX .. "minimal-sb-track-bot",
+            trackMid   = SB_TEX .. "minimal-sb-track-mid",
+        },
+        onScrollDelta = function(d)
+            scrollOffset = scrollOffset + d * 3
+            RenderRecipeButtons()
+        end,
+        onScrollAbs = function(r)
+            local maxOff = math.max(0, table.getn(recipeCache) - MAX_RECIPE_BUTTONS)
+            scrollOffset = math.floor(r * maxOff + 0.5)
+            RenderRecipeButtons()
+        end,
+    })
 
     -- Layer C 图标常驻池: 每个唯一图标路径各建一个持久隐藏 1×1 纹理, **持有引用**防纹理缓存逐出。
     -- 根因(上滚卡/下滚不卡)：旧方案单一 warmTex 轮流 SetTexture 只持有最后一张引用，其余预热后变无引用→
@@ -616,26 +491,24 @@ DFUI:NewMod("TradeSkill", 5, function()
         -- atlas 原像素 BGR(24,26,29) 暗灰, ADD blend 叠加到亮色 marble 背景 → 视觉变亮
         -- (selectedOverlay / hoverOverlay 已验证 atlas + ADD blend 模式可靠)
         local headerLeft = btn:CreateTexture(nil, "BACKGROUND")
-        ApplyAtlas(headerLeft, "recipe-header-left", false)
+        headerLeft:SetTexture(PROF_TEX .. "hdr_left.tga")  -- recipe-header-left 独立整图(atlas切片1.12不显示,改整图)
+        -- BLEND(去 ADD)：横条显素材本色深棕(≈23)，比 ADD 叠亮的(≈39)更深沉
         headerLeft:SetWidth(14); headerLeft:SetHeight(20)
         headerLeft:SetPoint("LEFT", btn, "LEFT", 0, 0)
-        headerLeft:SetBlendMode("ADD")
         headerLeft:Hide()
         btn.headerLeft = headerLeft
 
         local headerRight = btn:CreateTexture(nil, "BACKGROUND")
-        ApplyAtlas(headerRight, "recipe-header-right", false)
+        headerRight:SetTexture(PROF_TEX .. "hdr_right.tga")
         headerRight:SetWidth(14); headerRight:SetHeight(20)
         headerRight:SetPoint("RIGHT", btn, "RIGHT", 0, 0)
-        headerRight:SetBlendMode("ADD")
         headerRight:Hide()
         btn.headerRight = headerRight
 
         local headerMid = btn:CreateTexture(nil, "BACKGROUND")
-        ApplyAtlas(headerMid, "recipe-header-middle", false)
+        headerMid:SetTexture(PROF_TEX .. "hdr_mid.tga")
         headerMid:SetPoint("TOPLEFT", headerLeft, "TOPRIGHT", 0, 0)
         headerMid:SetPoint("BOTTOMRIGHT", headerRight, "BOTTOMLEFT", 0, 0)
-        headerMid:SetBlendMode("ADD")
         headerMid:Hide()
         btn.headerMid = headerMid
 
@@ -1372,6 +1245,10 @@ DFUI:NewMod("TradeSkill", 5, function()
             end
         end
 
+        -- 同步 DF 滚动条 thumb 位置/高度 + 到顶/底箭头淡出（minimal 整图皮肤）
+        if recipeScrollbar then
+            recipeScrollbar.UpdateThumb(scrollOffset, maxOffset, MAX_RECIPE_BUTTONS, table.getn(recipeCache))
+        end
     end
 
     -- 兼容包装：数据真变化的调用点（搜索/过滤/折叠/事件刷新）走这里；滚动只调 RenderRecipeButtons
