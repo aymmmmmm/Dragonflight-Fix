@@ -411,24 +411,9 @@ DFUI:NewMod("TradeSkill", 5, function()
     -- DF minimal 滚动条（整图皮肤，零 UV 切片；素材 media\tex\interface\buttons\minimal-sb-*）
     -- 根因复盘：旧 CreateMinimalScrollbar 对 tall-narrow atlas 做 SetTexCoord 切片，1.12/DXVK 渲染不出
     -- (箭头/thumb 中段空白)。现复用 DFUI.CreateRetailScrollbar 的整图范式（每部件独立小图、整张拉伸、零切片）。
-    local SB_TEX = TEX .. "interface\\buttons\\"
-    local recipeScrollbar = DFUI.CreateRetailScrollbar(leftColumn, listFrame, {
-        width  = 22,   -- 箭头横向拉伸(16→22)；轨道靠 trackW 固定细、不跟 sb 宽
-        arrowH = 12,
-        arrowTopPad = 5,  -- 上箭头往上 5px
-        arrowBotPad = 5,  -- 下箭头往下 5px
-        textures = {
-            up         = SB_TEX .. "minimal-sb-arrow-up",
-            down       = SB_TEX .. "minimal-sb-arrow-down",
-            -- thumb 3-slice：中段(圆柱渐变拉伸) + 上下 retail 圆角端盖
-            thumb      = SB_TEX .. "minimal-sb-thumb",
-            thumbTop   = SB_TEX .. "minimal-sb-thumb-top",
-            thumbBot   = SB_TEX .. "minimal-sb-thumb-bot",
-            -- track 3-slice：retail 半透明凹槽（上下圆角端盖 + 中段竖直拉伸）
-            trackTop   = SB_TEX .. "minimal-sb-track-top",
-            trackBot   = SB_TEX .. "minimal-sb-track-bot",
-            trackMid   = SB_TEX .. "minimal-sb-track-mid",
-        },
+    -- 复用 DFUI.CreateMinimalScrollbar 工厂(整图皮肤预设，core/tools.lua)；width/arrowH/pad 用默认
+    local recipeScrollbar = DFUI.CreateMinimalScrollbar(leftColumn, listFrame, {
+        gap = 10,  -- 箭头与滑块间距 10px
         onScrollDelta = function(d)
             scrollOffset = scrollOffset + d * 3
             RenderRecipeButtons()
@@ -492,7 +477,7 @@ DFUI:NewMod("TradeSkill", 5, function()
         -- (selectedOverlay / hoverOverlay 已验证 atlas + ADD blend 模式可靠)
         local headerLeft = btn:CreateTexture(nil, "BACKGROUND")
         headerLeft:SetTexture(PROF_TEX .. "hdr_left.tga")  -- recipe-header-left 独立整图(atlas切片1.12不显示,改整图)
-        -- BLEND(去 ADD)：横条显素材本色深棕(≈23)，比 ADD 叠亮的(≈39)更深沉
+        headerLeft:SetBlendMode("ADD")  -- 暗横条 ADD 到暗背景→变亮，深背景上更醒目(vertexColor 不能>1 提亮，故用 ADD)
         headerLeft:SetWidth(14); headerLeft:SetHeight(20)
         headerLeft:SetPoint("LEFT", btn, "LEFT", 0, 0)
         headerLeft:Hide()
@@ -500,6 +485,7 @@ DFUI:NewMod("TradeSkill", 5, function()
 
         local headerRight = btn:CreateTexture(nil, "BACKGROUND")
         headerRight:SetTexture(PROF_TEX .. "hdr_right.tga")
+        headerRight:SetBlendMode("ADD")
         headerRight:SetWidth(14); headerRight:SetHeight(20)
         headerRight:SetPoint("RIGHT", btn, "RIGHT", 0, 0)
         headerRight:Hide()
@@ -507,6 +493,7 @@ DFUI:NewMod("TradeSkill", 5, function()
 
         local headerMid = btn:CreateTexture(nil, "BACKGROUND")
         headerMid:SetTexture(PROF_TEX .. "hdr_mid.tga")
+        headerMid:SetBlendMode("ADD")
         headerMid:SetPoint("TOPLEFT", headerLeft, "TOPRIGHT", 0, 0)
         headerMid:SetPoint("BOTTOMRIGHT", headerRight, "BOTTOMLEFT", 0, 0)
         headerMid:Hide()
@@ -1370,8 +1357,28 @@ DFUI:NewMod("TradeSkill", 5, function()
             detailCooldown:Hide()
         end
 
-        detailRequire:SetText("")
-        detailRequire:Hide()
+        -- 所需工具：TradeSkill 用 GetTradeSkillTools(铁匠锤/铁毡)、Craft 用 GetCraftSpellFocus(附魔台等)
+        -- 不赌返回格式(单逗号串 or 工具名+hasTool 多值)：取所有 string 返回拼接，跳过 bool
+        local toolStr
+        local toolFn = (currentMode == "tradeskill" and GetTradeSkillTools)
+                    or (currentMode == "craft" and GetCraftSpellFocus) or nil
+        if toolFn then
+            local res = {pcall(toolFn, selectedIndex)}
+            if res[1] then
+                local ts = {}
+                for ti = 2, table.getn(res) do
+                    if type(res[ti]) == "string" and res[ti] ~= "" then table.insert(ts, res[ti]) end
+                end
+                if table.getn(ts) > 0 then toolStr = table.concat(ts, ", ") end
+            end
+        end
+        if toolStr then
+            detailRequire:SetText("需要: " .. toolStr)
+            detailRequire:Show()
+        else
+            detailRequire:SetText("")
+            detailRequire:Hide()
+        end
 
         -- 训练点数已挪到按钮左侧 trainingPointsText，这里隐藏避免重复
         detailPoints:SetText(""); detailPoints:Hide()

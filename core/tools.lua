@@ -589,7 +589,7 @@ function DFUI.CreateRetailScrollbar(parent, listFrame, opts)
     local arrowH    = (opts.arrowH or 16) * scale -- 箭头按钮高
     local trackW    = 12 * scale                  -- 轨道/滑块宽
     local inset     = 3 * scale                   -- 轨道左右内缩
-    local gap       = 2 * scale                   -- 箭头与轨道间距
+    local gap       = (opts.gap or 2) * scale     -- 箭头与轨道间距（opts.gap 可调；越大滑块越短、离箭头越远）
     local thumbMinH = 30 * scale                  -- 滑块最小高
     local xOff      = opts.xOffset or width        -- 默认贴 listFrame 右外侧
     local onDelta = opts.onScrollDelta or function() end
@@ -597,8 +597,9 @@ function DFUI.CreateRetailScrollbar(parent, listFrame, opts)
 
     local sb = CreateFrame("Frame", nil, parent)
     sb:SetWidth(width)
-    sb:SetPoint("TOPRIGHT",    listFrame, "TOPRIGHT",    xOff, 0)
-    sb:SetPoint("BOTTOMRIGHT", listFrame, "BOTTOMRIGHT", xOff, 0)
+    -- topInset/botInset：sb 上下端各向内缩，让箭头对齐 listFrame 内容区(避开列头/底部留白)；固定 px 不随 scale
+    sb:SetPoint("TOPRIGHT",    listFrame, "TOPRIGHT",    xOff, -(opts.topInset or 0))
+    sb:SetPoint("BOTTOMRIGHT", listFrame, "BOTTOMRIGHT", xOff,  (opts.botInset or 0))
     sb:SetFrameLevel(parent:GetFrameLevel() + 5)
 
     -- 箭头按钮：Button 原生纹理（normal/pushed/highlight/disabled 各一张整图，highlight 自动叠加）
@@ -740,6 +741,32 @@ function DFUI.CreateRetailScrollbar(parent, listFrame, opts)
     end
 
     return sb
+end
+
+-- DF minimal 风滚动条整图素材集 (media\tex\interface\buttons\minimal-sb-*，全 retail 精确坐标抠图)
+local MINIMAL_SB_TEXTURES = {
+    up       = RSB_TEX .. "minimal-sb-arrow-up",
+    down     = RSB_TEX .. "minimal-sb-arrow-down",
+    thumb    = RSB_TEX .. "minimal-sb-thumb",
+    thumbTop = RSB_TEX .. "minimal-sb-thumb-top",
+    thumbBot = RSB_TEX .. "minimal-sb-thumb-bot",
+    trackTop = RSB_TEX .. "minimal-sb-track-top",
+    trackBot = RSB_TEX .. "minimal-sb-track-bot",
+    trackMid = RSB_TEX .. "minimal-sb-track-mid",
+}
+-- DFUI.CreateMinimalScrollbar — DF minimal 风滚动条(整图皮肤预设)，薄封装 CreateRetailScrollbar
+-- 其他面板复用一行: DFUI.CreateMinimalScrollbar(parent, listFrame, { onScrollDelta=fn, onScrollAbs=fn })
+--   onScrollDelta(±1): 点上/下箭头   onScrollAbs(0..1): 拖 thumb
+--   可选覆盖: width(默22)/arrowH(默12)/arrowTopPad(默5)/arrowBotPad(默5)/scale
+--   返回 sb；列表刷新末尾点调用 sb.UpdateThumb(scrollOff, maxOff, visRows, totalRows)
+function DFUI.CreateMinimalScrollbar(parent, listFrame, opts)
+    opts = opts or {}
+    if opts.textures    == nil then opts.textures    = MINIMAL_SB_TEXTURES end
+    if opts.width       == nil then opts.width       = 22 end
+    if opts.arrowH      == nil then opts.arrowH      = 12 end
+    if opts.arrowTopPad == nil then opts.arrowTopPad = 5  end
+    if opts.arrowBotPad == nil then opts.arrowBotPad = 5  end
+    return DFUI.CreateRetailScrollbar(parent, listFrame, opts)
 end
 
 -- 获取单位真实血量

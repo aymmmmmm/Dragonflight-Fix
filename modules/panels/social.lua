@@ -585,10 +585,9 @@ DFUI:NewMod("Social", 5, function()
         goldArrow(getglobal(sbName.."ScrollDownButton"), false)
     end
     local scrollBarNames = {
-        "GuildListScrollFrameScrollBar",
         "FriendsFrameFriendsScrollFrameScrollBar",
         "FriendsFrameIgnoreScrollFrameScrollBar",
-        "WhoListScrollFrameScrollBar",
+        -- Guild/Who 滚动条改用 DFUI.CreateMinimalScrollbar 接管，箭头不染金、改隐藏(见下方)
     }
     for i = 1, table.getn(scrollBarNames) do
         local nm = scrollBarNames[i]
@@ -601,18 +600,20 @@ DFUI:NewMod("Social", 5, function()
         end
     end
 
-    -- who 全自制：列表挂 whoInset，上下箭头（vanilla 默认锚 WhoListScrollFrame 右、超出 whoInset 外侧）
-    -- 重锚到 whoInset 右内侧、再内 1px；hook scrollbar OnShow 防 vanilla 布局重置
+    -- who 全自制：列表挂 whoInset，滚动条改用 DFUI.CreateMinimalScrollbar(下方)。
+    -- vanilla 箭头 alpha0+EnableMouse(false) 保活隐藏(不 Hide frame，避免连带 Hide 自制列表)，hook OnShow 维持隐藏
     if whoInset then
-        local function reanchorWhoArrows()
+        local function hideWhoArrows()
+            local sb = getglobal("WhoListScrollFrameScrollBar")
+            if sb then sb:SetAlpha(0); sb:EnableMouse(false) end  -- 整条 vanilla scrollbar(箭头+轨道+thumb)隐藏，去除残留滑块
             local up   = getglobal("WhoListScrollFrameScrollBarScrollUpButton")
             local down = getglobal("WhoListScrollFrameScrollBarScrollDownButton")
-            if up   then up:ClearAllPoints();   up:SetPoint("TOPRIGHT",     whoInset, "TOPRIGHT",     1, -1) end
-            if down then down:ClearAllPoints(); down:SetPoint("BOTTOMRIGHT", whoInset, "BOTTOMRIGHT", 1,  1) end
+            if up   then up:EnableMouse(false)   end
+            if down then down:EnableMouse(false) end
         end
-        reanchorWhoArrows()
+        hideWhoArrows()
         local whoSB = getglobal("WhoListScrollFrameScrollBar")
-        if whoSB then HookScript(whoSB, "OnShow", reanchorWhoArrows) end
+        if whoSB then HookScript(whoSB, "OnShow", hideWhoArrows) end
     end
 
     -- 好友/屏蔽列表滚动箭头同样重锚到 friendsInset 右内侧（与查找 who 完全相同的偏移）
@@ -632,17 +633,19 @@ DFUI:NewMod("Social", 5, function()
         end
     end
 
-    -- 公会列表滚动箭头同样重锚到 guildInset 右内侧（与查找/好友相同偏移）
+    -- 公会列表滚动条改用 DFUI.CreateMinimalScrollbar(下方)；vanilla 箭头 alpha0+EnableMouse(false) 保活隐藏
     if guildInset then
-        local function reanchorGuildArrows()
+        local function hideGuildArrows()
+            local sb = getglobal("GuildListScrollFrameScrollBar")
+            if sb then sb:SetAlpha(0); sb:EnableMouse(false) end  -- 整条 vanilla scrollbar(箭头+轨道+thumb)隐藏，去除残留滑块
             local up   = getglobal("GuildListScrollFrameScrollBarScrollUpButton")
             local down = getglobal("GuildListScrollFrameScrollBarScrollDownButton")
-            if up   then up:ClearAllPoints();   up:SetPoint("TOPRIGHT",     guildInset, "TOPRIGHT",     1, -1) end
-            if down then down:ClearAllPoints(); down:SetPoint("BOTTOMRIGHT", guildInset, "BOTTOMRIGHT", 1,  1) end
+            if up   then up:EnableMouse(false)   end
+            if down then down:EnableMouse(false) end
         end
-        reanchorGuildArrows()
+        hideGuildArrows()
         local guildSB = getglobal("GuildListScrollFrameScrollBar")
-        if guildSB then HookScript(guildSB, "OnShow", reanchorGuildArrows) end
+        if guildSB then HookScript(guildSB, "OnShow", hideGuildArrows) end
         -- vanilla 多入口(成员点击 GuildMemberDetailFrame:Show / 箭头滚动 / 拖动滚动条 …)都会反复把
         -- 区域列头 H2 宽度改回 vanilla(~105) → 右锚下左缘左移。逐个 hook 堵不完，改用 guildInset
         -- OnUpdate 每帧轻检测：H2 一旦被改宽(>80)就把 width+位置+文字对齐三件套设回。偏移最多 1 帧、肉眼无感。
@@ -1220,6 +1223,7 @@ DFUI:NewMod("Social", 5, function()
             -- visibleRowsWho/whoOffset 提到行创建前声明，供 onWheel 闭包捕获
             local visibleRowsWho = 0
             local whoOffset = 0
+            local whoScrollbar  -- forward：sb 在 refreshWhoRows 后创建，refresh 末尾点调用 UpdateThumb
             for i = 1, WHO_ROWS do
                 DFUI.CreateSocialRow(whoInset, {
                     name       = "DFUI_WhoRow"..i,
@@ -1326,7 +1330,30 @@ DFUI:NewMod("Social", 5, function()
                     local h2fs = WhoFrameColumnHeader2:GetFontString()
                     if h2fs then h2fs:SetText(WHO_SORT_LABEL[whoSortType] or "地区") end
                 end
+                if whoScrollbar then whoScrollbar.UpdateThumb(whoOffset, maxOff, visibleRowsWho, numTotal) end
             end
+
+            -- DF minimal 滚动条：xOffset=0 锚 whoInset 内右侧(inset 已贴 customBg 右边、不能外凸)
+            whoScrollbar = DFUI.CreateMinimalScrollbar(whoInset, whoInset, {
+                xOffset = -3,  -- 整体左移 3px
+                scale   = 0.8,  -- 整体缩小 20%(width/箭头/轨道/thumb 同比)
+                arrowTopPad = 0, arrowBotPad = 0,
+                topInset = 8, botInset = 8,           -- 上下箭头各离 inset 8px(同公会)
+                gap = 7,                              -- 箭头与滑块间距 2→7(+5)：滑块缩短、离箭头变远
+                onScrollDelta = function(d)
+                    local numTotal = (GetNumWhoResults and GetNumWhoResults()) or 0
+                    local maxOff = math.max(0, numTotal - visibleRowsWho)
+                    whoOffset = whoOffset + d
+                    if whoOffset < 0 then whoOffset = 0 elseif whoOffset > maxOff then whoOffset = maxOff end
+                    refreshWhoRows()
+                end,
+                onScrollAbs = function(r)
+                    local numTotal = (GetNumWhoResults and GetNumWhoResults()) or 0
+                    local maxOff = math.max(0, numTotal - visibleRowsWho)
+                    whoOffset = math.floor(r * maxOff + 0.5)
+                    refreshWhoRows()
+                end,
+            })
 
             -- vanilla WhoList_Update 会 Show/SetText 原生 WhoFrameButton；必须让 DFUI 的
             -- hideVanillaWhoBtn 在它之后收尾，否则有查询时 vanilla 残留文字会盖住自制列表
@@ -1549,6 +1576,7 @@ DFUI:NewMod("Social", 5, function()
             local guildOffset = 0
             local guildSearchText = ""
             local guildNumShown = 0  -- 过滤后成员数（refreshGuildRows 维护，onWheel 算 maxOff）
+            local guildScrollbar  -- forward：sb 在 refreshGuildRows 后创建，refresh 末尾点调用 UpdateThumb
             local guildShowOffline = true  -- 显示离线成员开关（默认显示；接管 vanilla GuildFrameLFGButton）
             local updateGuildButtons  -- forward decl：底部三按钮 enable 镜像，按钮创建后赋值
             -- 底部「成员 N  在线 M」统计（玩家状态那行右侧），refreshGuildRows 实时更新
@@ -1807,9 +1835,30 @@ DFUI:NewMod("Social", 5, function()
                 relayoutHdr(GuildFrameColumnHeader3, gMode and "官阶" or "等级")
                 applyGuildColWidths(gMode)
                 if updateGuildButtons then updateGuildButtons() end
+                if guildScrollbar then guildScrollbar.UpdateThumb(guildOffset, maxOff, visibleRowsGuild, guildNumShown) end
             end
 
             if hooksecurefunc then hooksecurefunc("GuildStatus_Update", refreshGuildRows) end
+
+            -- DF minimal 滚动条：xOffset=0 锚 guildInset 内右侧
+            guildScrollbar = DFUI.CreateMinimalScrollbar(guildInset, guildInset, {
+                xOffset = -3,  -- 整体左移 3px
+                scale   = 0.8,  -- 整体缩小 20%(width/箭头/轨道/thumb 同比)
+                arrowTopPad = 0, arrowBotPad = 0,
+                topInset = 8, botInset = 8,           -- 上下箭头各离 inset 8px
+                gap = 7,                              -- 箭头与滑块间距 2→7(+5)：滑块两端各让更多，滑块缩短、离箭头变远
+                onScrollDelta = function(d)
+                    local maxOff = math.max(0, guildNumShown - visibleRowsGuild)
+                    guildOffset = guildOffset + d
+                    if guildOffset < 0 then guildOffset = 0 elseif guildOffset > maxOff then guildOffset = maxOff end
+                    refreshGuildRows()
+                end,
+                onScrollAbs = function(r)
+                    local maxOff = math.max(0, guildNumShown - visibleRowsGuild)
+                    guildOffset = math.floor(r * maxOff + 0.5)
+                    refreshGuildRows()
+                end,
+            })
 
             -- 切 mode = vanilla 切换 GuildPlayerStatusFrame/GuildStatusFrame 显隐。
             -- deferOneFrame 延迟一帧：等 vanilla 把两 Frame 切换完成、IsShown 稳定后再读 mode 刷新。

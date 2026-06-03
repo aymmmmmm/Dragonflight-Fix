@@ -83,7 +83,7 @@ DFUI:NewMod("Character", 5, function()
         end
     end
 
-    -- 保留 vanilla 原生上下箭头（亮金本色），只隐藏轨道与 thumb
+    -- 隐藏 vanilla 滚动条视觉（箭头/轨道/thumb），保留 frame；视觉由 DFUI.CreateMinimalScrollbar 接管
     local function KeepArrowsHideTrack(sbName)
         local sb = getglobal(sbName)
         if not sb then return end
@@ -97,23 +97,14 @@ DFUI:NewMod("Character", 5, function()
         if bot and bot.SetTexture then bot:SetTexture(nil); bot:Hide() end
         local thumb = sb.GetThumbTexture and sb:GetThumbTexture()
         if thumb then thumb:SetTexture(nil) end
-        -- 上下按钮换成 ChatIcon 金色下拉箭头本色（与角色 tab 下拉箭头同款），不着色
-        local function goldArrow(btn, isUp)
+        -- 上下按钮隐藏（视觉改由 DFUI.CreateMinimalScrollbar 接管）；alpha0+EnableMouse(false) 保活，不 Hide frame
+        local function hideArrow(btn)
             if not btn then return end
             btn._dfScrollSkinned = true
-            btn:SetWidth(24); btn:SetHeight(24)
-            btn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
-            btn:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Down")
-            btn:SetDisabledTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Disabled")
-            btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
-            local L, R, T, B = 0, 1, 0, 1
-            if isUp then T, B = 1, 0 end   -- 上箭头垂直翻转
-            local function setc(t) if t then t:SetTexCoord(L, R, T, B) end end
-            setc(btn:GetNormalTexture());   setc(btn:GetPushedTexture())
-            setc(btn:GetDisabledTexture()); setc(btn:GetHighlightTexture())
+            btn:SetAlpha(0); btn:EnableMouse(false)
         end
-        goldArrow(getglobal(sbName.."ScrollUpButton"),   true)
-        goldArrow(getglobal(sbName.."ScrollDownButton"), false)
+        hideArrow(getglobal(sbName.."ScrollUpButton"))
+        hideArrow(getglobal(sbName.."ScrollDownButton"))
     end
 
     -- 再扫一遍 SkillListScrollFrame 自身的装饰纹理（残留竖条/边框/小箭头来源）
@@ -378,8 +369,8 @@ DFUI:NewMod("Character", 5, function()
     if HonorFrame then HonorFrame:SetFrameLevel(honorInset:GetFrameLevel() + 1) end
     if ArenaFrame then ArenaFrame:SetFrameLevel(honorInset:GetFrameLevel() + 1) end
 
-    -- 声望 tab / 技能 tab：保留 vanilla 原生上下箭头（亮金本色），隐藏轨道与 thumb
-    -- 鼠标滚轮仍能滚动列表（FauxScrollFrame 自带 OnMouseWheel）
+    -- 声望 tab / 技能 tab：隐藏 vanilla 滚动条，下方加 DFUI.CreateMinimalScrollbar 接管视觉
+    -- 鼠标滚轮仍能滚动列表（FauxScrollFrame 自带 OnMouseWheel，vanilla offset 链路保留）
     if ReputationListScrollFrame and ReputationListScrollFrameScrollBar then
         KeepArrowsHideTrack("ReputationListScrollFrameScrollBar")
         -- 持续压住轨道（引擎在 ScrollFrame OnShow 时会重 Show/恢复纹理），函数幂等
@@ -391,6 +382,65 @@ DFUI:NewMod("Character", 5, function()
         KeepArrowsHideTrack("SkillListScrollFrameScrollBar")
         HookScript(SkillListScrollFrameScrollBar, "OnShow", function()
             KeepArrowsHideTrack("SkillListScrollFrameScrollBar")
+        end)
+    end
+
+    -- DF minimal 滚动条（参数同社交）。驱动/读取 vanilla offset 全走 scrollbar 的 Slider API
+    -- (GetMinMaxValues/GetValue/SetValue)，**绝不 hook** SkillFrame_UpdateSkills/ReputationFrame_Update
+    -- （它们含 FixSkillBarColors/进度条填充，往里塞东西会连累 → 上次破坏教训）；thumb 同步用独立节流 OnUpdate。
+    local repSB, skillSB
+    local function setFauxOffset(sbar, newOff, maxOff)
+        if newOff < 0 then newOff = 0 elseif newOff > maxOff then newOff = maxOff end
+        local lo, hi = sbar:GetMinMaxValues()
+        sbar:SetValue((maxOff > 0) and (lo + newOff / maxOff * (hi - lo)) or lo)
+    end
+    local function fauxOffsetOf(sbar, maxOff)  -- 从 scrollbar 像素值反推行 offset(不依赖 FauxScrollFrame_GetOffset)
+        local lo, hi = sbar:GetMinMaxValues()
+        if hi <= lo or maxOff <= 0 then return 0 end
+        local o = math.floor((sbar:GetValue() - lo) / (hi - lo) * maxOff + 0.5)
+        if o < 0 then return 0 elseif o > maxOff then return maxOff end
+        return o
+    end
+    if ReputationListScrollFrame and ReputationListScrollFrameScrollBar then
+        repSB = DFUI.CreateMinimalScrollbar(ReputationListScrollFrame, ReputationListScrollFrameScrollBar, {
+            xOffset = -3, scale = 0.8, arrowTopPad = 0, arrowBotPad = 0, topInset = 8, botInset = 8, gap = 7,
+            onScrollDelta = function(d)
+                local maxOff = math.max(0, GetNumFactions() - (NUM_FACTIONS_DISPLAYED or 15))
+                setFauxOffset(ReputationListScrollFrameScrollBar, fauxOffsetOf(ReputationListScrollFrameScrollBar, maxOff) + d, maxOff)
+            end,
+            onScrollAbs = function(r)
+                local maxOff = math.max(0, GetNumFactions() - (NUM_FACTIONS_DISPLAYED or 15))
+                setFauxOffset(ReputationListScrollFrameScrollBar, math.floor(r * maxOff + 0.5), maxOff)
+            end,
+        })
+    end
+    if SkillListScrollFrame and SkillListScrollFrameScrollBar then
+        skillSB = DFUI.CreateMinimalScrollbar(SkillListScrollFrame, SkillListScrollFrameScrollBar, {
+            xOffset = -3, scale = 0.8, arrowTopPad = 0, arrowBotPad = 0, topInset = 8, botInset = 8, gap = 7,
+            onScrollDelta = function(d)
+                local maxOff = math.max(0, GetNumSkillLines() - (SKILLS_TO_DISPLAY or 15))
+                setFauxOffset(SkillListScrollFrameScrollBar, fauxOffsetOf(SkillListScrollFrameScrollBar, maxOff) + d, maxOff)
+            end,
+            onScrollAbs = function(r)
+                local maxOff = math.max(0, GetNumSkillLines() - (SKILLS_TO_DISPLAY or 15))
+                setFauxOffset(SkillListScrollFrameScrollBar, math.floor(r * maxOff + 0.5), maxOff)
+            end,
+        })
+    end
+    if repSB or skillSB then  -- thumb 同步：独立节流 OnUpdate(0.1s)，读 scrollbar 反推 offset；不碰任何 vanilla update
+        local syncT = 0
+        CreateFrame("Frame"):SetScript("OnUpdate", function()
+            syncT = syncT + (arg1 or 0)
+            if syncT < 0.1 then return end
+            syncT = 0
+            if repSB and ReputationFrame and ReputationFrame:IsVisible() then
+                local total = GetNumFactions(); local m = math.max(0, total - (NUM_FACTIONS_DISPLAYED or 15))
+                repSB.UpdateThumb(fauxOffsetOf(ReputationListScrollFrameScrollBar, m), m, (NUM_FACTIONS_DISPLAYED or 15), total)
+            end
+            if skillSB and SkillFrame and SkillFrame:IsVisible() then
+                local total = GetNumSkillLines(); local m = math.max(0, total - (SKILLS_TO_DISPLAY or 15))
+                skillSB.UpdateThumb(fauxOffsetOf(SkillListScrollFrameScrollBar, m), m, (SKILLS_TO_DISPLAY or 15), total)
+            end
         end)
     end
 
