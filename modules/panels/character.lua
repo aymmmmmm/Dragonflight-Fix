@@ -329,11 +329,22 @@ DFUI:NewMod("Character", 5, function()
     CharacterFramePortrait:SetParent(customBg)
     CharacterFramePortrait:SetDrawLayer("BORDER", 0)
 
+    -- 模型区背后：DF 职业专属背景（retail UI-Character-Info-<Class>-BG，paperdollinfopart1/2.blp 抠出独立 POT 切片）
+    -- 9 个 vanilla 职业各一张 media\tex\character\classbg-<token>.tga（256x512 POT，内容 197x355 在左上角）
+    local CLASS_BG = {WARRIOR=1,PALADIN=1,HUNTER=1,ROGUE=1,PRIEST=1,SHAMAN=1,MAGE=1,WARLOCK=1,DRUID=1}
     local characterBg = customBg:CreateTexture(nil, "OVERLAY")
-    characterBg:SetTexture("Interface\\Buttons\\WHITE8X8")
+    local _, playerClassToken = UnitClass("player")
+    if playerClassToken and CLASS_BG[playerClassToken] then
+        characterBg:SetTexture(TEX .. "character\\classbg-" .. string.lower(playerClassToken) .. ".tga")
+        characterBg:SetTexCoord(0, 197/256, 0, 355/512)  -- 裁掉 POT 透明 padding，只显内容区
+        characterBg:SetVertexColor(1, 1, 1, 1)
+    else
+        -- 未知职业（DK/Monk/DH 等 retail 专属，1.12 不存在）→ 退回原暗底兜底
+        characterBg:SetTexture("Interface\\Buttons\\WHITE8X8")
+        characterBg:SetVertexColor(0, 0, 0, 0.3)
+    end
     characterBg:SetPoint("TOPLEFT", customBg, "TOPLEFT", 55, -60)
     characterBg:SetPoint("BOTTOMRIGHT", customBg, "BOTTOMRIGHT", -55, 60)
-    characterBg:SetVertexColor(0, 0, 0, 0.3)
     characterBg:Hide()
 
     local closeButton = DFUI.CreateRedButton(customBg, "close", function() HideUIPanel(CharacterFrame) end)

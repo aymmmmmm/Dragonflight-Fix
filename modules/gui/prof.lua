@@ -345,21 +345,48 @@ DFUI:NewMod("Gui-prof", 4, function()
         hint:SetTextColor(0.7, 0.7, 0.7)
         dialog.hint = hint
 
+        -- 输入区边框 + 暗底（同时充当点击聚焦捕捉器）
+        local inputBG = CreateFrame("Frame", nil, dialog)
+        inputBG:SetPoint("TOPLEFT", dialog, "TOPLEFT", 10, -56)
+        inputBG:SetPoint("BOTTOMRIGHT", dialog, "BOTTOMRIGHT", -10, 42)
+        inputBG:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        })
+        inputBG:SetBackdropColor(0, 0, 0, 0.6)
+        inputBG:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+        inputBG:EnableMouse(true)
+        inputBG:SetScript("OnMouseDown", function() dialog.editBox:SetFocus() end)
+        dialog.inputBG = inputBG
+
         local scrollFrame = CreateFrame("ScrollFrame", "DFUI_ShareScrollFrame", dialog, "UIPanelScrollFrameTemplate")
-        scrollFrame:SetPoint("TOPLEFT", dialog, "TOPLEFT", 14, -60)
-        scrollFrame:SetPoint("BOTTOMRIGHT", dialog, "BOTTOMRIGHT", -32, 50)
+        scrollFrame:SetPoint("TOPLEFT", inputBG, "TOPLEFT", 8, -8)
+        scrollFrame:SetPoint("BOTTOMRIGHT", inputBG, "BOTTOMRIGHT", -28, 8)
+        scrollFrame:SetFrameLevel(inputBG:GetFrameLevel() + 1)
+        scrollFrame:EnableMouse(true)
+        scrollFrame:SetScript("OnMouseDown", function() dialog.editBox:SetFocus() end)
 
         local editBox = CreateFrame("EditBox", "DFUI_ShareEditBox", scrollFrame)
-        editBox:SetWidth(460)
+        editBox:SetWidth(450)
         editBox:SetHeight(210)
         editBox:SetMultiLine(true)
         editBox:SetAutoFocus(false)
         editBox:SetFont(Setup.font .. "BigNoodleTitling.ttf", DFUI.tools.ScaledSize(11), "OUTLINE")
         editBox:SetTextColor(0.9, 0.9, 0.9)
+        editBox:SetTextInsets(4, 4, 4, 4)
         editBox:SetMaxLetters(99999)
         editBox:SetScript("OnEscapePressed", function() this:ClearFocus() end)
         editBox:SetScript("OnTextChanged", function()
             scrollFrame:UpdateScrollChildRect()
+        end)
+        -- 聚焦时金色高亮边框，作为鼠标输入提示
+        editBox:SetScript("OnEditFocusGained", function()
+            inputBG:SetBackdropBorderColor(1, 0.82, 0, 1)
+        end)
+        editBox:SetScript("OnEditFocusLost", function()
+            inputBG:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
         end)
         scrollFrame:SetScrollChild(editBox)
         dialog.editBox = editBox
@@ -435,13 +462,13 @@ DFUI:NewMod("Gui-prof", 4, function()
 
         dialog.title:SetText("导出配置: " .. curProf)
         dialog.hint:SetText("Ctrl+A 全选, Ctrl+C 复制, 粘贴到其他角色的导入框")
-        dialog.editBox:SetText(exported)
-        dialog.editBox:SetFocus()
-        dialog.editBox:HighlightText(0, string.len(exported))
         dialog.importBtn:Hide()
         dialog.status:SetTextColor(0.5, 1, 0.5)
         dialog.status:SetText("共 " .. string.len(exported) .. " 字符")
+        dialog.editBox:SetText(exported)
         dialog:Show()
+        dialog.editBox:SetFocus()
+        dialog.editBox:HighlightText(0, string.len(exported))
     end
 
     function Setup:ShowImportDialog()
@@ -451,10 +478,10 @@ DFUI:NewMod("Gui-prof", 4, function()
         dialog.title:SetText("导入配置")
         dialog.hint:SetText("Ctrl+V 粘贴配置字符串, 然后点击确认导入")
         dialog.editBox:SetText("")
-        dialog.editBox:SetFocus()
         dialog.importBtn:Show()
         dialog.status:SetText("")
         dialog:Show()
+        dialog.editBox:SetFocus()
     end
 
     --=================

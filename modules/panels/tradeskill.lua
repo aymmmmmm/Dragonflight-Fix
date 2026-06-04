@@ -57,6 +57,17 @@ local ATLAS_SIZE = {
 local LAYOUT = {
     PANEL_SCALE         = 0.85,  -- 主面板缩放比例
     DETAIL_DESC_WIDTH   = 460,   -- 详情区描述文本宽度（retail SchematicForm 标准）
+    -- 右侧详情区布局重构（固定分区 + 修对齐）
+    DETAIL_INFO_Y       = -93,   -- 第一条信息行 Y（detailFrame 顶下方；图标底-80 + 间距-13；锚 detailFrame 避免新增 upvalue）
+    DETAIL_LINE_GAP     = -11,   -- 信息竖链各行间距（cooldown→require→desc）
+    DETAIL_DESC_MAXH    = 100,   -- 描述可视高上限(≈5 行)，超长裁掉防侵入材料区
+    REAGENT_LABEL_X     = 28,    -- 材料区左边距（与 detailIconBtn 同 x）
+    REAGENT_LABEL_Y     = -250,  -- 材料标签固定 Y（detailFrame 内，不随描述漂移）
+    REAGENT_GRID_GAP_Y  = 8,     -- 材料标签→网格首行间距
+    REAGENT_ROW_PITCH   = 58,    -- 材料行距（slot 50 + 间距 8）
+    REAGENT_COL_PITCH   = 222,   -- 材料列距（3 列均衡分布于 detailFrame 内宽）
+    REAGENT_COL_X0      = 0,     -- 材料首列 x 偏移
+    REAGENT_SLOT_W      = 200,   -- 材料格容器宽（180→200，材料名留更多空间）
 }
 
 local ATLAS = {
@@ -611,7 +622,7 @@ DFUI:NewMod("TradeSkill", 5, function()
     -- 加 OUTLINE 因为浮在专业背景画上 (无暗底)
     local detailName = detailFrame:CreateFontString(nil, "OVERLAY")
     detailName:SetFont("Fonts\\FRIZQT__.TTF", 18)
-    detailName:SetPoint("LEFT", detailIconBtn, "RIGHT", 14, 17)
+    detailName:SetPoint("LEFT", detailIconBtn, "RIGHT", 14, 0)  -- LEFT-LEFT 中线对齐图标中点（去手调 +17）
     detailName:SetWidth(400)
     detailName:SetJustifyH("LEFT")
     detailName:SetTextColor(1.00, 0.82, 0.00)
@@ -636,14 +647,16 @@ DFUI:NewMod("TradeSkill", 5, function()
     -- detailCooldown / Require / Points: -3 间距统一, OUTLINE 保可读
     local detailCooldown = detailFrame:CreateFontString(nil, "OVERLAY")
     detailCooldown:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
-    detailCooldown:SetPoint("TOPLEFT", detailSubText, "BOTTOMLEFT", 0, -6)
+    detailCooldown:SetPoint("TOPLEFT", detailFrame, "TOPLEFT", LAYOUT.REAGENT_LABEL_X, LAYOUT.DETAIL_INFO_Y)  -- retail风:下沉图标下方左缘 x=28 对齐材料(锚 detailFrame)
     detailCooldown:SetWidth(400)
+    detailCooldown:SetJustifyH("LEFT")  -- 关键:SetWidth(400)后默认 CENTER 会把短文本居中右移,破坏与材料左对齐
     detailCooldown:SetTextColor(0.95, 0.90, 0.80)
 
     local detailRequire = detailFrame:CreateFontString(nil, "OVERLAY")
     detailRequire:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
     detailRequire:SetPoint("TOPLEFT", detailCooldown, "BOTTOMLEFT", 0, -6)
     detailRequire:SetWidth(400)
+    detailRequire:SetJustifyH("LEFT")  -- 同上:补左对齐,否则"需要:xxx"在 400px 框内居中
     detailRequire:SetTextColor(0.95, 0.90, 0.80)
 
     local detailPoints = detailFrame:CreateFontString(nil, "OVERLAY")
@@ -655,9 +668,11 @@ DFUI:NewMod("TradeSkill", 5, function()
     -- detailDesc (12pt OUTLINE, 宽度 460)
     local detailDesc = detailFrame:CreateFontString(nil, "OVERLAY")
     detailDesc:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
-    detailDesc:SetPoint("TOPLEFT", detailPoints, "BOTTOMLEFT", 0, -6)
+    detailDesc:SetPoint("TOPLEFT", detailRequire, "BOTTOMLEFT", 0, LAYOUT.DETAIL_LINE_GAP)  -- 跳过死字段 points
     detailDesc:SetWidth(LAYOUT.DETAIL_DESC_WIDTH)
+    detailDesc:SetHeight(LAYOUT.DETAIL_DESC_MAXH)  -- 限高防长描述侵入固定材料区
     detailDesc:SetJustifyH("LEFT")
+    detailDesc:SetJustifyV("TOP")
     detailDesc:SetTextColor(0.90, 0.86, 0.72)
 
     -- reagentLabel (retail Reagents container Label, OUTLINE 保浮在背景画上可读)
@@ -669,7 +684,7 @@ DFUI:NewMod("TradeSkill", 5, function()
     -- 材料格工厂 (retail ProfessionsReagentSlotBaseTemplate: 180×50 容器 + 39×39 按钮)
     local function CreateReagentSlot(parent)
         local slot = CreateFrame("Frame", nil, parent)
-        slot:SetWidth(180)
+        slot:SetWidth(LAYOUT.REAGENT_SLOT_W)  -- 180→200，材料名留更多横向空间
         slot:SetHeight(50)
 
         local iconFrame = CreateFrame("Button", nil, slot)
@@ -699,7 +714,7 @@ DFUI:NewMod("TradeSkill", 5, function()
         -- nameText (retail LEFT x=46 from slot LEFT, i.e. iconFrame RIGHT +7, 无 OUTLINE)
         local nameText = slot:CreateFontString(nil, "OVERLAY")
         nameText:SetFont("Fonts\\FRIZQT__.TTF", 16)
-        nameText:SetPoint("TOPLEFT", iconFrame, "TOPRIGHT", 7, 0)
+        nameText:SetPoint("LEFT", iconFrame, "RIGHT", 7, 6)  -- LEFT 锚=文字中线对齐图标中点；+6 给下方 count 让位
         nameText:SetPoint("RIGHT", slot, "RIGHT", -5, 0)
         nameText:SetJustifyH("LEFT")
         slot.nameText = nameText
@@ -1288,6 +1303,30 @@ DFUI:NewMod("TradeSkill", 5, function()
         end
         detailFrame:Show()
 
+        -- 描述：1.12 无 GetTradeSkillDescription(已实证 nil)，原生取不到时从产物/法术 tooltip 扫描兜底
+        -- 内联实现：只用全局 DFUI_Libs(非 upvalue) + 内部 local，避免新增 UpdateDetail upvalue(Lua5.0 limit=32)
+        if (not description or description == "") and DFUI_Libs and DFUI_Libs.libtipscan then
+            local scan = DFUI_Libs.libtipscan:GetScanner("DFUIProfDesc")
+            local filled
+            if currentMode == "tradeskill" then
+                filled = pcall(scan.SetTradeSkillItem, scan, selectedIndex)
+            else
+                filled = pcall(scan.SetCraftSpell, scan, selectedIndex)
+            end
+            if filled then
+                local parts = {}
+                local total = scan:NumLines() or 0
+                for li = 2, total do  -- 跳过第1行(产物名)
+                    local lt = scan:GetLine(li)
+                    -- 提取"使用"效果行(食物恢复/buff、药水效果);材料/属性行不含此前缀,自动跳过
+                    if lt and lt ~= "" and (string.find(lt, "使用:") or string.find(lt, "使用：") or string.find(lt, "Use:")) then
+                        table.insert(parts, lt)
+                    end
+                end
+                if table.getn(parts) > 0 then description = table.concat(parts, "\n") end
+            end
+        end
+
         detailIcon:SetTexture(texture or DEFAULT_ICON)
         detailName:SetText(name)
         detailSubText:SetText(""); detailSubText:Hide()
@@ -1351,29 +1390,26 @@ DFUI:NewMod("TradeSkill", 5, function()
             local h = math.floor(cooldown / 3600)
             local m = math.floor((cooldown - h * 3600) / 60)
             detailCooldown:SetText(h > 0 and ("冷却: " .. h .. "h " .. m .. "m") or ("冷却: " .. m .. "m"))
+            detailCooldown:SetTextColor(1, 0.1, 0.1)  -- 仅 CD 中才显示=当前不可制作, 红色
             detailCooldown:Show()
         else
             detailCooldown:SetText("")
             detailCooldown:Hide()
         end
 
-        -- 所需工具：TradeSkill 用 GetTradeSkillTools(铁匠锤/铁毡)、Craft 用 GetCraftSpellFocus(附魔台等)
-        -- 不赌返回格式(单逗号串 or 工具名+hasTool 多值)：取所有 string 返回拼接，跳过 bool
+        -- 所需工具/焦点：TradeSkill 用 GetTradeSkillTools(铁匠锤/铁毡)、Craft 用 GetCraftSpellFocus(附魔台等)
+        -- 复用 vanilla 原生 BuildColoredListString：接收多返回值(工具1,有无1,...)，
+        -- 缺失的工具内嵌红色码、满足的留空(继承下方 SetTextColor 暖色)，与 vanilla TradeSkillFrame 完全一致
         local toolStr
         local toolFn = (currentMode == "tradeskill" and GetTradeSkillTools)
                     or (currentMode == "craft" and GetCraftSpellFocus) or nil
-        if toolFn then
-            local res = {pcall(toolFn, selectedIndex)}
-            if res[1] then
-                local ts = {}
-                for ti = 2, table.getn(res) do
-                    if type(res[ti]) == "string" and res[ti] ~= "" then table.insert(ts, res[ti]) end
-                end
-                if table.getn(ts) > 0 then toolStr = table.concat(ts, ", ") end
-            end
+        if toolFn and BuildColoredListString then
+            local ok, s = pcall(function() return BuildColoredListString(toolFn(selectedIndex)) end)
+            if ok then toolStr = s end
         end
-        if toolStr then
+        if toolStr and toolStr ~= "" then
             detailRequire:SetText("需要: " .. toolStr)
+            detailRequire:SetTextColor(0.95, 0.90, 0.80)  -- 基底暖色; 缺失工具由 BuildColoredListString 内嵌红码自动覆盖
             detailRequire:Show()
         else
             detailRequire:SetText("")
@@ -1390,16 +1426,27 @@ DFUI:NewMod("TradeSkill", 5, function()
             detailDesc:SetText(""); detailDesc:Hide()
         end
 
-        -- 材料标签动态锚点 (跟随最末显示的文字行下方 18px, 避免与 desc 重叠)
-        -- 默认 anchor 为 detailName (detailSubText 当前是死字段总隐藏)
-        local anchor = detailName
-        if detailCooldown:IsShown() then anchor = detailCooldown end
-        if detailRequire:IsShown() then anchor = detailRequire end
-        if detailPoints:IsShown() then anchor = detailPoints end
-        if detailDesc:IsShown() then anchor = detailDesc end
-        -- anchor.x = detailIconBtn.RIGHT + 14 = 28+47+14 = 89, 目标 x = 28, offsetX = -61
+        -- 信息竖链运行时重排（retail 风）：名字留图标右侧；冷却/需要/描述下沉到图标下方左缘(x=28)，
+        -- 与「材料:」同一条竖线对齐。按可见性接力，第一条可见行锚图标底，其余接上一行 → 无空洞
+        local prevLine = nil
+        local function RelinkLine(fs)
+            if fs:IsShown() then
+                fs:ClearAllPoints()
+                if prevLine then
+                    fs:SetPoint("TOPLEFT", prevLine, "BOTTOMLEFT", 0, LAYOUT.DETAIL_LINE_GAP)
+                else
+                    -- 锚 detailFrame(已是 upvalue)而非 detailIconBtn，避免新增 UpdateDetail upvalue(Lua5.0 limit=32)
+                    fs:SetPoint("TOPLEFT", detailFrame, "TOPLEFT", LAYOUT.REAGENT_LABEL_X, LAYOUT.DETAIL_INFO_Y)
+                end
+                prevLine = fs
+            end
+        end
+        RelinkLine(detailCooldown); RelinkLine(detailRequire); RelinkLine(detailDesc)
+
+        -- 材料区固定分区：reagentLabel 钉死到 detailFrame 固定 Y，不随描述长短漂移
+        -- 越界由 detailDesc:SetHeight(DETAIL_DESC_MAXH) 限高防住（长描述被裁，不侵入材料网格）
         reagentLabel:ClearAllPoints()
-        reagentLabel:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -61, -50)  -- V15 -30→-50 reagent 区整体下移 20px
+        reagentLabel:SetPoint("TOPLEFT", detailFrame, "TOPLEFT", LAYOUT.REAGENT_LABEL_X, LAYOUT.REAGENT_LABEL_Y)
 
         numReagents = numReagents or 0
         if numReagents > 0 then reagentLabel:Show() else reagentLabel:Hide() end
@@ -1451,10 +1498,12 @@ DFUI:NewMod("TradeSkill", 5, function()
                     end
                     slot.reagentIndex = i
                     slot:ClearAllPoints()
-                    -- retail 网格: 3 列 × 3 行 (适配 detailFrame 717 宽), spacing 5px
+                    -- retail 网格: 3 列 × 3 行 (适配 detailFrame 717 宽)，列距/行距均衡见 LAYOUT
                     local col = math.mod(i - 1, 3)
                     local row = math.floor((i - 1) / 3)
-                    slot:SetPoint("TOPLEFT", reagentLabel, "BOTTOMLEFT", col * 200, -8 - row * 65)  -- V5 col 185→200 row 55→65 加大网格呼吸
+                    slot:SetPoint("TOPLEFT", reagentLabel, "BOTTOMLEFT",
+                        LAYOUT.REAGENT_COL_X0 + col * LAYOUT.REAGENT_COL_PITCH,
+                        -LAYOUT.REAGENT_GRID_GAP_Y - row * LAYOUT.REAGENT_ROW_PITCH)
                     slot:Show()
                 else
                     slot:Hide()
