@@ -46,39 +46,84 @@ DFUI:NewMod("Trade", 5, function()
 
     ---------------------------------------------------------------------------
     -- 4. 头像：锚各自首槽正上方（自动对齐两栏 = 参考图布局）
+    --    向上留足空间放金环 + 名字(右上) + 金币(右下)。
     --    不 reparent —— 保持 parent=TradeFrame，其 FrameLevel 高于 bg，
     --    整体压在 bg 金属边框(ARTWORK/OVERLAY)之上，避免被角/边盖住。
     ---------------------------------------------------------------------------
+    local PORTRAIT_SIZE = 50
+
+    -- 对齐参考图(交易.png)：头像靠左/中、金环顶边贴框顶（接近 vanilla 原 x=7/183）
+    TradeFramePlayerPortrait:SetWidth(PORTRAIT_SIZE)
+    TradeFramePlayerPortrait:SetHeight(PORTRAIT_SIZE)
     TradeFramePlayerPortrait:SetDrawLayer("BORDER", 0)
     TradeFramePlayerPortrait:ClearAllPoints()
-    TradeFramePlayerPortrait:SetPoint("BOTTOMLEFT", TradePlayerItem1, "TOPLEFT", -2, 6)
+    TradeFramePlayerPortrait:SetPoint("BOTTOMLEFT", TradePlayerItem1, "TOPLEFT", -12, 38)
 
+    TradeFrameRecipientPortrait:SetWidth(PORTRAIT_SIZE)
+    TradeFrameRecipientPortrait:SetHeight(PORTRAIT_SIZE)
     TradeFrameRecipientPortrait:SetDrawLayer("BORDER", 0)
     TradeFrameRecipientPortrait:ClearAllPoints()
-    TradeFrameRecipientPortrait:SetPoint("BOTTOMLEFT", TradeRecipientItem1, "TOPLEFT", -2, 6)
+    TradeFrameRecipientPortrait:SetPoint("BOTTOMLEFT", TradeRecipientItem1, "TOPLEFT", -12, 38)
 
     ---------------------------------------------------------------------------
-    -- 5. 名字：锚各自头像右侧
+    -- 5. 名字：锚各自头像右上（金币在头像正下方，名字在右上）
     ---------------------------------------------------------------------------
     TradeFramePlayerNameText:ClearAllPoints()
-    TradeFramePlayerNameText:SetPoint("LEFT", TradeFramePlayerPortrait, "RIGHT", 4, 2)
+    TradeFramePlayerNameText:SetPoint("TOPLEFT", TradeFramePlayerPortrait, "TOPRIGHT", 12, -2)
 
     TradeFrameRecipientNameText:ClearAllPoints()
-    TradeFrameRecipientNameText:SetPoint("LEFT", TradeFrameRecipientPortrait, "RIGHT", 4, 2)
+    TradeFrameRecipientNameText:SetPoint("TOPLEFT", TradeFrameRecipientPortrait, "TOPRIGHT", 12, -2)
 
     ---------------------------------------------------------------------------
-    -- 6. 标题"交易"（对齐拾取窗口 14pt 金色 OUTLINE 居中）
-    --    独立 titleHolder 提高 FrameLevel，确保显示在金属边框之上
+    -- 5b. 金币：左右各加 DF 凹底框（素材框），金币框叠其上 —— 视觉对称
+    --     左 TradePlayerInputMoneyFrame=输入格(永显)；右 TradeRecipientMoneyFrame
+    --     =SmallMoneyFrame(出钱才显)。框始终在 → 空着也对称；金币行为保持 vanilla。
+    --     复用 DFUI.CreateRetailInset(大理石底+边+角，已有 TGA，无新素材)。
+    --     -14：下移到金环底缘以下，避免环下半弧压住框（环比头像大 15px）。
+    ---------------------------------------------------------------------------
+    local MONEY_BOX_W, MONEY_BOX_H = 116, 24
+    local function CreateMoneyBox(portrait, moneyFrame)
+        if not moneyFrame then return end
+        local box = CreateFrame("Frame", nil, bg)
+        box:SetWidth(MONEY_BOX_W)
+        box:SetHeight(MONEY_BOX_H)
+        box:SetPoint("TOPLEFT", portrait, "BOTTOMLEFT", 8, -14)
+        box:SetFrameLevel(bg:GetFrameLevel() + 2)
+        DFUI.CreateRetailInset(box, { anchors = {0, 0, 0, 0}, followFrame = TradeFrame })
+        moneyFrame:ClearAllPoints()
+        moneyFrame:SetPoint("LEFT", box, "LEFT", 6, 0)
+        -- 金币框 parent 仍 TradeFrame（保 vanilla 金钱逻辑），抬帧层压在 inset 大理石底之上
+        if moneyFrame.SetFrameLevel then moneyFrame:SetFrameLevel(box:GetFrameLevel() + 8) end
+        return box
+    end
+    CreateMoneyBox(TradeFramePlayerPortrait,    TradePlayerInputMoneyFrame)
+    CreateMoneyBox(TradeFrameRecipientPortrait, TradeRecipientMoneyFrame)
+
+    ---------------------------------------------------------------------------
+    -- 6. 高层覆盖框 titleHolder（金环挂这层确保盖住头像方角；
+    --    参考图(交易.png)顶部无"交易"标题文字 → 已移除标题，仅保留载体框）
     ---------------------------------------------------------------------------
     local titleHolder = CreateFrame("Frame", nil, TradeFrame)
     titleHolder:SetAllPoints(TradeFrame)
     titleHolder:SetFrameLevel(TradeFrame:GetFrameLevel() + 5)
 
-    local title = titleHolder:CreateFontString(nil, "OVERLAY")
-    title:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
-    title:SetText("交易")
-    title:SetTextColor(0.96875, 0.8984375, 0.578125)
-    title:SetPoint("TOP", bg, "TOP", 0, -4)
+    ---------------------------------------------------------------------------
+    -- 6b. 头像金色圆环（DF retail playerframe portraitring-large 抠图整图）
+    --     绘制在 titleHolder(高 FrameLevel) 之上，盖住方形头像四角；
+    --     环略大于头像，内孔透出脸部，SetTexture 整张 + 居中（不切片）。
+    ---------------------------------------------------------------------------
+    local RING_TEX = TEX .. "unitframes\\df_portrait_ring.tga"
+    local RING_SIZE = 80
+    local function AddPortraitRing(portrait)
+        local ring = titleHolder:CreateTexture(nil, "OVERLAY")
+        ring:SetTexture(RING_TEX)
+        ring:SetWidth(RING_SIZE)
+        ring:SetHeight(RING_SIZE)
+        ring:SetPoint("CENTER", portrait, "CENTER", 0, 0)
+        return ring
+    end
+    AddPortraitRing(TradeFramePlayerPortrait)
+    AddPortraitRing(TradeFrameRecipientPortrait)
 
     ---------------------------------------------------------------------------
     -- 7. 关闭按钮（对齐拾取窗口 21x21 红钮）
