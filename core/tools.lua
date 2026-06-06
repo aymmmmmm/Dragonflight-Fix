@@ -512,6 +512,26 @@ function DFUI.CreateRetailInset(parent, opts)
 
     inset.edges = {top=top, bot=bot, left=left, right=right}
 
+    -- 可选上下内阴影渐变（凹陷立体感）；默认关闭，不影响现有调用
+    if opts.shade then
+        local sa = type(opts.shade) == "table" and opts.shade or {}
+        local aTop, aBot = sa.top or 0.55, sa.bot or 0.55
+        local shH = sa.height or 40
+        local shT = inset:CreateTexture(nil, "ARTWORK")
+        shT:SetTexture("Interface\\Buttons\\WHITE8X8")
+        shT:SetGradientAlpha("VERTICAL", 0,0,0,aTop, 0,0,0,0)
+        shT:SetPoint("TOPLEFT",  inset, "TOPLEFT",  eL, -eT)
+        shT:SetPoint("TOPRIGHT", inset, "TOPRIGHT", -eR, -eT)
+        shT:SetHeight(shH)
+        local shB = inset:CreateTexture(nil, "ARTWORK")
+        shB:SetTexture("Interface\\Buttons\\WHITE8X8")
+        shB:SetGradientAlpha("VERTICAL", 0,0,0,0, 0,0,0,aBot)
+        shB:SetPoint("BOTTOMLEFT",  inset, "BOTTOMLEFT",  eL, eB)
+        shB:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -eR, eB)
+        shB:SetHeight(shH)
+        inset.shade = {top=shT, bot=shB}
+    end
+
     -- 4 角（generalframeinsetborders atlas）
     local TEX_CORNER = RIT_TEX .. "interface\\generalframeinsetborders.tga"
     local function makeCorner(point, l, r, t, b)
