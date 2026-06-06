@@ -58,8 +58,8 @@ local LAYOUT = {
     PANEL_SCALE         = 0.85,  -- 主面板缩放比例
     DETAIL_DESC_WIDTH   = 460,   -- 详情区描述文本宽度（retail SchematicForm 标准）
     -- 右侧详情区布局重构（固定分区 + 修对齐）
-    DETAIL_INFO_Y       = -93,   -- 第一条信息行 Y（detailFrame 顶下方；图标底-80 + 间距-13；锚 detailFrame 避免新增 upvalue）
-    DETAIL_LINE_GAP     = -11,   -- 信息竖链各行间距（cooldown→require→desc）
+    DETAIL_INFO_Y       = -103,  -- 第一条信息行 Y（detailFrame 顶下方；锚 detailFrame 避免新增 upvalue）；整块下移 10px（原 -93）
+    DETAIL_LINE_GAP     = -16,   -- 信息竖链各行间距（cooldown→require→desc）；间距扩大 5px（原 -11）
     DETAIL_DESC_MAXH    = 100,   -- 描述可视高上限(≈5 行)，超长裁掉防侵入材料区
     REAGENT_LABEL_X     = 28,    -- 材料区左边距（与 detailIconBtn 同 x）
     REAGENT_LABEL_Y     = -250,  -- 材料标签固定 Y（detailFrame 内，不随描述漂移）
@@ -211,7 +211,7 @@ local DIFFICULTY_COLORS = {
     medium   = {1.00, 0.82, 0.00},   -- 金黄
     easy     = {0.40, 0.90, 0.40},   -- 亮绿
     trivial  = {0.75, 0.75, 0.75},   -- 银灰
-    header   = {0.98, 0.91, 0.58},   -- 暖金（header 分组色）
+    header   = {1.00, 0.82, 0.00},   -- 纯金（对齐参考图，与 medium 同值；左侧分类头/「全部」/header 行共用）
     none     = {0.40, 0.90, 0.40},   -- 亮绿（未学）
     used     = {0.75, 0.75, 0.75},   -- 银灰（已学，同 trivial）
     default  = {0.90, 0.86, 0.76},   -- 亮米色
@@ -625,7 +625,7 @@ DFUI:NewMod("TradeSkill", 5, function()
     detailName:SetPoint("LEFT", detailIconBtn, "RIGHT", 14, 0)  -- LEFT-LEFT 中线对齐图标中点（去手调 +17）
     detailName:SetWidth(400)
     detailName:SetJustifyH("LEFT")
-    detailName:SetTextColor(1.00, 0.82, 0.00)
+    detailName:SetTextColor(1.00, 1.00, 1.00)  -- 对齐参考图：配方标题白字（原金 1.0,0.82,0）
 
     -- detail ☆ 收藏指示 (retail OutputText 旁的 favorite 标记)
     local detailFavStar = detailFrame:CreateTexture(nil, "OVERLAY")
@@ -642,7 +642,7 @@ DFUI:NewMod("TradeSkill", 5, function()
     detailSubText:SetPoint("TOPLEFT", detailName, "BOTTOMLEFT", 0, -8)
     detailSubText:SetWidth(400)
     detailSubText:SetJustifyH("LEFT")
-    detailSubText:SetTextColor(0.98, 0.91, 0.58)
+    detailSubText:SetTextColor(1.00, 0.82, 0.00)  -- 对齐参考图：纯金（原暖金 0.98,0.91,0.58）
 
     -- detailCooldown / Require / Points: -3 间距统一, OUTLINE 保可读
     local detailCooldown = detailFrame:CreateFontString(nil, "OVERLAY")
@@ -650,14 +650,14 @@ DFUI:NewMod("TradeSkill", 5, function()
     detailCooldown:SetPoint("TOPLEFT", detailFrame, "TOPLEFT", LAYOUT.REAGENT_LABEL_X, LAYOUT.DETAIL_INFO_Y)  -- retail风:下沉图标下方左缘 x=28 对齐材料(锚 detailFrame)
     detailCooldown:SetWidth(400)
     detailCooldown:SetJustifyH("LEFT")  -- 关键:SetWidth(400)后默认 CENTER 会把短文本居中右移,破坏与材料左对齐
-    detailCooldown:SetTextColor(0.95, 0.90, 0.80)
+    detailCooldown:SetTextColor(1.00, 1.00, 1.00)  -- 默认基底白（CD 中由 L1393 红色覆盖作不可制作警示）
 
     local detailRequire = detailFrame:CreateFontString(nil, "OVERLAY")
     detailRequire:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
     detailRequire:SetPoint("TOPLEFT", detailCooldown, "BOTTOMLEFT", 0, -6)
     detailRequire:SetWidth(400)
     detailRequire:SetJustifyH("LEFT")  -- 同上:补左对齐,否则"需要:xxx"在 400px 框内居中
-    detailRequire:SetTextColor(0.95, 0.90, 0.80)
+    detailRequire:SetTextColor(1.00, 1.00, 1.00)  -- 需要:xxx 白字
 
     local detailPoints = detailFrame:CreateFontString(nil, "OVERLAY")
     detailPoints:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
@@ -673,13 +673,13 @@ DFUI:NewMod("TradeSkill", 5, function()
     detailDesc:SetHeight(LAYOUT.DETAIL_DESC_MAXH)  -- 限高防长描述侵入固定材料区
     detailDesc:SetJustifyH("LEFT")
     detailDesc:SetJustifyV("TOP")
-    detailDesc:SetTextColor(0.90, 0.86, 0.72)
+    detailDesc:SetTextColor(1.00, 1.00, 1.00)  -- 描述白字
 
     -- reagentLabel (retail Reagents container Label, OUTLINE 保浮在背景画上可读)
     local reagentLabel = detailFrame:CreateFontString(nil, "OVERLAY")
     reagentLabel:SetFont("Fonts\\FRIZQT__.TTF", 17)
     reagentLabel:SetText("材料:")
-    reagentLabel:SetTextColor(0.98, 0.91, 0.58)
+    reagentLabel:SetTextColor(1.00, 0.82, 0.00)  -- 对齐参考图：「材料:」纯金（原暖金 0.98,0.91,0.58）
 
     -- 材料格工厂 (retail ProfessionsReagentSlotBaseTemplate: 180×50 容器 + 39×39 按钮)
     local function CreateReagentSlot(parent)
@@ -1409,7 +1409,7 @@ DFUI:NewMod("TradeSkill", 5, function()
         end
         if toolStr and toolStr ~= "" then
             detailRequire:SetText("需要: " .. toolStr)
-            detailRequire:SetTextColor(0.95, 0.90, 0.80)  -- 基底暖色; 缺失工具由 BuildColoredListString 内嵌红码自动覆盖
+            detailRequire:SetTextColor(1.00, 1.00, 1.00)  -- 基底白字; 缺失工具由 BuildColoredListString 内嵌红码自动覆盖
             detailRequire:Show()
         else
             detailRequire:SetText("")
@@ -1466,8 +1466,8 @@ DFUI:NewMod("TradeSkill", 5, function()
                     pCount = pCount or 0
                     slot.countText:SetText("(" .. pCount .. "/" .. rCount .. ")")
                     local enough = pCount >= rCount
-                    local r, g, b = 0.95, 0.90, 0.78
-                    if not enough then r, g, b = 1.00, 0.30, 0.30 end
+                    local r, g, b = 1.00, 1.00, 1.00               -- 足料白字
+                    if not enough then r, g, b = 0.66, 0.66, 0.66 end  -- 缺料灰色（对齐参考图，实测 ~168,168,168）
                     slot.nameText:SetTextColor(r, g, b)
                     slot.countText:SetTextColor(r, g, b)
                     -- P1-D2 v4: 优先从 itemLink 颜色头解析 rarity（验证 OK：颜色头提取稳定）
