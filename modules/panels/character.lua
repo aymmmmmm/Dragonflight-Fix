@@ -218,6 +218,26 @@ DFUI:NewMod("Character", 5, function()
     -- 荣誉/竞技场：隐藏暴雪纹理
     local function StripHonorAndArena()
         HideBlizzardTextures(HonorFrame)
+        -- 重贴荣誉槽位底图：这四张是 Turtle 自带的原生 1.12 BLP（在 patch.MPQ），
+        -- 被 HideBlizzardTextures 连同 General 底一起隐藏了。数据 FontString/子 Frame
+        -- 本就按这套底图的槽位锚定，故按原生偏移整图贴回即精确复刻（不动任何数据锚点）。
+        -- parent=HonorFrame、BACKGROUND 层 → 落在数据文本之下、honorInset(marble) 之上。
+        if HonorFrame and not HonorFrame._dfHonorSlots then
+            HonorFrame._dfHonorSlots = true
+            local slots = {
+                {"UI-Character-Honor-TopLeft",     256, 256,  22,  -65},
+                {"UI-Character-Honor-TopRight",    128, 256, 275,  -65},
+                {"UI-Character-Honor-BottomLeft",  256, 128,  22, -321},
+                {"UI-Character-Honor-BottomRight", 128, 128, 275, -321},
+            }
+            for i = 1, table.getn(slots) do
+                local s = slots[i]
+                local t = HonorFrame:CreateTexture(nil, "BACKGROUND")
+                t:SetTexture("Interface\\PaperDollInfoFrame\\" .. s[1])
+                t:SetWidth(s[2]); t:SetHeight(s[3])
+                t:SetPoint("TOPLEFT", HonorFrame, "TOPLEFT", s[4], s[5])
+            end
+        end
         if ArenaFrame then
             HideBlizzardTextures(ArenaFrame)
             -- 美化团队按钮
@@ -368,10 +388,10 @@ DFUI:NewMod("Character", 5, function()
     })
 
     -- 荣誉 Tab 凹陷容器（留出子 Tab 区，跟随 HonorFrame 和 ArenaFrame 任一显示）
-    -- 上边界 -55 → -85（向下挪 30px），给子 tab 区让出更多空间
+    -- 上边界 -55→-85→-73→-63→-53→-51（上移对齐荣誉边框上沿）；左 3→7→9 / 右 -6→-10
     local honorInset = DFUI.CreateRetailInset(customBg, {
         name         = "DFUI_HonorInset",
-        anchors      = {3, -85, -6, 6},
+        anchors      = {9, -51, -10, 6},
         followFrames = {HonorFrame, ArenaFrame},
     })
 
@@ -557,21 +577,21 @@ DFUI:NewMod("Character", 5, function()
         left:SetWidth(edgeW)
         left:SetHeight(h)
         left:SetPoint("TOPLEFT", tab, "TOPLEFT", -3, 0)
-        left:SetTexCoord(0.015625, 0.5625, 0.816406, 0.957031)
+        left:SetTexCoord(0.015625, 0.5625, 0.957031, 0.816406)  -- v 翻转：贴合 inset 上沿
 
         local right = tab:CreateTexture(nil, "BACKGROUND")
         right:SetTexture(tabsPath)
         right:SetWidth(edgeW)
         right:SetHeight(h)
         right:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 5, 0)
-        right:SetTexCoord(0.015625, 0.59375, 0.667969, 0.808594)
+        right:SetTexCoord(0.015625, 0.59375, 0.808594, 0.667969)  -- v 翻转
 
         local middle = tab:CreateTexture(nil, "BACKGROUND")
         middle:SetTexture(tabsPath)
         middle:SetHeight(h)
         middle:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
         middle:SetPoint("TOPRIGHT", right, "TOPLEFT", 0, 0)
-        middle:SetTexCoord(0, 0.015625, 0.175781, 0.316406)
+        middle:SetTexCoord(0, 0.015625, 0.316406, 0.175781)  -- v 翻转
 
         -- 选中态
         local selH = 30
@@ -580,7 +600,7 @@ DFUI:NewMod("Character", 5, function()
         leftSel:SetWidth(edgeW)
         leftSel:SetHeight(selH)
         leftSel:SetPoint("TOPLEFT", tab, "TOPLEFT", -1, 0)
-        leftSel:SetTexCoord(0.015625, 0.5625, 0.496094, 0.660156)
+        leftSel:SetTexCoord(0.015625, 0.5625, 0.660156, 0.496094)  -- v 翻转
         leftSel:Hide()
 
         local rightSel = tab:CreateTexture(nil, "BACKGROUND")
@@ -588,7 +608,7 @@ DFUI:NewMod("Character", 5, function()
         rightSel:SetWidth(edgeW)
         rightSel:SetHeight(selH)
         rightSel:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 6, 0)
-        rightSel:SetTexCoord(0.015625, 0.59375, 0.324219, 0.488281)
+        rightSel:SetTexCoord(0.015625, 0.59375, 0.488281, 0.324219)  -- v 翻转
         rightSel:Hide()
 
         local middleSel = tab:CreateTexture(nil, "BACKGROUND")
@@ -596,7 +616,7 @@ DFUI:NewMod("Character", 5, function()
         middleSel:SetHeight(selH)
         middleSel:SetPoint("TOPLEFT", leftSel, "TOPRIGHT", 0, 0)
         middleSel:SetPoint("TOPRIGHT", rightSel, "TOPLEFT", 0, 0)
-        middleSel:SetTexCoord(0, 0.015625, 0.00390625, 0.167969)
+        middleSel:SetTexCoord(0, 0.015625, 0.167969, 0.00390625)  -- v 翻转
         middleSel:Hide()
 
         -- 高亮（鼠标悬停）
@@ -605,7 +625,7 @@ DFUI:NewMod("Character", 5, function()
         hlLeft:SetWidth(edgeW)
         hlLeft:SetHeight(h)
         hlLeft:SetPoint("TOPLEFT", tab, "TOPLEFT", -3, 0)
-        hlLeft:SetTexCoord(0.015625, 0.5625, 0.816406, 0.957031)
+        hlLeft:SetTexCoord(0.015625, 0.5625, 0.957031, 0.816406)  -- v 翻转
         hlLeft:SetBlendMode("ADD")
         hlLeft:SetAlpha(0.4)
 
@@ -614,7 +634,7 @@ DFUI:NewMod("Character", 5, function()
         hlRight:SetWidth(edgeW)
         hlRight:SetHeight(h)
         hlRight:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 5, 0)
-        hlRight:SetTexCoord(0.015625, 0.59375, 0.667969, 0.808594)
+        hlRight:SetTexCoord(0.015625, 0.59375, 0.808594, 0.667969)  -- v 翻转
         hlRight:SetBlendMode("ADD")
         hlRight:SetAlpha(0.4)
 
@@ -623,13 +643,13 @@ DFUI:NewMod("Character", 5, function()
         hlMiddle:SetHeight(h)
         hlMiddle:SetPoint("TOPLEFT", hlLeft, "TOPRIGHT", 0, 0)
         hlMiddle:SetPoint("TOPRIGHT", hlRight, "TOPLEFT", 0, 0)
-        hlMiddle:SetTexCoord(0, 0.015625, 0.175781, 0.316406)
+        hlMiddle:SetTexCoord(0, 0.015625, 0.316406, 0.175781)  -- v 翻转
         hlMiddle:SetBlendMode("ADD")
         hlMiddle:SetAlpha(0.4)
 
         -- 文字
         local label = tab:CreateFontString(nil, "BORDER", "GameFontNormalSmall")
-        label:SetPoint("CENTER", tab, "CENTER", 0, 2)
+        label:SetPoint("CENTER", tab, "CENTER", 0, -2)
         label:SetText(text)
         tab._label = label
 
