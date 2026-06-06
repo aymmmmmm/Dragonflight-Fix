@@ -133,19 +133,22 @@ SlashCmdList["DFBAR"] = function()
         local st = f.GetStatusBarTexture and f:GetStatusBarTexture()
         local tw = st and st.GetWidth and st:GetWidth()
         local tl = st and st.GetDrawLayer and st:GetDrawLayer()
+        local ea = f.GetEffectiveAlpha and f:GetEffectiveAlpha()
         dfbar_msg("  " .. nm .. " shown=" .. tostring(f:IsShown())
             .. " val/max=" .. n2(val) .. "/" .. n2(mx)
             .. " sbColor=" .. n2(cr) .. "," .. n2(cg) .. "," .. n2(cb) .. "," .. n2(ca)
-            .. " texW=" .. n2(tw) .. " layer=" .. tostring(tl))
+            .. " texW=" .. n2(tw) .. " layer=" .. tostring(tl)
+            .. " fill=" .. dfbar_fillOf(f) .. " effA=" .. n2(ea))
     end
     dfbar_msg("|cffffcc00[DFBar]|r 技能/声望条:")
     dumpBar("SkillRankFrame2")
     dumpBar("ReputationBar2")
 
-    -- SkillRankFrame2 只列"可见(shown)"的纹理层 → 找盖在 fill 之上的遮挡源
-    local f2 = getglobal("SkillRankFrame2")
-    if f2 and f2.GetRegions then
-        dfbar_msg("|cffffcc00[DFBar]|r SkillRankFrame2 可见纹理层:")
+    -- 列一条 bar 的"可见(shown)"纹理层 → 找盖在 fill 之上的遮挡源 / 确认 fill 层在不在
+    local function dumpLayers(nm)
+        local f2 = getglobal(nm)
+        if not (f2 and f2.GetRegions) then return end
+        dfbar_msg("|cffffcc00[DFBar]|r " .. nm .. " 可见纹理层:")
         local rs = {f2:GetRegions()}
         for i = 1, table.getn(rs) do
             local r = rs[i]
@@ -158,4 +161,6 @@ SlashCmdList["DFBAR"] = function()
             end
         end
     end
+    dumpLayers("SkillRankFrame2")
+    dumpLayers("ReputationBar2")
 end
