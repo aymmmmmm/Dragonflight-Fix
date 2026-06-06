@@ -92,13 +92,13 @@ DFUI:NewMod("SpellBook", 5, function()
     if SpellBookPageText then SpellBookPageText:Hide() end
 
     local BUTTONS_PER_PAGE = 12          -- 单页 6 行 × 2 列
-    local COLUMN_SPACING = 225           -- retail spellbookframe.xml: 第二列 x=225
+    local COLUMN_SPACING = 190           -- 第二列 x=115+190=305（原225，整列左移35）
     local ROW_SPACING = 72               -- 容器 60 高 + 行间隙 12
 
     local spellData = {}
 
     -- 2. 创建 PaperDollFrame 外框
-    local spellbook = DFUI.CreatePaperDollFrame("DFUI_SpellBookFrame", UIParent, 550, 580, 1)
+    local spellbook = DFUI.CreatePaperDollFrame("DFUI_SpellBookFrame", UIParent, 527, 576, 1)  -- 外框收贴凹槽：宽 550→527(右收13)、高 580→576(下收4)
     spellbook:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
     spellbook:SetFrameStrata("MEDIUM")
     spellbook:SetFrameLevel(25)
@@ -109,19 +109,41 @@ DFUI:NewMod("SpellBook", 5, function()
     spellbook:SetScript("OnDragStop", function() spellbook:StopMovingOrSizing() end)
     spellbook:SetScale(.9)
 
-    -- 3. 页面纹理（retail DF 10.1 原版，两张拼接：Page1 主羊皮纸 + Page2 右侧条）
-    -- retail spellbookframe.xml:669-678 精确锚点
-    local mainPage = spellbook:CreateTexture(nil, "ARTWORK")
-    mainPage:SetTexture(TEX .. "panels\\spellbook_retail_page1.tga")
-    mainPage:SetPoint("TOPLEFT", spellbook, "TOPLEFT", 3, -25)  -- 7 → 3，往左拉伸 4
-    mainPage:SetWidth(514)  -- 510 + 4，左缘左移 4，右缘不动
-    mainPage:SetHeight(571)
+    -- 3a. 凹陷画框（DF retail 风格暗岩石凹槽）——固定尺寸精确包住等比羊皮纸（不拉伸、无缝）
+    -- inset 尺寸：游戏内实测逐步收紧贴齐羊皮纸可见纸边（纹理透明边裁掉）→ 504 × 513（右累计收13/下累计收17）
+    local inset = DFUI.CreateRetailInset(spellbook, {
+        name    = "DFUI_SpellBookInset",
+        bg      = "interface\\UI-Background-Rock.blp",  -- 必须 .blp，512² .tga 在 1.12 不加载会露黑
+    })
+    inset:ClearAllPoints()                               -- 覆盖工厂双锚，改固定尺寸 + TOPLEFT 固定锚
+    inset:SetPoint("TOPLEFT", spellbook, "TOPLEFT", 11, -50)  -- 左11/顶50 留白；固定锚不随缩框漂移（与按钮同坐标系）
+    inset:SetWidth(504)   -- 右内沿累计收 13px 贴羊皮纸可见右边
+    inset:SetHeight(513)  -- 下内沿累计收 17px 贴羊皮纸可见下边（底已离开金属）
+    inset:Show()                                         -- 法术书常驻显示，不走 followFrame
+    inset.bg:SetVertexColor(0.35, 0.32, 0.28)            -- 暗岩石凹槽底（与天赋/声望 inset 统一）
 
-    local rightStrip = spellbook:CreateTexture(nil, "ARTWORK")
+    -- 3b. 内容承载层：浮在 inset 之上，统一持有法术按钮/翻页/页码
+    --（1.12 SetFrameLevel 不递归子 frame，逐个抬层级会漏 iconBtn/cooldown/newGlow，故用统一高层 host）
+    local contentHost = CreateFrame("Frame", nil, spellbook)
+    contentHost:SetAllPoints(spellbook)
+    contentHost:SetFrameLevel(inset:GetFrameLevel() + 2)  -- inset=26 → 28，盖过凹槽底
+
+    -- 3c. 页面纹理（retail DF 10.1，两张拼接）——等比固定尺寸贴 inset 内沿，正好填满（不拉伸）
+    -- inset 边线 eL=eR=2 / eT=eB=3 → 内沿 = 513×524 = 羊皮纸 (472+41)×524
+    -- DrawLayer ARTWORK sublevel 2：盖住 inset.bg(BACKGROUND)，露出 edges(ARTWORK,0) + corners(OVERLAY)
+    local mainPage = inset:CreateTexture(nil, "ARTWORK")
+    mainPage:SetTexture(TEX .. "panels\\spellbook_retail_page1.tga")
+    mainPage:SetDrawLayer("ARTWORK", 2)
+    mainPage:SetPoint("TOPLEFT", inset, "TOPLEFT", 2, -3)  -- 贴左/顶内沿
+    mainPage:SetWidth(472)   -- 等比缩（514→472，比例 0.90 不变）
+    mainPage:SetHeight(524)  -- 571→524
+
+    local rightStrip = inset:CreateTexture(nil, "ARTWORK")
     rightStrip:SetTexture(TEX .. "panels\\spellbook_retail_page2.tga")
-    rightStrip:SetPoint("TOPLEFT", mainPage, "TOPRIGHT", 0, 0)  -- retail 精确：紧贴 page1 右侧
-    rightStrip:SetWidth(45)  -- 47 - 2
-    rightStrip:SetHeight(571)  -- 同步 mainPage 高度
+    rightStrip:SetDrawLayer("ARTWORK", 2)
+    rightStrip:SetPoint("TOPLEFT", mainPage, "TOPRIGHT", 0, 0)  -- 紧贴主页右
+    rightStrip:SetWidth(41)   -- 等比缩（45→41）
+    rightStrip:SetHeight(524)  -- 同步 mainPage
 
     -- 4. 职业图标 + 标题
     local classIcon = spellbook:CreateTexture(nil, "OVERLAY")
@@ -524,16 +546,16 @@ DFUI:NewMod("SpellBook", 5, function()
     end
 
     for i = 1, BUTTONS_PER_PAGE do
-        local btn = spellbook:CreateSpellButton(spellbook)
+        local btn = spellbook:CreateSpellButton(contentHost)
         local row = math.floor((i - 1) / 2)
         local col = math.mod(i - 1, 2)
-        -- 首格 TOPLEFT(115, -75)，COLUMN_SPACING=225 / ROW_SPACING=72 容纳 60 高容器
+        -- 首格 TOPLEFT(115, -75)，COLUMN_SPACING=190 / ROW_SPACING=72 容纳 60 高容器
         btn:SetPoint("TOPLEFT", spellbook, "TOPLEFT", 115 + col * COLUMN_SPACING, -75 - row * ROW_SPACING)
         table.insert(spellbook.spellButtons, btn)
     end
 
     -- 8. 翻页系统
-    local pageText = spellbook:CreateFontString(nil, "OVERLAY", "GameFontBlack")
+    local pageText = contentHost:CreateFontString(nil, "OVERLAY", "GameFontBlack")
     pageText:SetTextColor(0.25, 0.12, 0)
     pageText:SetJustifyH("RIGHT")
     pageText:SetPoint("BOTTOMRIGHT", spellbook, "BOTTOMRIGHT", -110, 38)  -- retail 精确
@@ -873,7 +895,7 @@ DFUI:NewMod("SpellBook", 5, function()
         end
     end
 
-    prevBtn = CreatePageButton(spellbook, "prev")
+    prevBtn = CreatePageButton(contentHost, "prev")
     prevBtn:SetPoint("BOTTOMRIGHT", spellbook, "BOTTOMRIGHT", -66, 26)  -- retail 精确
     prevBtn:SetScript("OnClick", function()
         if spellbook.currentPage > 1 then
@@ -882,7 +904,7 @@ DFUI:NewMod("SpellBook", 5, function()
         end
     end)
 
-    nextBtn = CreatePageButton(spellbook, "next")
+    nextBtn = CreatePageButton(contentHost, "next")
     nextBtn:SetPoint("BOTTOMRIGHT", spellbook, "BOTTOMRIGHT", -31, 26)  -- retail 精确
     nextBtn:SetScript("OnClick", function()
         if spellbook.currentPage < spellbook.maxPages then
@@ -893,7 +915,7 @@ DFUI:NewMod("SpellBook", 5, function()
 
     -- 复选框创建（OnClick 翻转 boolean → 刷新，不依赖 GetChecked）
     local showPassiveCheckbox = CreateCheckbox(spellbook, L.SHOW_PASSIVE)
-    showPassiveCheckbox:SetPoint("BOTTOMLEFT", spellbook, "BOTTOMLEFT", 15, 8)
+    showPassiveCheckbox:SetPoint("BOTTOMLEFT", spellbook, "BOTTOMLEFT", 15, 48)  -- 上移（8→48）
     showPassiveCheckbox:SetFrameLevel(spellbook:GetFrameLevel() + 5)
     showPassiveCheckbox:SetChecked(filterShowPassive)
     showPassiveCheckbox:SetScript("OnClick", function()
