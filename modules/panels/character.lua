@@ -138,8 +138,10 @@ DFUI:NewMod("Character", 5, function()
         end
     end
 
-    -- 清掉 SkillFrame 右侧另一个 ScrollFrame：SkillDetailScrollFrame（技能详情区）
-    -- pfUI 已验证（_dev/pfUI-master/skins/blizzard/character.lua:301-303）
+    -- SkillDetailScrollFrame（技能详情区）：换皮但保留功能
+    -- ⚠ 根因：vanilla 把详情元素(描述/成本/状态条/放弃按钮)挂在 SkillDetailScrollChildFrame 子，
+    -- 裸 Hide ChildFrame 会连带隐藏它们 → 选中技能无描述、专业无放弃按钮。
+    -- 仿 pfUI(character.lua:305-320)：先把功能元素 reparent 到 SkillDetailScrollFrame 再 Hide ChildFrame。
     if SkillDetailScrollFrame then
         local regions = {SkillDetailScrollFrame:GetRegions()}
         for i = 1, table.getn(regions) do
@@ -149,6 +151,12 @@ DFUI:NewMod("Character", 5, function()
             end
         end
         NukeScrollBar(SkillDetailScrollFrameScrollBar)
+        -- 功能元素移出 ChildFrame（下面 Hide ChildFrame 只去空背景、不伤功能）
+        if SkillDetailCostText then SkillDetailCostText:SetParent(SkillDetailScrollFrame) end
+        if SkillDetailDescriptionText then SkillDetailDescriptionText:SetParent(SkillDetailScrollFrame) end
+        if SkillDetailStatusBar then SkillDetailStatusBar:SetParent(SkillDetailScrollFrame) end
+        -- 放弃按钮保持在状态条(其原父)下，随状态条显隐(未选中→状态条隐藏→按钮跟着隐藏，不残留)
+        if SkillDetailStatusBarUnlearnButton then SkillDetailStatusBarUnlearnButton:SetParent(SkillDetailStatusBar) end
         if SkillDetailScrollChildFrame then
             SkillDetailScrollChildFrame:Hide()
         end
@@ -386,6 +394,33 @@ DFUI:NewMod("Character", 5, function()
         anchors     = {3, -65, -6, 6},
         followFrame = SkillFrame,
     })
+    -- 技能详情区独立凹陷框（下方第二个框）：与列表框分开，中间留缝 → 呈现两个框体
+    -- 相对锚自适应布局：上框(skillInset)底收到技能列表底(岩石往上、凹槽缩短)，下框接其下方
+    local skillDetailInset = DFUI.CreateRetailInset(customBg, {
+        name        = "DFUI_SkillDetailInset",
+        anchors     = {3, -65, -6, 6},   -- 占位，下面重锚
+        followFrame = SkillFrame,
+    })
+    -- 详情框取消 marble 填充，只留凹槽边框(凹陷描线+圆角)，透出主面板底
+    if skillDetailInset.bg then skillDetailInset.bg:Hide() end
+    local SKILL_FRAME_GAP = 8   -- 两框间缝(可调)
+    if SkillListScrollFrame and SkillDetailScrollFrame then
+        -- 上框：顶不变，底收到技能列表底（岩石上移、凹槽缩短）
+        skillInset:ClearAllPoints()
+        skillInset:SetPoint("TOPLEFT",  customBg, "TOPLEFT",  3, -65)
+        skillInset:SetPoint("TOPRIGHT", customBg, "TOPRIGHT", -6, -65)
+        skillInset:SetPoint("BOTTOM",   SkillListScrollFrame, "BOTTOM", 0, -4)
+        -- 下框：顶接上框下方留缝，底到 customBg 底
+        skillDetailInset:ClearAllPoints()
+        skillDetailInset:SetPoint("TOPLEFT",     skillInset, "BOTTOMLEFT",  0, -SKILL_FRAME_GAP)
+        skillDetailInset:SetPoint("TOPRIGHT",    skillInset, "BOTTOMRIGHT", 0, -SKILL_FRAME_GAP)
+        skillDetailInset:SetPoint("BOTTOMLEFT",  customBg, "BOTTOMLEFT",  3, 6)
+        skillDetailInset:SetPoint("BOTTOMRIGHT", customBg, "BOTTOMRIGHT", -6, 6)
+        -- 详情内容落进下框（vanilla 默认位置可能在上框内，双锚保证填进下框）
+        SkillDetailScrollFrame:ClearAllPoints()
+        SkillDetailScrollFrame:SetPoint("TOPLEFT",     skillDetailInset, "TOPLEFT",     12, -10)
+        SkillDetailScrollFrame:SetPoint("BOTTOMRIGHT", skillDetailInset, "BOTTOMRIGHT", -12, 10)
+    end
 
     -- 荣誉 Tab 凹陷容器（留出子 Tab 区，跟随 HonorFrame 和 ArenaFrame 任一显示）
     -- 上边界 -55→-85→-73→-63→-53→-51（上移对齐荣誉边框上沿）；左 3→7→9 / 右 -6→-10
@@ -478,7 +513,7 @@ DFUI:NewMod("Character", 5, function()
 
     -- 技能/声望条 fill 修复函数前向声明（定义在 :868/:845，但引用点 tab OnClick/OnShow 在其之前，
     -- Lua 5.0 不前向声明会解析成全局 nil）
-    local FixSkillBarColors, FixRepBarAlpha, EnsureBarTex
+    local FixSkillBarColors, FixRepBarAlpha, EnsureBarTex, FixSkillDetail
 
     -- 荣誉 Tab 状态 + 子 Tab 前向声明
     local honorTabActive = false
@@ -757,6 +792,7 @@ DFUI:NewMod("Character", 5, function()
         -- 兜底：重开面板若记住上次在技能/声望子页（不经 tab OnClick），低频重设纹理 + 染色
         if EnsureBarTex then EnsureBarTex() end
         if FixSkillBarColors and SkillFrame and SkillFrame:IsVisible() then FixSkillBarColors() end
+        if FixSkillDetail and SkillFrame and SkillFrame:IsVisible() then FixSkillDetail() end
         if FixRepBarAlpha and ReputationFrame and ReputationFrame:IsVisible() then FixRepBarAlpha() end
     end)
 
@@ -937,6 +973,7 @@ DFUI:NewMod("Character", 5, function()
             local b = getglobal("ReputationBar" .. i)
             if b and b.CreateTexture then EnsureCustomBar(b) end
         end
+        if SkillDetailStatusBar and SkillDetailStatusBar.CreateTexture then EnsureCustomBar(SkillDetailStatusBar) end
     end
 
     -- 声望进度条（ReputationBar1..N）：建三层；填充由 FixRepBarAlpha 驱动(读 vanilla value + 好感度色)
@@ -972,6 +1009,89 @@ DFUI:NewMod("Character", 5, function()
             if border and border.Hide then border:Hide() end
         end
     end
+    -- 技能详情区状态条：照上面列表条样式(barbg 凹槽全高盖 vanilla + barfill 全高，无金属边框/不绑定/不内缩)
+    if SkillDetailStatusBar and SkillDetailStatusBar.CreateTexture then
+        local SDS = SkillDetailStatusBar
+        -- 清旧自定义残留(金属边框/绑定/内缩)，让 EnsureCustomBar 重建全高(同列表条)
+        if SDS._dfFrame then for k = 1, 3 do if SDS._dfFrame[k] then SDS._dfFrame[k]:Hide() end end; SDS._dfFrame = nil end
+        if SDS._dfBg   then for k = 1, 3 do if SDS._dfBg[k]   then SDS._dfBg[k]:Hide()   end end; SDS._dfBg   = nil end
+        if SDS._dfFill then for k = 1, 3 do if SDS._dfFill[k] then SDS._dfFill[k]:Hide() end end; SDS._dfFill = nil end
+        SDS._dfBarW = nil
+        EnsureCustomBar(SDS)   -- 重建全高 barbg + barfill
+    end
+    -- 放弃/遗忘按钮（专业可放弃时 vanilla 按 isAbandonable 自动显隐）：轻换 DF 图标，不碰 OnClick(StaticPopup UNLEARN_SKILL)
+    if SkillDetailStatusBarUnlearnButton and not SkillDetailStatusBarUnlearnButton._dfSkinned then
+        local ub = SkillDetailStatusBarUnlearnButton
+        ub:SetWidth(20); ub:SetHeight(20)
+        if ub.SetHitRectInsets then ub:SetHitRectInsets(0, 0, 0, 0) end
+        ub:ClearAllPoints()
+        ub:SetPoint("LEFT", SkillDetailStatusBar, "RIGHT", 6, 0)  -- offset 待游戏内微调
+        if ub.SetNormalTexture then ub:SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up") end
+        if ub.SetPushedTexture then ub:SetPushedTexture(nil) end
+        if ub.SetHighlightTexture then
+            ub:SetHighlightTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+            local hl = ub.GetHighlightTexture and ub:GetHighlightTexture()
+            if hl and hl.SetBlendMode then hl:SetBlendMode("ADD") end
+        end
+        ub._dfSkinned = true
+    end
+    -- 详情区动态修正（post-hook 在 vanilla SkillDetailFrame_SetStatusBar 之后跑）：
+    -- vanilla 每次选中会重排状态条/文字锚，故加宽+白字+填充必须在其后覆盖。
+    -- ⚠ 绝不重设 Description/Cost 的相互 SetPoint —— vanilla 自己管(Description 锚 Cost)，
+    --    反向设会循环依赖报错(SkillFrame.lua:367 SkillDetailDescriptionText:SetPoint 踩过)。只改颜色/对齐。
+    function FixSkillDetail()  -- 赋值给前向声明的 local
+        local SDS = SkillDetailStatusBar
+        if SDS and SDS.GetValue then
+            -- 高度照上面列表条(取 SkillRankFrame1 高度)
+            if SkillRankFrame1 and SkillRankFrame1.GetHeight then
+                local h = SkillRankFrame1:GetHeight()
+                if h and h > 5 then SDS:SetHeight(h) end
+            end
+            local sr = {SDS:GetRegions()}   -- 状态条上文字(技能名/等级)转白
+            for i = 1, table.getn(sr) do
+                local r = sr[i]
+                if r.GetObjectType and r:GetObjectType() == "FontString" and r.SetTextColor then r:SetTextColor(1, 1, 1) end
+            end
+            UpdateCustomFill(SDS, DF_SKILL_BLUE[1], DF_SKILL_BLUE[2], DF_SKILL_BLUE[3])   -- 照列表条驱动填充
+            -- 填充高度比凹槽小 1px(顶内缩 1，露 1px barbg 凹槽边；仅详情条)
+            local fl = SDS._dfFill
+            if fl and fl[1] and fl[3] then
+                fl[1]:ClearAllPoints(); fl[1]:SetPoint("TOPLEFT", SDS, "TOPLEFT", 0, -1); fl[1]:SetPoint("BOTTOMLEFT", SDS, "BOTTOMLEFT", 0, 2); fl[1]:SetWidth(9)
+                fl[3]:ClearAllPoints(); fl[3]:SetPoint("TOPRIGHT", SDS, "TOPRIGHT", 0, -1); fl[3]:SetPoint("BOTTOMRIGHT", SDS, "BOTTOMRIGHT", 0, 2); fl[3]:SetWidth(9)
+            end
+        end
+        -- 文字：只改颜色/对齐，绝不碰相互 SetPoint(防 vanilla 循环依赖)
+        if SkillDetailDescriptionText then
+            if SkillDetailDescriptionText.SetJustifyH  then SkillDetailDescriptionText:SetJustifyH("LEFT") end
+            if SkillDetailDescriptionText.SetTextColor then SkillDetailDescriptionText:SetTextColor(1, 1, 1) end
+            -- 去描述文字首尾空格(vanilla 带前导空格→第一行缩进、wrap 第二行顶格不齐)
+            -- 含全角空格(中文客户端：GBK \161\161 / UTF8 \227\128\128，%s 匹配不到)，循环去净
+            if SkillDetailDescriptionText.GetText and SkillDetailDescriptionText.SetText then
+                local txt = SkillDetailDescriptionText:GetText()
+                if txt then
+                    local t = txt
+                    t = string.gsub(t, "|[cC]%x%x%x%x%x%x%x%x", "")  -- 去颜色起始码 |cAARRGGBB(byte1=124='|'，码后带前导空格)
+                    t = string.gsub(t, "|[rR]", "")                   -- 去颜色结束码 |r
+                    local go = true
+                    while go do
+                        go = false
+                        local r = string.gsub(t, "^%s+", "");  if r ~= t then t = r; go = true end
+                        r = string.gsub(t, "%s+$", "");         if r ~= t then t = r; go = true end
+                        if string.sub(t, 1, 2) == "\161\161" then t = string.sub(t, 3); go = true end
+                        if string.sub(t, 1, 3) == "\227\128\128" then t = string.sub(t, 4); go = true end
+                        local L = string.len(t)
+                        if L >= 2 and string.sub(t, L-1, L) == "\161\161" then t = string.sub(t, 1, L-2); go = true end
+                        if L >= 3 and string.sub(t, L-2, L) == "\227\128\128" then t = string.sub(t, 1, L-3); go = true end
+                    end
+                    if t ~= txt then SkillDetailDescriptionText:SetText(t) end
+                end
+            end
+        end
+        if SkillDetailCostText then
+            if SkillDetailCostText.SetJustifyH  then SkillDetailCostText:SetJustifyH("LEFT") end
+            if SkillDetailCostText.SetTextColor then SkillDetailCostText:SetTextColor(1, 1, 1) end
+        end
+    end
     -- 技能分组染色（post-hook 在 vanilla SkillFrame_UpdateSkills 之后）：灰组(护甲精通/职业技能/语言)银灰、其他 DF 蓝
     function FixSkillBarColors()  -- 赋值给前向声明的 local
         local headerOf, cur = {}, nil
@@ -1001,6 +1121,7 @@ DFUI:NewMod("Character", 5, function()
         setglobal("SkillFrame_UpdateSkills", function(a1, a2, a3, a4, a5, a6, a7, a8, a9)
             _origUpdateSkills(a1, a2, a3, a4, a5, a6, a7, a8, a9)
             FixSkillBarColors()
+            if FixSkillDetail then FixSkillDetail() end
         end)
     end
 
