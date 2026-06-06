@@ -373,6 +373,7 @@ DFUI:NewMod("Social", 5, function()
     skinSubTab(IgnoreFrameToggleTab2,  70, true)    -- 屏蔽模式: "屏蔽" 始终 selected
 
     -- 4 个 ToggleTab 完全在 inset 之上，底部紧贴 inset 顶（DF retail 标签栏样式）
+    -- 保持原左侧位置，整体缩小 10%（SetScale 等比缩纹理+文字，底左角锚点不动）
     FriendsFrameToggleTab1:ClearAllPoints()
     FriendsFrameToggleTab1:SetPoint("BOTTOMLEFT", friendsInset, "TOPLEFT", 8, 0)
     FriendsFrameToggleTab2:ClearAllPoints()
@@ -381,6 +382,10 @@ DFUI:NewMod("Social", 5, function()
     IgnoreFrameToggleTab1:SetPoint("BOTTOMLEFT", friendsInset, "TOPLEFT", 8, 0)
     IgnoreFrameToggleTab2:ClearAllPoints()
     IgnoreFrameToggleTab2:SetPoint("BOTTOMLEFT", IgnoreFrameToggleTab1, "BOTTOMRIGHT", 4, 0)
+    FriendsFrameToggleTab1:SetScale(0.81)
+    FriendsFrameToggleTab2:SetScale(0.81)
+    IgnoreFrameToggleTab1:SetScale(0.81)
+    IgnoreFrameToggleTab2:SetScale(0.81)
 
     -- 提到 inset 之上
     FriendsFrameToggleTab1:SetFrameLevel(customBg:GetFrameLevel() + 2)
