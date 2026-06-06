@@ -16,6 +16,16 @@ DFUI:NewMod("Talents", 1, function()
     local MAX_TALENT_POINTS = 51 -- 最大天赋点数（Turtle WoW）
     local Update                 -- 前向声明，Update 实际定义在后面
 
+    -- 统一字体：全部走 FRIZQT(patch-Z 映射 FZ 中文字体，中英文/数字都渲染)+阴影(对齐 vanilla 观感)，
+    -- 三档字号集中此处一改全改；替换原先 GameFontLarge/Normal/Small + 复选框 BigNoodleTitling 的混用
+    local TALENT_FONT_SIZE = { title = 15, label = 13, rank = 11 }
+    local function SetTalentFont(fs, role)
+        if not fs then return end
+        fs:SetFont('Fonts\\FRIZQT__.TTF', TALENT_FONT_SIZE[role] or 13)
+        fs:SetShadowColor(0, 0, 0, 1)
+        fs:SetShadowOffset(1, -1)
+    end
+
     local TALENT_BRANCH_TEXTURECOORDS = {
         up = {[1] = {0.12890625, 0.25390625, 0, 0.484375}, [-1] = {0.12890625, 0.25390625, 0.515625, 1.0}},
         down = {[1] = {0, 0.125, 0, 0.484375}, [-1] = {0, 0.125, 0.515625, 1.0}},
@@ -263,13 +273,55 @@ DFUI:NewMod("Talents", 1, function()
         frame:SetScript("OnMouseDown", function() this:StartMoving() end)
         frame:SetScript("OnMouseUp", function() this:StopMovingOrSizing() end)
 
-        -- DF 金属边框（同时作为唯一背景）
+        -- DF 金属边框（外层，恢复原样：同时作为唯一背景）
         local metalBg = DFUI.CreatePaperDollFrame("DFUI_TalentBg", frame, 1020, 600, 2)
         metalBg:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
         metalBg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
         metalBg:SetFrameLevel(frame:GetFrameLevel() - 1)
-        -- 岩石背景偏暗以衬托天赋树
-        metalBg.Bg:SetVertexColor(0.35, 0.30, 0.25)
+        -- 亮岩石（同制造面板，不染暗）
+        metalBg.Bg:SetVertexColor(1, 1, 1)
+
+        -- DF 通用九宫格内层装饰边框（uiframedragonflight，缩小，嵌在金属框内、围住内容区）
+        -- 8 块独立小整图，零大-atlas 切片；改大小调 NS_SCALE，改范围调 inner 锚点偏移
+        local ns = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\talents\\"
+        local NS_SCALE = 0.40                              -- 九宫格整体缩放（原角166/边30）
+        local C, E = 166 * NS_SCALE, 30 * NS_SCALE         -- 缩放后角尺寸 / 边厚
+        local CUV, HUV = 0.648438, 0.9375                  -- 角内容UV(166/256) / 边短轴UV(30/32)
+        local TR, TG, TB = 0.45, 0.42, 0.40                -- 对齐外层金属边框色(金属均色norm 0.171/0.160/0.150微暖;九宫格原0.392→染后≈金属);要更亮/暗整体等比缩放
+        local inner = CreateFrame("Frame", "DFUI_TalentInnerFrame", frame)
+        inner:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -21)
+        inner:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 3)
+        inner:SetFrameLevel(frame:GetFrameLevel())         -- 金属框之上、内容(treeFrame)之下
+
+        local function nsTex(file, ur, vb)
+            local t = inner:CreateTexture(nil, "ARTWORK")
+            t:SetTexture(ns .. file)
+            t:SetTexCoord(0, ur, 0, vb)
+            t:SetVertexColor(TR, TG, TB)
+            return t
+        end
+
+        -- 四角（各自图案已含朝向，统一取画布左上内容区）
+        local tl = nsTex("frame_corner_tl", CUV, CUV); tl:SetWidth(C); tl:SetHeight(C)
+        tl:SetPoint("TOPLEFT", inner, "TOPLEFT", 0, 0)
+        local tr = nsTex("frame_corner_tr", CUV, CUV); tr:SetWidth(C); tr:SetHeight(C)
+        tr:SetPoint("TOPRIGHT", inner, "TOPRIGHT", 0, 0)
+        local bl = nsTex("frame_corner_bl", CUV, CUV); bl:SetWidth(C); bl:SetHeight(C)
+        bl:SetPoint("BOTTOMLEFT", inner, "BOTTOMLEFT", 0, 0)
+        local br = nsTex("frame_corner_br", CUV, CUV); br:SetWidth(C); br:SetHeight(C)
+        br:SetPoint("BOTTOMRIGHT", inner, "BOTTOMRIGHT", 0, 0)
+
+        -- 上下边（角间横向拉伸，高 E）
+        local top = nsTex("frame_edge_top", 1, HUV); top:SetHeight(E)
+        top:SetPoint("TOPLEFT", tl, "TOPRIGHT", 0, 0); top:SetPoint("TOPRIGHT", tr, "TOPLEFT", 0, 0)
+        local bot = nsTex("frame_edge_bot", 1, HUV); bot:SetHeight(E)
+        bot:SetPoint("BOTTOMLEFT", bl, "BOTTOMRIGHT", 0, 0); bot:SetPoint("BOTTOMRIGHT", br, "BOTTOMLEFT", 0, 0)
+
+        -- 左右边（角间纵向拉伸，宽 E）
+        local lft = nsTex("frame_edge_left", HUV, 1); lft:SetWidth(E)
+        lft:SetPoint("TOPLEFT", tl, "BOTTOMLEFT", 0, 0); lft:SetPoint("BOTTOMLEFT", bl, "TOPLEFT", 0, 0)
+        local rgt = nsTex("frame_edge_right", HUV, 1); rgt:SetWidth(E)
+        rgt:SetPoint("TOPRIGHT", tr, "BOTTOMRIGHT", 0, 0); rgt:SetPoint("BOTTOMRIGHT", br, "TOPRIGHT", 0, 0)
 
         local closeButton = DFUI.CreateRedButton(frame, "close", function()
             pcall(PlaySound, "TalentScreenClose")
@@ -284,19 +336,23 @@ DFUI:NewMod("Talents", 1, function()
         local headerText = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
         headerText:SetText('天赋')
         headerText:SetPoint('TOP', metalBg, 'TOP', 0, -3)
+        SetTalentFont(headerText, 'title')
 
         local pointsLeft = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-        pointsLeft:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -10, 17)
+        pointsLeft:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -40, 17)
+        SetTalentFont(pointsLeft, 'label')
         frame.pointsLeft = pointsLeft
 
         -- 已学/规划模式切换 radio
         local learnedCB = DFUI.tools.CreateIndiCheckbox(frame, nil, '已学')
         learnedCB:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', 150, 17)
         learnedCB:SetChecked(true)
+        SetTalentFont(learnedCB.label, 'label')
 
         local plannedCB = DFUI.tools.CreateIndiCheckbox(frame, nil, '规划')
         plannedCB:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', 260, 17)
         plannedCB:SetChecked(false)
+        SetTalentFont(plannedCB.label, 'label')
         plannedCB.label:SetTextColor(0, 1, 1)
 
         -- 方案导航（默认隐藏，规划模式才显示）
@@ -315,6 +371,7 @@ DFUI:NewMod("Talents", 1, function()
         local planLabel = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
         planLabel:SetPoint('LEFT', prevPlanBtn, 'RIGHT', 5, 0)
         planLabel:SetText('方案 1/' .. MAX_PLANS)
+        SetTalentFont(planLabel, 'label')
         planLabel:SetTextColor(0, 1, 1)
         planLabel:Hide()
 
@@ -335,6 +392,7 @@ DFUI:NewMod("Talents", 1, function()
         resetBtn:SetHeight(22)
         resetBtn:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -220, 17)
         resetBtn:SetText('重置')
+        SetTalentFont(resetBtn:GetFontString(), 'label')
         resetBtn:SetScript('OnClick', function()
             ResetPlan(nil)
         end)
@@ -407,12 +465,16 @@ DFUI:NewMod("Talents", 1, function()
             treeFrame:SetHeight(500)
             treeFrame:SetPoint('TOPLEFT', frame, 'TOPLEFT', xOffsets[i] + 20, -50)
             -- debugframe(treeFrame)
-            local header = treeFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
-            header:SetPoint('TOP', treeFrame, 'TOP', 0, 20)
+            local header = treeFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+            header:SetPoint('TOP', treeFrame, 'TOP', 0, 6)
+            SetTalentFont(header, 'label')
 
-            local pointsText = treeFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-            pointsText:SetPoint('TOP', treeFrame, 'TOP', 0, 0)
-            pointsText:SetTextColor(1, 1, 1)
+            -- 标题铭牌底框（DF cypher 框体，金棕，搭岩石；独立小整图整张贴）
+            local headerBg = treeFrame:CreateTexture(nil, 'ARTWORK')
+            headerBg:SetTexture('Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\talents\\title_frame')
+            headerBg:SetTexCoord(0, 0.79296875, 0, 0.84375)  -- 内容 203/256 × 54/64
+            headerBg:SetHeight(32)
+            -- 宽度与锚定在 inset 建好后设置(对齐 inset 外边框)
 
             local branchFrame = CreateFrame('Frame', nil, treeFrame)
             branchFrame:SetAllPoints()
@@ -420,84 +482,50 @@ DFUI:NewMod("Talents", 1, function()
             local arrowFrame = CreateFrame('Frame', nil, treeFrame)
             arrowFrame:SetAllPoints()
 
-            local bgTopLeft = treeFrame:CreateTexture(nil, 'BACKGROUND')
-            bgTopLeft:SetWidth(200)
-            bgTopLeft:SetHeight(300)
-            bgTopLeft:SetPoint('TOPLEFT', treeFrame, 'TOPLEFT', 20, -30)
+            -- DF 凹槽容器：大理石底 + 凹槽描线 + 圆角 + 上下内阴影；插画/连线全部锚进 inset，层层包含不溢出框体
+            local inset = DFUI.CreateRetailInset(treeFrame, {
+                name    = 'DFUI_TalentInset' .. i,
+                anchors = {0, -28, 0, 0},          -- 顶留 28 给 header/pointsText；左右下贴满 treeFrame
+                bg      = "interface\\UI-Background-Rock.blp",  -- 凹陷内底：同外框材质的岩石（用 .blp，512×512 的 .tga 在 1.12 不加载→露纯黑）
+            })
+            inset:Show()
+            inset.bg:SetVertexColor(0.35, 0.32, 0.28)           -- 暗岩石凹陷底；插画走 ADD 混合，黑背景透明露出此底，图案加亮显现
+            -- 连线/箭头提到 inset 之上，免被岩石底/插画盖住
+            branchFrame:SetFrameLevel(inset:GetFrameLevel() + 2)
+            arrowFrame:SetFrameLevel(inset:GetFrameLevel() + 3)
 
-            local bgTopRight = treeFrame:CreateTexture(nil, 'BACKGROUND')
-            bgTopRight:SetWidth(100)
-            bgTopRight:SetHeight(300)
-            bgTopRight:SetPoint('TOPRIGHT', treeFrame, 'TOPRIGHT', 20, -30)
+            -- 每棵树消费点数文字：建在 inset 上(OVERLAY)，渲染于插画(BACKGROUND)之上，免被铺满的插画遮住
+            local pointsText = inset:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+            pointsText:SetTextColor(1, 1, 1)
+            pointsText:SetPoint('BOTTOM', inset, 'BOTTOM', 0, 5)   -- 紧贴凹槽下边内侧
+            SetTalentFont(pointsText, 'label')
 
-            local bgBottomLeft = treeFrame:CreateTexture(nil, 'BACKGROUND')
-            bgBottomLeft:SetWidth(200)
-            bgBottomLeft:SetHeight(200)
-            bgBottomLeft:SetPoint('BOTTOMLEFT', treeFrame, 'BOTTOMLEFT', 20, -30)
-
-            local bgBottomRight = treeFrame:CreateTexture(nil, 'BACKGROUND')
-            bgBottomRight:SetWidth(100)
-            bgBottomRight:SetHeight(200)
-            bgBottomRight:SetPoint('BOTTOMRIGHT', treeFrame, 'BOTTOMRIGHT', 20, -30)
+            -- 铭牌宽取一半、水平居中, 底顶着凹槽(inset)上端
+            headerBg:ClearAllPoints()
+            headerBg:SetWidth(150)
+            headerBg:SetPoint('BOTTOM', inset, 'TOP', 0, 0)
+            header:ClearAllPoints()
+            header:SetPoint('CENTER', headerBg, 'CENTER', 0, 0)
 
             treeFrames[i] = {
                 frame = treeFrame,
+                inset = inset,
                 header = header,
                 pointsText = pointsText,
                 branchFrame = branchFrame,
                 arrowFrame = arrowFrame
             }
 
+            -- 凹槽背景插画：每职业天赋一张整图(retail 4块合成,内容320×384→POT512²,无黑底)
+            -- 单张 BLEND 铺满 inset 内部,稳定不闪(取代旧 4 块 ADD 拼接的时有时无)
             local _, _, _, fileName = GetTalentTabInfo(i)
-            local base = fileName and ('Interface\\TalentFrame\\' .. fileName .. '-') or 'Interface\\TalentFrame\\MageFire-'
-
-            bgTopLeft:SetTexture(base .. 'TopLeft')
-            bgTopLeft:SetAlpha(0.7)
-            bgTopRight:SetTexture(base .. 'TopRight')
-            bgTopRight:SetAlpha(0.7)
-            bgBottomLeft:SetTexture(base .. 'BottomLeft')
-            bgBottomLeft:SetAlpha(0.7)
-            bgBottomRight:SetTexture(base .. 'BottomRight')
-            bgBottomRight:SetAlpha(0.7)
-
-            local borderTop = treeFrame:CreateTexture(nil, 'OVERLAY')
-            borderTop:SetTexture('Interface\\Buttons\\WHITE8X8')
-            -- borderTop:SetVertexColor(1,0.82,0, .4)
-            borderTop:SetVertexColor(0,0,0, .4)
-            borderTop:SetWidth(265)
-            -- borderTop:SetHeight(2)
-            borderTop:SetHeight(4)
-            borderTop:SetPoint('TOPLEFT', bgTopLeft, 'TOPLEFT', 2, 0)
-
-            local borderBottom = treeFrame:CreateTexture(nil, 'OVERLAY')
-            borderBottom:SetTexture('Interface\\Buttons\\WHITE8X8')
-            -- borderBottom:SetVertexColor(0,0,0, .9)
-            borderBottom:SetGradientAlpha('VERTICAL', 0, 0, 0, .9, 0, 0, 0, 0)
-            borderBottom:SetWidth(270)
-            borderBottom:SetHeight(40)
-            borderBottom:SetPoint('LEFT', bgBottomLeft, 'BOTTOMLEFT', 0, 100)
-
-            local borderLeft = treeFrame:CreateTexture(nil, 'OVERLAY')
-            borderLeft:SetTexture('Interface\\Buttons\\WHITE8X8')
-            borderLeft:SetVertexColor(0,0,0, .4)
-            borderLeft:SetWidth(4)
-            borderLeft:SetHeight(420)
-            borderLeft:SetPoint('TOPLEFT', bgTopLeft, 'TOPLEFT', 0, 0)
-
-            local borderRight = treeFrame:CreateTexture(nil, 'OVERLAY')
-            borderRight:SetTexture('Interface\\Buttons\\WHITE8X8')
-            borderRight:SetVertexColor(0,0,0, .4)
-            borderRight:SetWidth(4)
-            borderRight:SetHeight(420)
-            borderRight:SetPoint('TOPRIGHT', bgTopRight, 'TOPRIGHT', -30, 0)
-
-            local whiteBottom = treeFrame:CreateTexture(nil, 'BACKGROUND')
-            whiteBottom:SetTexture('Interface\\Buttons\\WHITE8X8')
-            -- whiteBottom:SetVertexColor(0,0,0, .1)
-            whiteBottom:SetGradientAlpha('VERTICAL', 0, 0, 0, 0, 0, 0, 0, .9)
-            whiteBottom:SetWidth(270)
-            whiteBottom:SetHeight(70)
-            whiteBottom:SetPoint('TOP', borderBottom, 'BOTTOM', 0, 1)
+            local illust = inset:CreateTexture(nil, 'BACKGROUND')
+            illust:SetDrawLayer('BACKGROUND', 2)
+            illust:SetTexture('Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\talents\\illust_' .. (fileName or 'warriorarms'))
+            illust:SetTexCoord(0, 1, 0, 1)  -- 整图已预裁为显示内容区(从512²原图裁x38~282/y0~384铺满256²,_tools/tga_crop_resize.js)，全采=更高有效分辨率不糊；框体高瘦比例由 inset 拉回
+            illust:SetAllPoints(inset)   -- 跟随 inset 真实尺寸(实测249×391,硬编码必错);SetTexCoord 仅裁采样不影响铺满
+            illust:SetAlpha(0.9)
+            treeFrames[i].illust = illust
 
             branchArrays[i] = {}
             branchTextures[i] = {}
@@ -516,6 +544,7 @@ DFUI:NewMod("Talents", 1, function()
         local button = CreateFrame('Button', nil, treeFrame)
         button:SetWidth(32)
         button:SetHeight(32)
+        button:SetFrameLevel(treeFrames[tabIndex].inset:GetFrameLevel() + 5)
 
         local x = (column - 1) * 63 + 35
         local y = -(tier - 1) * 63 - 50
@@ -540,14 +569,9 @@ DFUI:NewMod("Talents", 1, function()
         hoverBorder:SetVertexColor(1, 0.82, 0)
         hoverBorder:Hide()
 
-        local rankBg = button:CreateTexture(nil, 'OVERLAY')
-        rankBg:SetTexture(0, 0, 0, .5)
-        rankBg:SetWidth(37)
-        rankBg:SetHeight(12)
-        rankBg:SetPoint('TOP', button, 'BOTTOM', 0, -2)
-
         local rank = button:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-        rank:SetPoint('CENTER', rankBg, 'CENTER', 0, 0)
+        rank:SetPoint('TOP', button, 'BOTTOM', 0, -2)
+        SetTalentFont(rank, 'rank')
 
         -- 规划点数叠加显示（青色小字，已学模式下有规划点时显示）
         local plannedRankBg = button:CreateTexture(nil, 'OVERLAY')
@@ -561,6 +585,7 @@ DFUI:NewMod("Talents", 1, function()
         plannedRank:SetPoint('CENTER', plannedRankBg, 'CENTER', 0, 0)
         plannedRank:SetTextColor(0, 1, 1)
         plannedRank:Hide()
+        SetTalentFont(plannedRank, 'rank')
 
         button.icon = icon
         button.border = border
@@ -721,6 +746,9 @@ DFUI:NewMod("Talents", 1, function()
 
         local texture = parent:CreateTexture(nil, layer)
         texture:SetTexture(texturePath)
+        -- UI-TalentBranches/Arrows 是黑底 atlas+SetTexCoord 切片，1.12/DXVK 下 alpha 不可靠→黑底实显成块；
+        -- ADD 混合让黑色(0,0,0)不贡献=透明、只显亮线，绕开 alpha 问题（根治"很多黑块"）
+        texture:SetBlendMode('ADD')
         texture:SetWidth(32)
         texture:SetHeight(32)
         table.insert(textures, texture)
@@ -970,7 +998,7 @@ DFUI:NewMod("Talents", 1, function()
             frame.pointsLeft:SetText('|cff00ffff已规划: ' .. used .. '/' .. MAX_TALENT_POINTS .. '  剩余: ' .. left .. '|r')
         else
             local points = UnitCharacterPoints('player')
-            frame.pointsLeft:SetText('Talent Points Available: |cFFFFFFFF' .. points .. '|r')
+            frame.pointsLeft:SetText('可用天赋点：|cFFFFFFFF' .. points .. '|r')
         end
 
         -- 更新方案标签文字
