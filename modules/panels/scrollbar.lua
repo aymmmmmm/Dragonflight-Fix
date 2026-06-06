@@ -184,9 +184,7 @@ DFUI:NewMod("Scrollbar", 6, function()
     -------------------------------------------------------
     local scrollbarTargets = {
         -- 角色面板技能/声望滚动条改由 character.lua 保留 vanilla 原生亮金箭头，这里不接管
-        -- 任务日志
-        "QuestLogListScrollFrameScrollBar",
-        "QuestLogDetailScrollFrameScrollBar",
+        -- 任务日志两条（列表+详情）改由 questlog.lua 接管 DF minimal 滚动条，这里不染青铜
         -- 任务对话
         "QuestDetailScrollFrameScrollBar",
         "QuestRewardScrollFrameScrollBar",
