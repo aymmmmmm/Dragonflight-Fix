@@ -16,6 +16,17 @@ DFUI:NewMod("Talents", 1, function()
     local MAX_TALENT_POINTS = 51 -- 最大天赋点数（Turtle WoW）
     local Update                 -- 前向声明，Update 实际定义在后面
 
+    -- ===== 布局常量（游戏内迭代只改这里；满足 MARGIN_X*2 + TREE_W*3 + TREE_GAP*2 = FRAME_W）=====
+    local FRAME_W       = 888    -- 主框宽（原1020）
+    local FRAME_H       = 582    -- 主框高（原600；顶/底各再压5px，纵向受 8×63 网格锁定）
+    local TREE_W        = 280    -- 单棵树宽（原300，贴合按钮+右侧连线）
+    local TREE_GAP      = 10     -- 树间间隙（原 340-300=40）
+    local MARGIN_X      = 14     -- 左右内边距（原20）
+    local TREE_PITCH    = TREE_W + TREE_GAP  -- 树水平步距 = 296
+    local TREE_TOP      = -37    -- treeFrame 顶部留白Y（原-50，独立可调；勿与按钮/连线的内部 -50 混淆）
+    local TREE_FRAME_H  = 500    -- treeFrame 高（不动，减高会加剧底部按钮溢出凹槽）
+    -- 注：天赋按钮 63px 网格步长与连线/箭头系统耦合，勿改
+
     -- 统一字体：全部走 FRIZQT(patch-Z 映射 FZ 中文字体，中英文/数字都渲染)+阴影(对齐 vanilla 观感)，
     -- 三档字号集中此处一改全改；替换原先 GameFontLarge/Normal/Small + 复选框 BigNoodleTitling 的混用
     local TALENT_FONT_SIZE = { title = 15, label = 13, rank = 11 }
@@ -262,8 +273,8 @@ DFUI:NewMod("Talents", 1, function()
 
     local function CreateMainFrame()
         frame = CreateFrame('Frame', 'BLF_TalentFrame', UIParent)
-        frame:SetWidth(1020)
-        frame:SetHeight(600)
+        frame:SetWidth(FRAME_W)
+        frame:SetHeight(FRAME_H)
         frame:SetFrameStrata('HIGH')
         frame:EnableMouse(true)
         frame:SetPoint('CENTER', UIParent, 'CENTER', 0, 0)
@@ -274,7 +285,7 @@ DFUI:NewMod("Talents", 1, function()
         frame:SetScript("OnMouseUp", function() this:StopMovingOrSizing() end)
 
         -- DF 金属边框（外层，恢复原样：同时作为唯一背景）
-        local metalBg = DFUI.CreatePaperDollFrame("DFUI_TalentBg", frame, 1020, 600, 2)
+        local metalBg = DFUI.CreatePaperDollFrame("DFUI_TalentBg", frame, FRAME_W, FRAME_H, 2)
         metalBg:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
         metalBg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
         metalBg:SetFrameLevel(frame:GetFrameLevel() - 1)
@@ -458,12 +469,11 @@ DFUI:NewMod("Talents", 1, function()
     end
 
     local function CreateTreeFrames()
-        local xOffsets = {0, 340, 680}
         for i = 1, 3 do
             local treeFrame = CreateFrame('Frame', nil, frame)
-            treeFrame:SetWidth(300)
-            treeFrame:SetHeight(500)
-            treeFrame:SetPoint('TOPLEFT', frame, 'TOPLEFT', xOffsets[i] + 20, -50)
+            treeFrame:SetWidth(TREE_W)
+            treeFrame:SetHeight(TREE_FRAME_H)
+            treeFrame:SetPoint('TOPLEFT', frame, 'TOPLEFT', MARGIN_X + (i - 1) * TREE_PITCH, TREE_TOP)
             -- debugframe(treeFrame)
             local header = treeFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
             header:SetPoint('TOP', treeFrame, 'TOP', 0, 6)
@@ -546,6 +556,7 @@ DFUI:NewMod("Talents", 1, function()
         button:SetHeight(32)
         button:SetFrameLevel(treeFrames[tabIndex].inset:GetFrameLevel() + 5)
 
+        -- 63 网格步长与连线/箭头系统耦合，勿改（改了连线全错位）；这里的 -50 是 tree 内坐标，与 TREE_TOP 无关
         local x = (column - 1) * 63 + 35
         local y = -(tier - 1) * 63 - 50
         button:SetPoint('TOPLEFT', treeFrame, 'TOPLEFT', x + 10, y)
@@ -821,6 +832,7 @@ DFUI:NewMod("Talents", 1, function()
         for tier = 1, 8 do
             for col = 1, 4 do
                 local node = branchArrays[tabIndex][tier][col]
+                -- 63 网格步长与按钮系统耦合，勿改；-50 为 tree 内坐标，与 TREE_TOP 无关
                 local xOffset = (col - 1) * 63 + 35 + 2
                 local yOffset = -(tier - 1) * 63 - 50 - 2
 
