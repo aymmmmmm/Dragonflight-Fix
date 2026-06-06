@@ -417,8 +417,9 @@ DFUI:NewMod("Character", 5, function()
     end
 
     -- DF minimal 滚动条（参数同社交）。驱动/读取 vanilla offset 全走 scrollbar 的 Slider API
-    -- (GetMinMaxValues/GetValue/SetValue)，**绝不 hook** SkillFrame_UpdateSkills/ReputationFrame_Update
-    -- （它们含 FixSkillBarColors/进度条填充，往里塞东西会连累 → 上次破坏教训）；thumb 同步用独立节流 OnUpdate。
+    -- (GetMinMaxValues/GetValue/SetValue)；thumb 同步用独立节流 OnUpdate，与 vanilla update 链路解耦。
+    -- 注：可对 SkillFrame_UpdateSkills/ReputationFrame_Update 做 post-hook 修进度条填充色（见 :868/:845），
+    -- 但只读色 / 4 参顶 alpha / 幂等重设 fill，**绝不**在 hook 里碰 offset/scrollbar/几何（否则连累滚动条 → 旧教训）。
     local repSB, skillSB
     local function setFauxOffset(sbar, newOff, maxOff)
         if newOff < 0 then newOff = 0 elseif newOff > maxOff then newOff = maxOff end
@@ -475,6 +476,10 @@ DFUI:NewMod("Character", 5, function()
         end)
     end
 
+    -- 技能/声望条 fill 修复函数前向声明（定义在 :868/:845，但引用点 tab OnClick/OnShow 在其之前，
+    -- Lua 5.0 不前向声明会解析成全局 nil）
+    local FixSkillBarColors, FixRepBarAlpha, EnsureBarTex
+
     -- 荣誉 Tab 状态 + 子 Tab 前向声明
     local honorTabActive = false
     local honorSubTab1, honorSubTab2
@@ -507,6 +512,8 @@ DFUI:NewMod("Character", 5, function()
         characterBg:Hide()
         CharacterFrame_ShowSubFrame("ReputationFrame")
         PanelTemplates_SetTab(CharacterFrame, 3)
+        if EnsureBarTex then EnsureBarTex() end       -- 低频重设纹理（防 init 那次未驻留）
+        if FixRepBarAlpha then FixRepBarAlpha() end   -- 显示时兜底染色
     end, 70)
 
     function customBg:UpdatePetTab()
@@ -530,6 +537,8 @@ DFUI:NewMod("Character", 5, function()
         characterBg:Hide()
         CharacterFrame_ShowSubFrame("SkillFrame")
         PanelTemplates_SetTab(CharacterFrame, 4)
+        if EnsureBarTex then EnsureBarTex() end             -- 低频重设纹理（防 init 那次未驻留）
+        if FixSkillBarColors then FixSkillBarColors() end   -- 显示时兜底染色
     end, 55)
 
     -- 荣誉 Tab：进入时默认显示荣誉子页
@@ -745,6 +754,10 @@ DFUI:NewMod("Character", 5, function()
     CenterFrame(CharacterFrame)
     HookScript(CharacterFrame, "OnShow", function()
         customBg:Show()
+        -- 兜底：重开面板若记住上次在技能/声望子页（不经 tab OnClick），低频重设纹理 + 染色
+        if EnsureBarTex then EnsureBarTex() end
+        if FixSkillBarColors and SkillFrame and SkillFrame:IsVisible() then FixSkillBarColors() end
+        if FixRepBarAlpha and ReputationFrame and ReputationFrame:IsVisible() then FixRepBarAlpha() end
     end)
 
     -- ToggleCharacter Hook
@@ -832,61 +845,135 @@ DFUI:NewMod("Character", 5, function()
     -- 字典 UV 坐标：uiframebars.png (256×256)
     -- ============================================================
     local CHAR_TEX = TEX .. "character\\"
-    -- A/B 切换：false=A 方案（独立 TGA 切片，SetTexture 直接引用）
-    --          true =B 方案（atlas 整图 + SetTexCoord 切片）
-    local BAR_USE_ATLAS = false
+    -- 半脱钩自建条（2026-06-06，全字典真素材 3-slice）：每条 bar 叠 bg(3-slice)+fill+frame(3-slice)，
+    -- 数据/数值/滚动/折叠白嫖 vanilla(只读 GetValue)。三层 ARTWORK 运行时建→压过 vanilla(其 statusbar 纹理在 BACKGROUND)。
+    -- 素材=字典 ui-frame-bar-*(interface/framegeneral/uiframebars.blp 精确坐标抠,_tools/_ringwork/cut_framebar.js)：
+    --   底 barbg-l/m/r(圆角凹槽) + 中 barfill-l/m/r(barbg 圆角形状染白→可染色圆角填充,make_barfill.js) + (金属框 barframe 暂不用)。
+    local BG_L, BG_M, BG_R = CHAR_TEX.."barbg-left.tga",    CHAR_TEX.."barbg-mid.tga",    CHAR_TEX.."barbg-right.tga"
+    local FR_L, FR_M, FR_R = CHAR_TEX.."barframe-left.tga", CHAR_TEX.."barframe-mid.tga", CHAR_TEX.."barframe-right.tga"
+    local FILL_L, FILL_M, FILL_R = CHAR_TEX.."barfill-left.tga", CHAR_TEX.."barfill-mid.tga", CHAR_TEX.."barfill-right.tga"
+    local BG_CAP, FR_CAP, FILL_CAP = 9, 9, 9   -- 3-slice 端帽渲染宽(可调)；FILL_CAP=BG_CAP 贴合凹槽
+    local DF_SKILL_BLUE = {0.03, 0.55, 1.0}
+    -- ⚠ 1.12 GetSkillLineInfo 护甲分组 header 真实文本 "护甲精通"(Armor Proficiencies)，旧名"护甲专精"留作兼容
+    local GRAY_HEADERS = { ["护甲精通"] = true, ["护甲专精"] = true, ["职业技能"] = true, ["语言"] = true }
 
-    -- texName 默认 fill-white.tga（声望条用，靠 vanilla SetStatusBarColor 按好感度染色）
-    local function ApplyBarFill(bar, texName)
-        texName = texName or "fill-white.tga"
-        if BAR_USE_ATLAS then
-            -- B 方案：tradeskill.lua:494-498 已验证模式
-            -- 先 CreateTexture 设 TexCoord 锁定 atlas 子区域，再 SetStatusBarTexture(obj)
-            local fill = bar:CreateTexture(nil, "ARTWORK")
-            fill:SetTexture(CHAR_TEX .. "atlas-uiframebars.tga")
-            fill:SetTexCoord(0, 1, 163/256, 180/256)  -- white 行 (y=163..180)
-            bar:SetStatusBarTexture(fill)
-        else
-            -- A 方案：独立切片（256×16 POT）
-            -- ⚠ 必须 POT：1.12 SetStatusBarTexture 对非 POT 文件静默拒绝、保留前一张纹理，
-            --   曾经 256×17 → 永远退回 vanilla UI-Character-Skills-Bar（见 reference-wow112-tga-pot）
-            bar:SetStatusBarTexture(CHAR_TEX .. texName)
+    -- 3-slice：端帽固定宽锚两端、中段拉伸、全高。返回 {L,M,R}（建表顺序=绘制层序）
+    local function slice3(bar, lt, mt, rt, cap)
+        local L = bar:CreateTexture(nil, "ARTWORK")
+        L:SetTexture(lt); L:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0); L:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0); L:SetWidth(cap)
+        local R = bar:CreateTexture(nil, "ARTWORK")
+        R:SetTexture(rt); R:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 0, 0); R:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 0); R:SetWidth(cap)
+        local M = bar:CreateTexture(nil, "ARTWORK")
+        M:SetTexture(mt); M:SetPoint("TOPLEFT", L, "TOPRIGHT", -2, 0); M:SetPoint("BOTTOMRIGHT", R, "BOTTOMLEFT", 2, 0)  -- 中段左右各重叠2px防拼缝
+        return {L, M, R}
+    end
+
+    -- 给一条 vanilla bar 挂三层真素材（幂等设一次）；vanilla 文字抬 OVERLAY 不被遮
+    local function EnsureCustomBar(bar)
+        -- 清旧版残留(整图轨道/纯色/旧金属框,挂持久 texture 跨 /reload 不消)——必须在 guard 之前,
+        -- 否则 _dfBg 已存在时直接 return,旧金属左右帽(_dfFrameSlices)清不掉会一直留着。
+        if bar._dfTrack then bar._dfTrack:Hide(); bar._dfTrack = nil end
+        if bar._dfFrame and bar._dfFrame.Hide then bar._dfFrame:Hide(); bar._dfFrame = nil end
+        if bar._dfCustomFill then bar._dfCustomFill:Hide(); bar._dfCustomFill = nil end
+        if bar._dfFrameSlices then for _, t in ipairs(bar._dfFrameSlices) do t:Hide() end; bar._dfFrameSlices = nil end
+        if bar._dfBg then return end
+        bar._dfBg = slice3(bar, BG_L, BG_M, BG_R, BG_CAP)          -- 底：圆角凹槽(全高暗底)
+        if bar._dfFill3 then bar._dfFill3:Hide(); bar._dfFill3 = nil end  -- 清旧单张矩形填充残留
+        -- 中：圆角填充 3-slice(barfill=barbg 圆角形状染白,可染色)；全高,建在 bg 后→压其上
+        local fL = bar:CreateTexture(nil, "ARTWORK")
+        fL:SetTexture(FILL_L); fL:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0); fL:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0); fL:SetWidth(FILL_CAP)
+        local fM = bar:CreateTexture(nil, "ARTWORK")
+        fM:SetTexture(FILL_M); fM:SetPoint("TOPLEFT", fL, "TOPRIGHT", -2, 0); fM:SetPoint("BOTTOMLEFT", fL, "BOTTOMRIGHT", -2, 0); fM:SetWidth(0.1)  -- 左重叠2px防拼缝
+        local fR = bar:CreateTexture(nil, "ARTWORK")
+        fR:SetTexture(FILL_R); fR:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 0, 0); fR:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 0); fR:SetWidth(FILL_CAP); fR:Hide()
+        bar._dfFill = {fL, fM, fR}
+        -- 金属框(barframe-*) 暂不用：素材为 31px 高条设计,rails 太厚,套 14px 矮条会吃掉中间填充(用户定:去厚框)
+        local regions = {bar:GetRegions()}
+        for i = 1, table.getn(regions) do
+            local r = regions[i]
+            if r.GetObjectType and r:GetObjectType() == "FontString" then r:SetDrawLayer("OVERLAY") end
         end
     end
 
-    -- 声望进度条（ReputationBar1..N，FauxScrollFrame 复用）
+    -- 更新一条 bar 的圆角填充：fL 圆角左帽固定 + fM 拉伸到进度点；满进度补 fR 圆角右帽。颜色 r,g,b
+    local function UpdateCustomFill(bar, r, g, b)
+        EnsureCustomBar(bar)
+        local fills = bar._dfFill
+        if not fills then return end
+        local fL, fM, fR = fills[1], fills[2], fills[3]
+        local val = (bar.GetValue and bar:GetValue()) or 0
+        local mn, mx = 0, 1
+        if bar.GetMinMaxValues then mn, mx = bar:GetMinMaxValues() end
+        local span = (mx or 1) - (mn or 0)
+        local pct = 0
+        if span > 0 then pct = ((val or 0) - (mn or 0)) / span end
+        if pct < 0 then pct = 0 elseif pct > 1 then pct = 1 end
+        if pct <= 0 then fL:Hide(); fM:Hide(); fR:Hide(); return end
+        local bw = bar:GetWidth() or 0
+        if bw > 0 then bar._dfBarW = bw end          -- 缓存有效条宽，防未 reflow GetWidth 返 0
+        bw = bar._dfBarW or 200
+        local progressW = bw * pct
+        fL:SetVertexColor(r or 1, g or 1, b or 1, 1); fL:Show()
+        fM:SetVertexColor(r or 1, g or 1, b or 1, 1)
+        fR:SetVertexColor(r or 1, g or 1, b or 1, 1)
+        if progressW >= bw - 1 then                  -- 满：补圆角右帽,中段铺满两帽之间(两侧各重叠1px)
+            fR:Show()
+            local mw = bw - 2 * FILL_CAP + 4; if mw < 0.1 then mw = 0.1 end
+            fM:SetWidth(mw); fM:Show()
+        else                                          -- 部分：右端直角进度沿(fR 隐),中段到进度点(左重叠2px)
+            fR:Hide()
+            local mw = progressW - FILL_CAP + 2; if mw < 0.1 then mw = 0.1 end
+            fM:SetWidth(mw); fM:Show()
+        end
+    end
+
+    -- init/OnShow/tab 调用点：幂等建三层（保留 EnsureBarTex 名，调用点不改）
+    EnsureBarTex = function()
+        for i = 1, (SKILLS_TO_DISPLAY or 15) do
+            local b = getglobal("SkillRankFrame" .. i)
+            if b and b.CreateTexture then EnsureCustomBar(b) end
+        end
+        for i = 1, (NUM_FACTIONS_DISPLAYED or 15) do
+            local b = getglobal("ReputationBar" .. i)
+            if b and b.CreateTexture then EnsureCustomBar(b) end
+        end
+    end
+
+    -- 声望进度条（ReputationBar1..N）：建三层；填充由 FixRepBarAlpha 驱动(读 vanilla value + 好感度色)
     for i = 1, (NUM_FACTIONS_DISPLAYED or 15) do
         local bar = getglobal("ReputationBar" .. i)
-        if bar and bar.SetStatusBarTexture then
-            ApplyBarFill(bar)
-            -- 保留 vanilla SetStatusBarColor —— ReputationFrame_Update 按好感度阶段染色
+        if bar and bar.CreateTexture then EnsureCustomBar(bar) end
+    end
+    FixRepBarAlpha = function()
+        for i = 1, (NUM_FACTIONS_DISPLAYED or 15) do
+            local b = getglobal("ReputationBar" .. i)
+            if b and b.GetValue then
+                local r, g, bl = 1, 1, 1
+                if b.GetStatusBarColor then r, g, bl = b:GetStatusBarColor() end  -- vanilla 好感度 RGB
+                UpdateCustomFill(b, r, g, bl)
+            end
         end
     end
+    if type(ReputationFrame_Update) == "function" then
+        local _origRepUpdate = ReputationFrame_Update
+        setglobal("ReputationFrame_Update", function(a1, a2, a3, a4, a5, a6, a7, a8, a9)
+            _origRepUpdate(a1, a2, a3, a4, a5, a6, a7, a8, a9)
+            FixRepBarAlpha()  -- POST-HOOK：vanilla 之后驱动自制填充
+        end)
+    end
 
-    -- 技能进度条（SkillRankFrame1..N）
+    -- 技能进度条（SkillRankFrame1..N）：建三层 + 隐藏 vanilla Border 框
     for i = 1, (SKILLS_TO_DISPLAY or 15) do
         local bar = getglobal("SkillRankFrame" .. i)
-        if bar and bar.SetStatusBarTexture then
-            -- 技能条：vanilla 不按状态染色（蓝色烤进原版纹理 UI-Character-Skills-Bar），
-            -- 换白底 fill 会失色看不见 → 改用预上色 fill-blue + 复位 color(1,1,1) 让 DF 蓝如实显示
-            ApplyBarFill(bar, "fill-blue.tga")
-            bar:SetStatusBarColor(1, 1, 1, 1)   -- 4 参：必须带 alpha=1，否则顶不掉 vanilla 的 0.5 半透明
+        if bar and bar.CreateTexture then
+            EnsureCustomBar(bar)
             -- SkillRankFrame{i}Border 在 1.12 vanilla 是 Frame（不是 Texture），无 SetTexture
             local border = getglobal("SkillRankFrame" .. i .. "Border")
             if border and border.Hide then border:Hide() end
         end
     end
-
-    -- 技能条颜色修复（根因实证 2026-06-02）：vanilla SkillFrame_UpdateSkills 每次刷新会把技能条
-    -- statusbarcolor 改成半透明蓝(0,0,1,0.5)，叠在深色 Solid 背景上 fill-blue 看不见（冷启动/滚动/
-    -- 切tab 竞态，谁后跑谁赢→时好时坏）。post-hook 在 vanilla 之后用 4 参 (1,1,1,1) 顶回不透明。
-    -- 按技能分组着色：护甲专精/职业技能/语言 → 灰(fill-white 银灰高光，与 fill-blue 同风格)，
-    -- 其他(武器技能/副职业/…) → 蓝(fill-blue)。一律 4 参 (1,1,1,1) 顶掉 vanilla 半透明蓝。
-    local SKILL_GRAY_TEX = CHAR_TEX .. "fill-white.tga"
-    local SKILL_BLUE_TEX = CHAR_TEX .. "fill-blue.tga"
-    local GRAY_HEADERS = { ["护甲专精"] = true, ["职业技能"] = true, ["语言"] = true }
-    local function FixSkillBarColors()
-        -- 建"技能行索引 → 所属分组名"映射（按当前展开后的列表）
+    -- 技能分组染色（post-hook 在 vanilla SkillFrame_UpdateSkills 之后）：灰组(护甲精通/职业技能/语言)银灰、其他 DF 蓝
+    function FixSkillBarColors()  -- 赋值给前向声明的 local
         local headerOf, cur = {}, nil
         local numLines = GetNumSkillLines and GetNumSkillLines() or 0
         for idx = 1, numLines do
@@ -899,14 +986,13 @@ DFUI:NewMod("Character", 5, function()
         end
         for i = 1, (SKILLS_TO_DISPLAY or 15) do
             local b = getglobal("SkillRankFrame" .. i)
-            if b and b.SetStatusBarTexture then
+            if b and b.GetValue then
                 local hdr = headerOf[offset + i]
                 if hdr and GRAY_HEADERS[hdr] then
-                    b:SetStatusBarTexture(SKILL_GRAY_TEX)
+                    UpdateCustomFill(b, 1, 1, 1)   -- 灰组：银灰本色
                 else
-                    b:SetStatusBarTexture(SKILL_BLUE_TEX)
+                    UpdateCustomFill(b, DF_SKILL_BLUE[1], DF_SKILL_BLUE[2], DF_SKILL_BLUE[3])  -- 蓝组：DF 蓝
                 end
-                b:SetStatusBarColor(1, 1, 1, 1)
             end
         end
     end
