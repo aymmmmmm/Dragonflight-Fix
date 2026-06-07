@@ -65,9 +65,9 @@ local LAYOUT = {
     REAGENT_LABEL_Y     = -250,  -- 材料标签固定 Y（detailFrame 内，不随描述漂移）
     REAGENT_GRID_GAP_Y  = 8,     -- 材料标签→网格首行间距
     REAGENT_ROW_PITCH   = 58,    -- 材料行距（slot 50 + 间距 8）
-    REAGENT_COL_PITCH   = 222,   -- 材料列距（3 列均衡分布于 detailFrame 内宽）
+    REAGENT_COL_PITCH   = 190,   -- 材料列距（3 列均衡分布；右栏收窄后 222→190 防 3 列溢出 detailFrame 内宽 612）
     REAGENT_COL_X0      = 0,     -- 材料首列 x 偏移
-    REAGENT_SLOT_W      = 200,   -- 材料格容器宽（180→200，材料名留更多空间）
+    REAGENT_SLOT_W      = 180,   -- 材料格容器宽（右栏收窄后 200→180，配合列距 190 留 10px 间隙防格重叠）
 }
 
 local ATLAS = {
@@ -302,7 +302,7 @@ DFUI:NewMod("TradeSkill", 5, function()
     -- ============================================================
     -- 1. 面板框架 (1069x658，DF retail Professions 等比)
     -- ============================================================
-    local panel = DFUI.CreatePaperDollFrame("DFUI_ProfessionFrame", UIParent, 1069, 658, 1)
+    local panel = DFUI.CreatePaperDollFrame("DFUI_ProfessionFrame", UIParent, 964, 658, 1)
     panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 30, -104)
     panel:SetFrameStrata("MEDIUM")
     panel:SetFrameLevel(25)
@@ -658,12 +658,6 @@ DFUI:NewMod("TradeSkill", 5, function()
     detailRequire:SetWidth(400)
     detailRequire:SetJustifyH("LEFT")  -- 同上:补左对齐,否则"需要:xxx"在 400px 框内居中
     detailRequire:SetTextColor(1.00, 1.00, 1.00)  -- 需要:xxx 白字
-
-    local detailPoints = detailFrame:CreateFontString(nil, "OVERLAY")
-    detailPoints:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
-    detailPoints:SetPoint("TOPLEFT", detailRequire, "BOTTOMLEFT", 0, -6)
-    detailPoints:SetWidth(400)
-    detailPoints:SetTextColor(0.98, 0.91, 0.58)
 
     -- detailDesc (12pt OUTLINE, 宽度 460)
     local detailDesc = detailFrame:CreateFontString(nil, "OVERLAY")
@@ -1416,9 +1410,6 @@ DFUI:NewMod("TradeSkill", 5, function()
             detailRequire:Hide()
         end
 
-        -- 训练点数已挪到按钮左侧 trainingPointsText，这里隐藏避免重复
-        detailPoints:SetText(""); detailPoints:Hide()
-
         -- 描述
         if description and description ~= "" then
             detailDesc:SetText(description); detailDesc:Show()
@@ -1498,7 +1489,7 @@ DFUI:NewMod("TradeSkill", 5, function()
                     end
                     slot.reagentIndex = i
                     slot:ClearAllPoints()
-                    -- retail 网格: 3 列 × 3 行 (适配 detailFrame 717 宽)，列距/行距均衡见 LAYOUT
+                    -- retail 网格: 3 列 × 3 行 (适配 detailFrame 612 宽)，列距/行距均衡见 LAYOUT
                     local col = math.mod(i - 1, 3)
                     local row = math.floor((i - 1) / 3)
                     slot:SetPoint("TOPLEFT", reagentLabel, "BOTTOMLEFT",
