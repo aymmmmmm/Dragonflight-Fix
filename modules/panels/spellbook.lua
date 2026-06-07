@@ -21,6 +21,7 @@ local L = {
     ERR_RIGHT_TAB_FAIL = " 右侧 Tab 创建失败：",
     PAGE_FMT = "第 %d / %d 页",
     LEARN_AT_LEVEL = "%d 级可学",
+    LEARN_AT_LEVEL_TALENT = "%d 级 · 天赋",
     NEXT_RANK_AT = "下一级 %d 级",
     REQUIRES_LEVEL = "需要等级 %d",
 }
@@ -175,6 +176,7 @@ DFUI:NewMod("SpellBook", 5, function()
         spellbook:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
         PlaySound("igSpellBookOpen")
         if spellbook.RebuildActionBindMap then spellbook:RebuildActionBindMap() end
+        if DFUI.InvalidateUnlearnedCache then DFUI:InvalidateUnlearnedCache() end
         spellbook:UpdateSpellDisplay()
     end)
     spellbook:SetScript("OnHide", function()
@@ -625,6 +627,12 @@ DFUI:NewMod("SpellBook", 5, function()
 
         spellbook.maxPages = math.ceil(table.getn(filteredSpells) / BUTTONS_PER_PAGE)
         if spellbook.maxPages < 1 then spellbook.maxPages = 1 end
+        if _G.DFUI_SBDBG then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[SBDBG]|r tab=" .. tostring(spellbook.selectedTabIndex)
+                .. " 已学=" .. table.getn(learned) .. " 未学=" .. table.getn(unlearned)
+                .. " 合计=" .. table.getn(filteredSpells) .. " 页=" .. spellbook.maxPages
+                .. " 当前页=" .. spellbook.currentPage .. " showRanks=" .. tostring(filterShowRanks))
+        end
         if spellbook.currentPage > spellbook.maxPages then
             spellbook.currentPage = spellbook.maxPages
         end
@@ -707,7 +715,11 @@ DFUI:NewMod("SpellBook", 5, function()
                 btn.rank:ClearAllPoints()
                 btn.rank:SetPoint("TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -3)
                 if spell.isUnlearned then
-                    btn.rank:SetText(string.format(L.LEARN_AT_LEVEL, spell.levelReq or 0))
+                    if spell.isTalent then
+                        btn.rank:SetText(string.format(L.LEARN_AT_LEVEL_TALENT, spell.levelReq or 0))
+                    else
+                        btn.rank:SetText(string.format(L.LEARN_AT_LEVEL, spell.levelReq or 0))
+                    end
                     btn.rank:SetTextColor(0.55, 0.78, 1.0)   -- 淡蓝：可学提示，区别于已学的土黄 rank
                     btn.rank:Show()
                 elseif spell.isPassive then
@@ -1268,6 +1280,14 @@ DFUI:NewMod("SpellBook", 5, function()
             local n, _, off, ns = GetSpellTabInfo(i)
             DEFAULT_CHAT_FRAME:AddMessage("  " .. i .. ": '" .. (n or "?") .. "' offset=" .. (off or 0) .. " count=" .. (ns or 0))
         end
+    end
+
+    -- 调试：切换实时显示计数打印（开后切 tab 会打 [SBDBG] 已学/未学/页数）
+    SLASH_DFSBDBG1 = "/sbdbg"
+    SlashCmdList["DFSBDBG"] = function()
+        _G.DFUI_SBDBG = not _G.DFUI_SBDBG
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[DFUI]|r SBDBG=" .. tostring(_G.DFUI_SBDBG))
+        if _G.DFUI_SBDBG and spellbook:IsShown() then spellbook:UpdateSpellDisplay() end
     end
 
     -- 供 trainerdata.lua 采集后即时刷新（法术书开着时访问训练师）

@@ -183,6 +183,8 @@ local function ComputeUnlearned()
     end
 
     -- 3. 每法术折叠成"下一个可学 rank"（比当前已学最高 rank 高的最低 rank）
+    --    addedUnlearned 记录已进未学列表的法术名，供 3.5 天赋扫描去重
+    local addedUnlearned = {}
     for name, list in pairs(byName) do
         local highest = knownHighest[name]   -- nil = 完全未学
         local nextEntry = nil
@@ -215,6 +217,42 @@ local function ComputeUnlearned()
                         isUnlearned = true,
                         levelReq    = nextEntry.levelReq or 0,
                     })
+                    addedUnlearned[name] = true
+                end
+            end
+        end
+    end
+
+    -- 3.5 天赋树扫描：补回未点的主动天赋（训练师不列未点天赋 → 训练师单源会漏）
+    --     移植自 MSB：currRank==0 且(单 rank 或 训练师有其 rank)视为主动 → 补入；
+    --     多 rank 天赋视作被动（强化XX/专精类）跳过。等级 = 10+(tier-1)*5。
+    if GetNumTalentTabs and GetNumTalents and GetTalentInfo then
+        for t = 1, GetNumTalentTabs() do
+            local talentTabName = GetTalentTabInfo(t)
+            local ti = (talentTabName and tabByNorm[NormName(talentTabName)]) or fallbackTab
+            if ti then
+                for i = 1, GetNumTalents(t) do
+                    local tn, icon, tier, _, currRank, maxRank = GetTalentInfo(t, i)
+                    if tn and currRank == 0 and not knownHighest[tn] and not addedUnlearned[tn] then
+                        if maxRank == 1 or byName[tn] then
+                            addedUnlearned[tn] = true
+                            result.byTab[ti] = result.byTab[ti] or {}
+                            table.insert(result.byTab[ti], {
+                                index       = nil,
+                                name        = tn,
+                                rank        = "",
+                                variant     = nil,
+                                variantRank = 0,
+                                texture     = icon,
+                                isPassive   = false,
+                                isRacial    = false,
+                                tabIndex    = ti,
+                                isUnlearned = true,
+                                isTalent    = true,
+                                levelReq    = 10 + (tier - 1) * 5,
+                            })
+                        end
+                    end
                 end
             end
         end
@@ -232,6 +270,92 @@ end
 function DFUI:GetSpellbookUnlearned()
     if not unlearnedCache then unlearnedCache = ComputeUnlearned() end
     return unlearnedCache
+end
+
+-- 供 spellbook.lua 在 OnShow 调用：强制下次 Get 重算，杜绝用到早先空缓存
+function DFUI:InvalidateUnlearnedCache()
+    InvalidateCache()
+end
+
+-- =================== 诊断：/dftrainer ==========================
+-- 在战士训练师窗口打开时运行，原样 dump 原始 service 列表 + 表头/有效判定，
+-- 再 dump 已采集 trainerDB + 计算出的未学 byTab，定位某技能卡在哪一层。
+local function Msg(s) if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage(s) end end
+_G.SLASH_DFTRAINER1 = "/dftrainer"
+_G.SlashCmdList["DFTRAINER"] = function(cmdArg)
+    local filter = cmdArg and Trim(cmdArg) ~= "" and string.lower(Trim(cmdArg)) or nil
+    local function hit(name) return (not filter) or (name and string.find(string.lower(name), filter, 1, true)) end
+
+    -- 1) 原始训练师列表（仅在训练师窗口开着时有数据）
+    local num = GetNumTrainerServices and GetNumTrainerServices() or 0
+    Msg("|cFF00FF00[DFTRAINER]|r 原始 service 数=" .. num)
+    if num > 0 then
+        -- 重建 classCats（与采集同口径）以标注每行判定
+        local classCats = {}
+        if GetNumTalentTabs then
+            for t = 1, GetNumTalentTabs() do local n = GetTalentTabInfo(t); if n then classCats[Trim(n)] = true end end
+        end
+        for i = 1, GetNumSpellTabs() do local n = GetSpellTabInfo(i); if n then classCats[Trim(n)] = true end end
+        classCats[GENERAL or "General"] = true
+        pcall(function()
+            if SetTrainerServiceTypeFilter then
+                SetTrainerServiceTypeFilter("available", 1, 0)
+                SetTrainerServiceTypeFilter("unavailable", 1, 0)
+                SetTrainerServiceTypeFilter("used", 1, 0)
+            end
+        end)
+        num = GetNumTrainerServices()
+        local curValid = true
+        local kept, skipped = 0, 0
+        for i = 1, num do
+            local ok, nm, rk = pcall(GetTrainerServiceInfo, i)
+            local name = ok and nm and Trim(nm) or nil
+            local rank = ok and rk and Trim(rk) or ""
+            local icon = ""
+            if GetTrainerServiceIcon then local iok, ic = pcall(GetTrainerServiceIcon, i); if iok then icon = ic or "" end end
+            local isHeader = (not icon) or icon == "" or icon == 0
+            local lv = 0
+            if GetTrainerServiceLevelReq then local lok, l = pcall(GetTrainerServiceLevelReq, i); if lok then lv = l or 0 end end
+            if isHeader then
+                curValid = classCats[name] and true or false
+                Msg("  #" .. i .. " |cffffd100[表头]|r '" .. (name or "?") .. "' valid=" .. tostring(curValid))
+            else
+                if curValid then kept = kept + 1 else skipped = skipped + 1 end
+                -- 默认只打被跳过的(丢失项)；带 filter 时打命中项
+                if (filter and hit(name)) or (not filter and not curValid) then
+                    Msg("  #" .. i .. " '" .. (name or "?") .. "' rank='" .. rank .. "' lv=" .. lv
+                        .. " icon=" .. (icon == "" and "|cffff0000空|r" or "有")
+                        .. " 采集=" .. (curValid and "|cff00ff00是|r" or "|cffff0000否|r"))
+                end
+            end
+        end
+        Msg("  小计：采集=" .. kept .. " 跳过=" .. skipped)
+    else
+        Msg("  (不在训练师窗口，跳过原始列表)")
+    end
+
+    -- 2) 已采集 trainerDB
+    if not trainerDB then Msg("|cFFff0000trainerDB=nil（未进世界?）|r"); return end
+    local cnt = 0
+    for k, e in pairs(trainerDB) do if type(e) == "table" then cnt = cnt + 1 end end
+    Msg("|cFF00FF00[trainerDB]|r 条数=" .. cnt .. " captured=" .. tostring(trainerDB._captured))
+    for k, e in pairs(trainerDB) do
+        if type(e) == "table" and hit(e.name) then
+            Msg("  '" .. (e.name or "?") .. "' rank='" .. (e.rank or "") .. "' lv=" .. (e.levelReq or 0) .. " cat='" .. (e.category or "") .. "'")
+        end
+    end
+
+    -- 3) 计算出的未学 byTab
+    InvalidateCache()
+    local r = ComputeUnlearned()
+    Msg("|cFF00FF00[ComputeUnlearned]|r:")
+    for ti = 1, GetNumSpellTabs() do
+        local list = r.byTab[ti]
+        local tn = GetSpellTabInfo(ti)
+        local n = list and table.getn(list) or 0
+        Msg("  tab" .. ti .. " '" .. (tn or "?") .. "' 未学=" .. n)
+        if list then for _, u in ipairs(list) do Msg("     - '" .. u.name .. "' lv=" .. (u.levelReq or 0) .. " rank='" .. (u.rank or "") .. "'") end end
+    end
 end
 
 -- =================== 事件 / 延迟 ==============================
