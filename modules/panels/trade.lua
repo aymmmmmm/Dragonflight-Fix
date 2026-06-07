@@ -50,20 +50,40 @@ DFUI:NewMod("Trade", 5, function()
     --    不 reparent —— 保持 parent=TradeFrame，其 FrameLevel 高于 bg，
     --    整体压在 bg 金属边框(ARTWORK/OVERLAY)之上，避免被角/边盖住。
     ---------------------------------------------------------------------------
-    local PORTRAIT_SIZE = 50
+    local PORTRAIT_SIZE = 58            -- 放大填满金环内孔（环 80，内孔约 60；实测可调）
+    local PORTRAIT_ZOOM = 0.10         -- SetTexCoord 裁掉脸贴图四周黑边（zoom in，实测可调）
+    local ROCK_TEX = TEX .. "interface\\UI-Background-Rock.blp"
 
-    -- 对齐参考图(交易.png)：头像靠左/中、金环顶边贴框顶（接近 vanilla 原 x=7/183）
-    TradeFramePlayerPortrait:SetWidth(PORTRAIT_SIZE)
-    TradeFramePlayerPortrait:SetHeight(PORTRAIT_SIZE)
-    TradeFramePlayerPortrait:SetDrawLayer("BORDER", 0)
-    TradeFramePlayerPortrait:ClearAllPoints()
-    TradeFramePlayerPortrait:SetPoint("BOTTOMLEFT", TradePlayerItem1, "TOPLEFT", -12, 38)
+    -- 头像后垫暗岩石底（金属矿质感）：脸没填满内孔处露岩石而非黑；
+    -- 放 bg 层（FrameLevel 低于 portrait）→ 垫在脸之下、面板岩石底之上
+    local function AddPortraitRock(portrait)
+        local rock = bg:CreateTexture(nil, "ARTWORK")
+        rock:SetTexture(ROCK_TEX)
+        rock:SetWidth(PORTRAIT_SIZE)
+        rock:SetHeight(PORTRAIT_SIZE)
+        rock:SetPoint("CENTER", portrait, "CENTER", 0, 0)
+        return rock
+    end
 
-    TradeFrameRecipientPortrait:SetWidth(PORTRAIT_SIZE)
-    TradeFrameRecipientPortrait:SetHeight(PORTRAIT_SIZE)
-    TradeFrameRecipientPortrait:SetDrawLayer("BORDER", 0)
-    TradeFrameRecipientPortrait:ClearAllPoints()
-    TradeFrameRecipientPortrait:SetPoint("BOTTOMLEFT", TradeRecipientItem1, "TOPLEFT", -12, 38)
+    -- 头像：放大填内孔 + 裁边去黑 + 垫岩石底（对齐 debug 反馈：消黑边、缝隙填金属矿）
+    local function SetupPortrait(portrait, anchorItem)
+        portrait:SetWidth(PORTRAIT_SIZE)
+        portrait:SetHeight(PORTRAIT_SIZE)
+        portrait:SetDrawLayer("BORDER", 0)
+        portrait:SetTexCoord(PORTRAIT_ZOOM, 1 - PORTRAIT_ZOOM, PORTRAIT_ZOOM, 1 - PORTRAIT_ZOOM)
+        portrait:ClearAllPoints()
+        portrait:SetPoint("BOTTOMLEFT", anchorItem, "TOPLEFT", -12, 38)
+        AddPortraitRock(portrait)
+    end
+    SetupPortrait(TradeFramePlayerPortrait,    TradePlayerItem1)
+    SetupPortrait(TradeFrameRecipientPortrait, TradeRecipientItem1)
+
+    -- vanilla TradeFrame_Update 每次刷新调 SetPortraitTexture，会把 TexCoord 重置回 (0,1,0,1)，
+    -- 裁边随之失效黑边重现 → post-hook(append=true) 在其后重设裁边，保持去黑边持续生效
+    hooksecurefunc("TradeFrame_Update", function()
+        TradeFramePlayerPortrait:SetTexCoord(PORTRAIT_ZOOM, 1 - PORTRAIT_ZOOM, PORTRAIT_ZOOM, 1 - PORTRAIT_ZOOM)
+        TradeFrameRecipientPortrait:SetTexCoord(PORTRAIT_ZOOM, 1 - PORTRAIT_ZOOM, PORTRAIT_ZOOM, 1 - PORTRAIT_ZOOM)
+    end, true)
 
     ---------------------------------------------------------------------------
     -- 5. 名字：锚各自头像右上（金币在头像正下方，名字在右上）
@@ -75,29 +95,89 @@ DFUI:NewMod("Trade", 5, function()
     TradeFrameRecipientNameText:SetPoint("TOPLEFT", TradeFrameRecipientPortrait, "TOPRIGHT", 12, -2)
 
     ---------------------------------------------------------------------------
-    -- 5b. 金币：左右各加 DF 凹底框（素材框），金币框叠其上 —— 视觉对称
-    --     左 TradePlayerInputMoneyFrame=输入格(永显)；右 TradeRecipientMoneyFrame
-    --     =SmallMoneyFrame(出钱才显)。框始终在 → 空着也对称；金币行为保持 vanilla。
-    --     复用 DFUI.CreateRetailInset(大理石底+边+角，已有 TGA，无新素材)。
-    --     -14：下移到金环底缘以下，避免环下半弧压住框（环比头像大 15px）。
+    -- 5b. 货币：左右各画 DF 大理石凹框 + 裸放 vanilla 金银铜
+    --     左 TradePlayerInputMoneyFrame=MoneyInputFrame compact(输入,永显)；
+    --     右 TradeRecipientMoneyFrame=只读(对方出钱才显)。
+    --     关键：凹框画成 bg(面板底框)自己的 region(非独立 frame)，跨 frame 恒在
+    --     money(parent=TradeFrame,高 level)之下 → 金银铜物理上绝不被盖；左右同函数=一致。
+    --     对方没钱时 SmallMoneyFrame 自隐但凹框 region 仍在 → 对称占位。
+    --     -14：下移到金环底缘以下，避免环下半弧压住框。
     ---------------------------------------------------------------------------
+    local MARBLE_TEX = TEX .. "interface\\ui-background-marble.tga"
+    local UIH_TEX    = TEX .. "panels\\df\\professions\\uiframe_h.tga"
+    local UIV_TEX    = TEX .. "panels\\df\\professions\\uiframe_v.tga"
+    local CORNER_TEX = TEX .. "interface\\generalframeinsetborders.tga"
+    -- 大理石凹框作 host(=box) 自己的 region；box level 运行时跟随 money-1 → 框恒在金银铜之下
+    local function DrawMoneyInset(host)
+        local eT, eB, eL, eR, cz = 3, 3, 2, 2, 5
+        local marble = host:CreateTexture(nil, "BACKGROUND")
+        marble:SetTexture(MARBLE_TEX)
+        marble:SetAllPoints(host)
+        local top = host:CreateTexture(nil, "ARTWORK")
+        top:SetTexture(UIH_TEX); top:SetTexCoord(0.0, 1.0, 0.9063, 0.9297)
+        top:SetPoint("TOPLEFT",  host, "TOPLEFT",  0, 0)
+        top:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
+        top:SetHeight(eT)
+        local bot = host:CreateTexture(nil, "ARTWORK")
+        bot:SetTexture(UIH_TEX); bot:SetTexCoord(0.0, 1.0, 0.8672, 0.8906)
+        bot:SetPoint("BOTTOMLEFT",  host, "BOTTOMLEFT",  0, 0)
+        bot:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
+        bot:SetHeight(eB)
+        local left = host:CreateTexture(nil, "ARTWORK")
+        left:SetTexture(UIV_TEX); left:SetTexCoord(0.4844, 0.5313, 0.0, 1.0)
+        left:SetPoint("TOPLEFT",    host, "TOPLEFT",    0, 0)
+        left:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT", 0, 0)
+        left:SetWidth(eL)
+        local right = host:CreateTexture(nil, "ARTWORK")
+        right:SetTexture(UIV_TEX); right:SetTexCoord(0.5313, 0.4844, 0.0, 1.0)
+        right:SetPoint("TOPRIGHT",    host, "TOPRIGHT",    0, 0)
+        right:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
+        right:SetWidth(eR)
+        local function corner(point, l, r, t, b)
+            local c = host:CreateTexture(nil, "ARTWORK")
+            c:SetTexture(CORNER_TEX); c:SetTexCoord(l, r, t, b)
+            c:SetPoint(point, host, point, 0, 0)
+            c:SetWidth(cz); c:SetHeight(cz)
+        end
+        corner("TOPLEFT",     0.703125, 0.828125, 0.03125, 0.28125)
+        corner("TOPRIGHT",    0.859375, 0.984375, 0.03125, 0.28125)
+        corner("BOTTOMLEFT",  0.328125, 0.453125, 0.6875,  0.9375)
+        corner("BOTTOMRIGHT", 0.515625, 0.640625, 0.6875,  0.9375)
+    end
+
+    local moneyPairs = {}
     local MONEY_BOX_W, MONEY_BOX_H = 116, 24
     local function CreateMoneyBox(portrait, moneyFrame)
         if not moneyFrame then return end
-        local box = CreateFrame("Frame", nil, bg)
+        local box = CreateFrame("Frame", nil, bg)   -- 货币框载体（始终显示=对方没钱也占位对称）
         box:SetWidth(MONEY_BOX_W)
         box:SetHeight(MONEY_BOX_H)
         box:SetPoint("TOPLEFT", portrait, "BOTTOMLEFT", 8, -14)
-        box:SetFrameLevel(bg:GetFrameLevel() + 2)
-        DFUI.CreateRetailInset(box, { anchors = {0, 0, 0, 0}, followFrame = TradeFrame })
+        DrawMoneyInset(box)                          -- 大理石凹框作 box region
         moneyFrame:ClearAllPoints()
         moneyFrame:SetPoint("LEFT", box, "LEFT", 6, 0)
-        -- 金币框 parent 仍 TradeFrame（保 vanilla 金钱逻辑），抬帧层压在 inset 大理石底之上
-        if moneyFrame.SetFrameLevel then moneyFrame:SetFrameLevel(box:GetFrameLevel() + 8) end
+        table.insert(moneyPairs, { box = box, money = moneyFrame })
         return box
     end
     CreateMoneyBox(TradeFramePlayerPortrait,    TradePlayerInputMoneyFrame)
     CreateMoneyBox(TradeFrameRecipientPortrait, TradeRecipientMoneyFrame)
+
+    -- ★真因：money 是 UIPanel 子 frame，FrameLevel 在显示时由 UIParent 动态决定，
+    --   加载时设的静态 box/bg level 对不上（常 ≥ money）→ 大理石框压住金银铜。
+    --   解法：运行时让 box level 跟随 money-1（同 strata），框恒在金银铜之下；
+    --   box parent=bg 始终显示 → 对方没出钱也保留框、左右对称。
+    local lvlWatcher = CreateFrame("Frame", nil, bg)
+    lvlWatcher:SetScript("OnUpdate", function()
+        if not TradeFrame:IsShown() then return end
+        for i = 1, table.getn(moneyPairs) do
+            local p = moneyPairs[i]
+            local target = p.money:GetFrameLevel() - 1
+            if target < 0 then target = 0 end
+            if p.box:GetFrameLevel() ~= target then
+                p.box:SetFrameLevel(target)
+            end
+        end
+    end)
 
     ---------------------------------------------------------------------------
     -- 6. 高层覆盖框 titleHolder（金环挂这层确保盖住头像方角；
