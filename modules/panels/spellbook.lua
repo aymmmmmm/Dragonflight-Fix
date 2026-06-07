@@ -20,6 +20,9 @@ local L = {
     ERR_NO_RIGHT_TAB = " 服务端没有 %s SpellTab",
     ERR_RIGHT_TAB_FAIL = " 右侧 Tab 创建失败：",
     PAGE_FMT = "第 %d / %d 页",
+    LEARN_AT_LEVEL = "%d 级可学",
+    NEXT_RANK_AT = "下一级 %d 级",
+    REQUIRES_LEVEL = "需要等级 %d",
 }
 
 -- Turtle WoW Tab 名称清理
@@ -322,6 +325,8 @@ DFUI:NewMod("SpellBook", 5, function()
                 end
             end
         elseif tabIndex then
+            -- 未学法术 / 已学下一级数据（来自 trainerdata.lua 的训练师采集，无数据则为空）
+            local unlearnedData = DFUI.GetSpellbookUnlearned and DFUI:GetSpellbookUnlearned() or nil
             local name, texture, offset, numSpells = GetSpellTabInfo(tabIndex)
             for i = 1, numSpells do
                 local spellIndex = offset + i
@@ -357,8 +362,16 @@ DFUI:NewMod("SpellBook", 5, function()
                         isPassive = IsSpellPassive(spellIndex, BOOKTYPE_SPELL)
                             or (spellRank and (string.find(spellRank, "Passive") or string.find(spellRank, "被动"))) and true or false,
                         isRacial = isRacial,
-                        tabIndex = tabIndex
+                        tabIndex = tabIndex,
+                        -- 已学法术若有更高未学 rank，标注其所需角色等级
+                        nextRankLevel = unlearnedData and unlearnedData.nextRank[cleanName] or nil,
                     })
+                end
+            end
+            -- 追加该 tab 的未学法术（置灰伪记录，index=nil）
+            if unlearnedData and unlearnedData.byTab[tabIndex] then
+                for _, u in ipairs(unlearnedData.byTab[tabIndex]) do
+                    table.insert(spellData, u)
                 end
             end
         end
@@ -461,7 +474,7 @@ DFUI:NewMod("SpellBook", 5, function()
         container.name = name
 
         local passive = container:CreateFontString(nil, "OVERLAY")
-        passive:SetFont("Fonts\\FRIZQT__.TTF", 8)
+        passive:SetFont("Fonts\\FRIZQT__.TTF", 10)
         passive:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -3)
         passive:SetText(L.PASSIVE)
         passive:SetTextColor(0.85, 0.70, 0.20)
@@ -469,21 +482,21 @@ DFUI:NewMod("SpellBook", 5, function()
         container.passive = passive
 
         local racial = container:CreateFontString(nil, "OVERLAY")
-        racial:SetFont("Fonts\\FRIZQT__.TTF", 8)
+        racial:SetFont("Fonts\\FRIZQT__.TTF", 10)
         racial:SetText(L.RACIAL)
         racial:SetTextColor(0.85, 0.70, 0.20)
         racial:Hide()
         container.racial = racial
 
         local rank = container:CreateFontString(nil, "OVERLAY")
-        rank:SetFont("Fonts\\FRIZQT__.TTF", 8)
+        rank:SetFont("Fonts\\FRIZQT__.TTF", 10)
         rank:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -3)
         rank:SetTextColor(0.85, 0.70, 0.20)
         rank:Hide()
         container.rank = rank
 
         iconBtn:SetScript("OnMouseDown", function()
-            if container.isPassive then return end
+            if container.isPassive or container.isUnlearned then return end
             icon:ClearAllPoints()
             icon:SetWidth(49)
             icon:SetHeight(49)
@@ -495,8 +508,8 @@ DFUI:NewMod("SpellBook", 5, function()
         end)
 
         iconBtn:SetScript("OnMouseUp", function()
-            -- 被动不响应：完全无视觉变化（边界态由 UpdateSpellDisplay 重画时归零兜底）
-            if container.isPassive then return end
+            -- 被动/未学不响应：完全无视觉变化（边界态由 UpdateSpellDisplay 重画时归零兜底）
+            if container.isPassive or container.isUnlearned then return end
             icon:ClearAllPoints()
             icon:SetWidth(48)
             icon:SetHeight(48)
@@ -507,7 +520,7 @@ DFUI:NewMod("SpellBook", 5, function()
         end)
 
         iconBtn:SetScript("OnClick", function()
-            if container.isPassive then return end
+            if container.isPassive or container.isUnlearned then return end
             if container.spellIndex and container.bookType then
                 CastSpell(container.spellIndex, container.bookType)
             end
@@ -516,7 +529,7 @@ DFUI:NewMod("SpellBook", 5, function()
         end)
 
         iconBtn:SetScript("OnDragStart", function()
-            if container.isPassive then return end
+            if container.isPassive or container.isUnlearned then return end
             if container.spellIndex and container.bookType then
                 PickupSpell(container.spellIndex, container.bookType)
             end
@@ -524,7 +537,15 @@ DFUI:NewMod("SpellBook", 5, function()
 
         iconBtn:SetScript("OnEnter", function()
             highlight:Show()
-            if container.spellIndex and container.bookType then
+            if container.isUnlearned then
+                -- 未学无 spellIndex，手搓 tooltip：法术名 + 需要等级
+                GameTooltip:SetOwner(iconBtn, "ANCHOR_RIGHT")
+                GameTooltip:SetText(container.spellName or "")
+                if container.levelReq and container.levelReq > 0 then
+                    GameTooltip:AddLine(string.format(L.REQUIRES_LEVEL, container.levelReq), 1, 0.4, 0.4)
+                end
+                GameTooltip:Show()
+            elseif container.spellIndex and container.bookType then
                 GameTooltip:SetOwner(iconBtn, "ANCHOR_RIGHT")
                 GameTooltip:SetSpell(container.spellIndex, container.bookType)
                 GameTooltip:Show()
@@ -568,28 +589,38 @@ DFUI:NewMod("SpellBook", 5, function()
         EnsureBaseline()
         spellbook:CollectSpells(spellbook.selectedTabIndex, spellbook.bookType)
 
-        local filteredSpells = {}
+        -- 分离已学 / 未学（未学伪记录 index=nil，不可进已学的最高 rank 去重，否则 nil 比较报错）
+        local learned, unlearned = {}, {}
         for i, spell in ipairs(spellData) do
             if filterShowPassive or not spell.isPassive then
-                table.insert(filteredSpells, spell)
+                if spell.isUnlearned then
+                    table.insert(unlearned, spell)
+                else
+                    table.insert(learned, spell)
+                end
             end
         end
 
-        local maxRanks = {}
-        for i, spell in ipairs(filteredSpells) do
-            -- 不同变体视为不同法术，用 name+variant 作为去重键
-            local dedupeKey = spell.name .. "\001" .. (spell.variant or "")
-            if not maxRanks[dedupeKey] or spell.index > maxRanks[dedupeKey].index then
-                maxRanks[dedupeKey] = spell
-            end
-        end
-
+        -- 已学：不显示等级时按 name+variant 折叠成最高 rank
         if not filterShowRanks then
-            filteredSpells = {}
-            for key, spell in pairs(maxRanks) do
-                table.insert(filteredSpells, spell)
+            local maxRanks = {}
+            for i, spell in ipairs(learned) do
+                local dedupeKey = spell.name .. "\001" .. (spell.variant or "")
+                if not maxRanks[dedupeKey] or spell.index > maxRanks[dedupeKey].index then
+                    maxRanks[dedupeKey] = spell
+                end
             end
-            table.sort(filteredSpells, function(a, b) return a.index < b.index end)
+            learned = {}
+            for key, spell in pairs(maxRanks) do
+                table.insert(learned, spell)
+            end
+            table.sort(learned, function(a, b) return a.index < b.index end)
+        end
+
+        -- 未学已在数据层按 levelReq 升序折叠成每法术一条；合并：已学在前、未学置灰在后
+        local filteredSpells = learned
+        for _, spell in ipairs(unlearned) do
+            table.insert(filteredSpells, spell)
         end
 
         spellbook.maxPages = math.ceil(table.getn(filteredSpells) / BUTTONS_PER_PAGE)
@@ -618,6 +649,17 @@ DFUI:NewMod("SpellBook", 5, function()
                 btn.bookType = spellbook.bookType
                 btn.spellName = spell.name
 
+                -- 未学态：置灰图标 + 灰名（1.12 无 SetDesaturated，用 vertexColor 压暗）
+                btn.isUnlearned = spell.isUnlearned
+                btn.levelReq = spell.levelReq
+                if spell.isUnlearned then
+                    btn.icon:SetVertexColor(0.4, 0.4, 0.4)
+                    btn.name:SetTextColor(0.6, 0.6, 0.6)
+                else
+                    btn.icon:SetVertexColor(1, 1, 1)
+                    btn.name:SetTextColor(1.0, 0.82, 0)
+                end
+
                 -- 新学法术高亮：仅玩家法术（非宠物）按 name 比对 newSpells 集合
                 if btn.newGlow then
                     if spellbook.bookType ~= BOOKTYPE_PET and spell.name and newSpells[spell.name] then
@@ -638,9 +680,13 @@ DFUI:NewMod("SpellBook", 5, function()
                     end
                 end
 
-                local start, duration, enable = GetSpellCooldown(spell.index, spellbook.bookType)
-                if btn.iconBtn.cooldown and start and duration and enable ~= nil then
-                    CooldownFrame_SetTimer(btn.iconBtn.cooldown, start, duration, enable)
+                if spell.index then
+                    local start, duration, enable = GetSpellCooldown(spell.index, spellbook.bookType)
+                    if btn.iconBtn.cooldown and start and duration and enable ~= nil then
+                        CooldownFrame_SetTimer(btn.iconBtn.cooldown, start, duration, enable)
+                    end
+                elseif btn.iconBtn.cooldown then
+                    CooldownFrame_SetTimer(btn.iconBtn.cooldown, 0, 0, 0)
                 end
                 local lastAnchor = btn.name
                 btn.isPassive = spell.isPassive
@@ -660,13 +706,26 @@ DFUI:NewMod("SpellBook", 5, function()
                 end
                 btn.rank:ClearAllPoints()
                 btn.rank:SetPoint("TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -3)
-                if spell.isPassive then
+                if spell.isUnlearned then
+                    btn.rank:SetText(string.format(L.LEARN_AT_LEVEL, spell.levelReq or 0))
+                    btn.rank:SetTextColor(0.55, 0.78, 1.0)   -- 淡蓝：可学提示，区别于已学的土黄 rank
+                    btn.rank:Show()
+                elseif spell.isPassive then
                     btn.rank:Hide()
                 elseif spell.variant then
                     btn.rank:SetText(spell.variant)
+                    btn.rank:SetTextColor(0.85, 0.70, 0.20)
                     btn.rank:Show()
                 elseif spell.rank and spell.rank ~= "" and spell.rank ~= "Passive" and spell.rank ~= "Racial" and spell.rank ~= "Racial Passive" then
-                    btn.rank:SetText(spell.rank)
+                    if spell.nextRankLevel then
+                        btn.rank:SetText(spell.rank .. "  |cff8cc8ff" .. string.format(L.NEXT_RANK_AT, spell.nextRankLevel) .. "|r")
+                    else
+                        btn.rank:SetText(spell.rank)
+                    end
+                    btn.rank:SetTextColor(0.85, 0.70, 0.20)
+                    btn.rank:Show()
+                elseif spell.nextRankLevel then
+                    btn.rank:SetText("|cff8cc8ff" .. string.format(L.NEXT_RANK_AT, spell.nextRankLevel) .. "|r")
                     btn.rank:Show()
                 else
                     btn.rank:Hide()
@@ -677,6 +736,8 @@ DFUI:NewMod("SpellBook", 5, function()
                 btn.spellIndex = nil
                 btn.bookType = nil
                 btn.isPassive = nil
+                btn.isUnlearned = nil
+                btn.levelReq = nil
                 btn:Hide()
             end
         end
@@ -1206,6 +1267,13 @@ DFUI:NewMod("SpellBook", 5, function()
         for i = 1, GetNumSpellTabs() do
             local n, _, off, ns = GetSpellTabInfo(i)
             DEFAULT_CHAT_FRAME:AddMessage("  " .. i .. ": '" .. (n or "?") .. "' offset=" .. (off or 0) .. " count=" .. (ns or 0))
+        end
+    end
+
+    -- 供 trainerdata.lua 采集后即时刷新（法术书开着时访问训练师）
+    DFUI.RefreshSpellbookFromTrainer = function()
+        if spellbook:IsShown() then
+            spellbook:UpdateSpellDisplay()
         end
     end
 

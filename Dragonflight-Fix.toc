@@ -5,7 +5,7 @@
 ## Notes-zhCN: 巨龙时代UI - 汉化修复版 (Turtle WoW 1.18.1)
 ## Version: 2.1
 ## Author: Guzruul - Reforged by Stormhand - Fix by Claude
-## SavedVariables: DFUI_PROFILES, DFUI_DB_SETUP, DFUI_BUGS, DFUI_HealthDB
+## SavedVariables: DFUI_PROFILES, DFUI_DB_SETUP, DFUI_BUGS, DFUI_HealthDB, DFUI_TrainerSpells
 ## OptionalDeps: pfQuest, pfQuest-turtle
 ## SavedVariablesPerCharacter: DFUI_CUR_PROFILE, DFUI_FRAMEPOS
 
@@ -63,6 +63,7 @@ modules\panels\help.lua
 modules\panels\openmail.lua
 modules\panels\inspect.lua
 modules\panels\macro.lua
+modules\panels\trainerdata.lua
 modules\panels\spellbook.lua
 modules\panels\keybinding.lua
 modules\ui\ui.lua
