@@ -231,6 +231,38 @@ DFUI:NewMod("Micro", 1, function()
             if charBtn:GetHighlightTexture() then
                 charBtn:GetHighlightTexture():SetTexCoord(82/256, 116/256, 216/512, 264/512)
             end
+
+            -- 在现有 DF 角色图标上叠加真实角色头像（OVERLAY 层覆盖底图标）
+            -- charBtn 是 vanilla frame，跨 /reload 不销毁，守护字段只防重复"创建"；
+            -- 尺寸/位置放守护块外，每次都重设，方便 /reload 即时调参
+            if not charBtn._dfPortrait then
+                charBtn._dfPortrait = charBtn:CreateTexture(nil, "OVERLAY")
+            end
+            -- 实测剪影本体(连通域去相邻图标污染,转ascii/PNG核对)：盾牌垂直恰居
+            -- 框体中心、水平偏左0.57px → 头像居中嵌入剪影轮廓内,四边对称
+            charBtn._dfPortrait:SetWidth(10)
+            charBtn._dfPortrait:SetHeight(13)
+            charBtn._dfPortrait:ClearAllPoints()
+            charBtn._dfPortrait:SetPoint("CENTER", charBtn, "CENTER", -0.57, 0)
+
+            local function refreshCharPortrait()
+                if charBtn._dfPortrait then
+                    SetPortraitTexture(charBtn._dfPortrait, "player")
+                end
+            end
+
+            -- 独立事件 frame 保持头像刷新（登录/重载 + 形态/易容变化）
+            if not charBtn._dfPortraitEvents then
+                local ef = CreateFrame("Frame")
+                ef:RegisterEvent("PLAYER_ENTERING_WORLD")
+                ef:RegisterEvent("UNIT_PORTRAIT_UPDATE")
+                ef:SetScript("OnEvent", function()
+                    refreshCharPortrait()
+                end)
+                charBtn._dfPortraitEvents = ef
+            end
+
+            refreshCharPortrait()
         end
     end
 
