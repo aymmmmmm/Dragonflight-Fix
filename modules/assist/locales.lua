@@ -6,7 +6,7 @@ local enUS = {
     ["panelTitle"]    = "Assist",
     ["close"]         = "Close",
     ["enabled"]       = "Enabled",
-    ["masterOn"]      = "Enable All Assist Features",
+    ["masterOn"]      = "Assist Master Switch (enable checked)",
 
     -- group titles
     ["grpAuto"]       = "Automation",
@@ -54,7 +54,7 @@ local enUS = {
 
     -- interface
     ["uiAttackBar"]   = "Attack Swing Timer",
-    ["uiAttackBarDesc"]= "Main / off-hand + ranged swing timer bars. Shift+drag to move.",
+    ["uiAttackBarDesc"]= "Main / off-hand + ranged swing timer bars. Hold Ctrl+Shift+Alt to move (layout mode).",
     ["uiQuickMark"]   = "Quick Mark",
     ["uiQuickMarkDesc"]= "Double-click the target frame to open a radial raid-marker wheel.",
 
@@ -67,7 +67,7 @@ local enUS = {
 
 local zhCN = {
     ["panelTitle"]    = "辅助功能",
-    ["masterOn"]      = "启用全部辅助功能",
+    ["masterOn"]      = "辅助总开关（启用已勾选的功能）",
     ["close"]         = "关闭",
     ["enabled"]       = "启用",
 
@@ -117,7 +117,7 @@ local zhCN = {
 
     -- interface
     ["uiAttackBar"]   = "攻击计时条",
-    ["uiAttackBarDesc"]= "主手/副手 + 远程挥击计时条。Shift+拖动移动位置。",
+    ["uiAttackBarDesc"]= "主手/副手 + 远程挥击计时条。按住 Ctrl+Shift+Alt 进布局模式拖动。",
     ["uiQuickMark"]   = "快速标记",
     ["uiQuickMarkDesc"]= "双击目标框打开径向团队标记轮盘。",
 

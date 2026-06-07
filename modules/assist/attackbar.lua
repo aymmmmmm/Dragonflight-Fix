@@ -42,11 +42,11 @@ local cachedOHLink = nil
 ----------------------------------------------------------------------
 
 local NEXT_MELEE_ABILITIES = {
-    "Heroic Strike",
-    "Cleave",
-    "Maul",
-    "Raptor Strike",
-    "Slam",
+    "Heroic Strike", "英勇打击",
+    "Cleave", "顺劈斩",
+    "Maul", "槌击",
+    "Raptor Strike", "猛禽一击",
+    "Slam", "猛击",
 }
 
 local function IsNextMeleeAbility(msg)
@@ -57,17 +57,33 @@ local function IsNextMeleeAbility(msg)
     return false
 end
 
--- Returns "ranged" or nil.
+-- Returns "ranged" or nil. 中英双语（中文客户端战斗日志为中文）
+local RANGED_PATTERNS = {
+    "Auto Shot", "自动射击",
+    "Shoot Bow", "弓射击",
+    "Shoot Crossbow", "弩射击",
+    "Shoot Gun", "枪械射击",
+    "Your Throw", "投掷",
+}
 local function DetectRangedType(msg)
     if not msg then return nil end
-    if string.find(msg, "Auto Shot")
-       or string.find(msg, "Shoot Bow")
-       or string.find(msg, "Shoot Crossbow")
-       or string.find(msg, "Shoot Gun")
-       or string.find(msg, "Your Throw") then
-        return "ranged"
+    for _, p in ipairs(RANGED_PATTERNS) do
+        if string.find(msg, p) then return "ranged" end
     end
     return nil
+end
+
+-- 招架/额外攻击：优先用 WoW 内置 GlobalString 格式串(语言无关)构造 pattern，
+-- 存到 DFUI.Assist 上(避免增加 OnEvent 闭包 upvalue，防 Lua5.0 上限)；运行时再叠加双语硬编码兜底。
+do
+    local function buildGS(gs)
+        if not gs or gs == "" then return nil end
+        local p = string.gsub(gs, "%%%d?%$?s", "(.+)")
+        p = string.gsub(p, "%%%d?%$?d", "%%d+")
+        return p
+    end
+    DFUI.Assist.parryPattern = buildGS(VSPARRYOTHERSELF)
+    DFUI.Assist.extraPattern = buildGS(SPELLEXTRAATTACKSSELF) or buildGS(SPELLEXTRAATTACKSOTHER)
 end
 
 -- Consumable flag: CHAT_MSG_SPELL_SELF_BUFF fires before ITEM_LOCK_CHANGED
@@ -140,7 +156,7 @@ end
 --
 -- Tooltip scan is kept as a fallback, because some servers
 -- return 0 from UnitRangedDamage.
-local SCAN_TIP_NAME = "QTAttackBarScanTip"
+local SCAN_TIP_NAME = "DFUIAssistAttackBarScanTip"
 
 local function GetRangedSlotSpeedFromTooltip()
     local slotID = GetInventorySlotInfo("RangedSlot")
@@ -318,7 +334,7 @@ local function HandleRangedSwing(f)
     state.rangedStart   = now
     state.rangedLandsAt = now + speed
 
-    f.rangedBar:SetStatusBarColor(0.2, 0.7, 0.3, 0.9)
+    f.rangedBar:SetStatusBarColor(0.3, 0.7, 0.4, 1)
 
     ApplyBarLayout(f)
     f.rangedBar:SetMinMaxValues(state.rangedStart, state.rangedLandsAt)
@@ -422,36 +438,19 @@ function DFUI.Assist.CreateAttackBar()
     f:SetClampedToScreen(true)
     f.currentLayout = nil
 
-    if DFUI.Assist.db and DFUI.Assist.db.attackBarX and DFUI.Assist.db.attackBarY then
-        f:ClearAllPoints()
-        f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT",
-                   DFUI.Assist.db.attackBarX, DFUI.Assist.db.attackBarY)
-    end
-
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", function()
-        if IsShiftKeyDown() then this:StartMoving() end
-    end)
-    f:SetScript("OnDragStop", function()
-        this:StopMovingOrSizing()
-        local x = this:GetLeft()
-        local y = this:GetTop()
-        if x and y then
-            DFUI.Assist.db.attackBarX = x
-            DFUI.Assist.db.attackBarY = y
-        end
-    end)
+    -- 位置/拖动交给 DFUI 统一布局系统（frames.lua 的 MakeFrameMovable + DFUI_FRAMEPOS）：
+    -- 主框 DFUIAssistAttackBar 已注册进 framesToMakeMovable，按住 Ctrl+Shift+Alt 进布局模式拖动。
 
     -- Background
     local bg = f:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(f)
-    bg:SetTexture(0, 0, 0, 0.5)
+    bg:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarBackground.blp")
 
     -- Main Hand StatusBar
     local bar = CreateFrame("StatusBar", nil, f)
     bar:SetAllPoints(f)
-    bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    bar:SetStatusBarColor(0.8, 0.2, 0.2, 0.9)
+    bar:SetStatusBarTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarStandard3.tga")
+    bar:SetStatusBarColor(0.85, 0.55, 0.2, 1)
 
     local txt = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     txt:SetPoint("CENTER", bar, "CENTER", 0, 0)
@@ -468,30 +467,16 @@ function DFUI.Assist.CreateAttackBar()
     ohFrame:SetWidth(BAR_WIDTH)
     ohFrame:SetHeight(BAR_HEIGHT_DUAL)
     ohFrame:SetPoint("TOP", f, "BOTTOM", 0, -BAR_GAP_DUAL)
-    ohFrame:EnableMouse(true)
-    ohFrame:RegisterForDrag("LeftButton")
-
-    ohFrame:SetScript("OnDragStart", function()
-        if IsShiftKeyDown() then f:StartMoving() end
-    end)
-    ohFrame:SetScript("OnDragStop", function()
-        f:StopMovingOrSizing()
-        local x = f:GetLeft()
-        local y = f:GetTop()
-        if x and y then
-            DFUI.Assist.db.attackBarX = x
-            DFUI.Assist.db.attackBarY = y
-        end
-    end)
+    ohFrame:EnableMouse(true)   -- 仅为 tooltip；拖动随主框（统一布局系统）
 
     local ohBg = ohFrame:CreateTexture(nil, "BACKGROUND")
     ohBg:SetAllPoints(ohFrame)
-    ohBg:SetTexture(0, 0, 0, 0.5)
+    ohBg:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarBackground.blp")
 
     local ohBar = CreateFrame("StatusBar", nil, ohFrame)
     ohBar:SetAllPoints(ohFrame)
-    ohBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    ohBar:SetStatusBarColor(0.2, 0.6, 0.8, 0.9)
+    ohBar:SetStatusBarTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarStandard3.tga")
+    ohBar:SetStatusBarColor(0.3, 0.55, 0.8, 1)
 
     local ohTxt = ohBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     ohTxt:SetPoint("CENTER", ohBar, "CENTER", 0, 0)
@@ -507,7 +492,7 @@ function DFUI.Assist.CreateAttackBar()
         GameTooltip:SetOwner(f, "ANCHOR_TOPLEFT")
         GameTooltip:AddLine("攻击条 (副手)")
         GameTooltip:AddLine("双持武器时自动显示副手攻击进度", 0.7, 0.7, 0.7)
-        GameTooltip:AddLine("Shift + 左键拖动: 移动位置", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("按住 Ctrl+Shift+Alt 进入布局模式拖动", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     ohFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -520,30 +505,16 @@ function DFUI.Assist.CreateAttackBar()
     rangedFrame:SetWidth(BAR_WIDTH)
     rangedFrame:SetHeight(BAR_HEIGHT_SINGLE)
     rangedFrame:SetPoint("TOP", f, "BOTTOM", 0, -BAR_GAP_DUAL)
-    rangedFrame:EnableMouse(true)
-    rangedFrame:RegisterForDrag("LeftButton")
-
-    rangedFrame:SetScript("OnDragStart", function()
-        if IsShiftKeyDown() then f:StartMoving() end
-    end)
-    rangedFrame:SetScript("OnDragStop", function()
-        f:StopMovingOrSizing()
-        local x = f:GetLeft()
-        local y = f:GetTop()
-        if x and y then
-            DFUI.Assist.db.attackBarX = x
-            DFUI.Assist.db.attackBarY = y
-        end
-    end)
+    rangedFrame:EnableMouse(true)   -- 仅为 tooltip；拖动随主框（统一布局系统）
 
     local rangedBg = rangedFrame:CreateTexture(nil, "BACKGROUND")
     rangedBg:SetAllPoints(rangedFrame)
-    rangedBg:SetTexture(0, 0, 0, 0.5)
+    rangedBg:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarBackground.blp")
 
     local rangedBar = CreateFrame("StatusBar", nil, rangedFrame)
     rangedBar:SetAllPoints(rangedFrame)
-    rangedBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    rangedBar:SetStatusBarColor(0.2, 0.7, 0.3, 0.9)
+    rangedBar:SetStatusBarTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarStandard3.tga")
+    rangedBar:SetStatusBarColor(0.3, 0.7, 0.4, 1)
 
     local rangedTxt = rangedBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     rangedTxt:SetPoint("CENTER", rangedBar, "CENTER", 0, 0)
@@ -560,7 +531,7 @@ function DFUI.Assist.CreateAttackBar()
         GameTooltip:AddLine("攻击条 (远程)")
         GameTooltip:AddLine("自动检测射击(Auto Shot)攻击", 0.7, 0.7, 0.7)
         GameTooltip:AddLine("射击条为绿色", 0.7, 0.7, 0.7)
-        GameTooltip:AddLine("Shift + 左键拖动: 移动位置", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("按住 Ctrl+Shift+Alt 进入布局模式拖动", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     rangedFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -671,7 +642,9 @@ function DFUI.Assist.CreateAttackBar()
         elseif event == "CHAT_MSG_SPELL_SELF_BUFF"
             or event == "CHAT_MSG_SPELL_PERIODIC_SELF_BUFFS" then
             if arg1 then
-                if string.find(arg1, "extra attack") then
+                local ep = DFUI.Assist.extraPattern
+                if (ep and string.find(arg1, ep))
+                    or string.find(arg1, "extra attack") or string.find(arg1, "额外") then
                     state.extraAttacks = state.extraAttacks + 1
                 elseif string.find(arg1, "Fury of Forgewright") then
                     state.extraAttacks = state.extraAttacks + 2
@@ -689,7 +662,9 @@ function DFUI.Assist.CreateAttackBar()
 
         -- Player parried an incoming attack → parry haste
         elseif event == "CHAT_MSG_COMBAT_CREATURE_VS_SELF_MISSES" then
-            if arg1 and string.find(arg1, "You parry") then
+            local pp = DFUI.Assist.parryPattern
+            if arg1 and ((pp and string.find(arg1, pp))
+                or string.find(arg1, "You parry") or string.find(arg1, "招架")) then
                 HandleParryHaste()
             end
 
@@ -858,8 +833,8 @@ function DFUI.Assist.CreateAttackBar()
         GameTooltip:AddLine("自动检测双持武器，分别显示主/副手进度", 0.7, 0.7, 0.7)
         GameTooltip:AddLine("支持远程射击(Auto Shot)", 0.7, 0.7, 0.7)
         GameTooltip:AddLine("急速变化 / 招架加速 / 额外攻击 实时修正", 0.7, 0.7, 0.7)
-        GameTooltip:AddLine("Shift + 左键拖动: 移动位置", 0.7, 0.7, 0.7)
-        GameTooltip:AddLine("/qt attackbar : 切换显示/隐藏攻击条", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("按住 Ctrl+Shift+Alt 进入布局模式拖动", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("在 ESC→辅助功能 配置页开关", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     f:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -869,74 +844,32 @@ function DFUI.Assist.CreateAttackBar()
 end
 
 ----------------------------------------------------------------------
--- Public API  (kept for backward compatibility with UI.lua / Options)
+-- 测试/排查：强制显示一次主手挥击条(不依赖战斗) + 打印开关状态
+-- 用法： /script DFUI.Assist.AttackBarTest()
 ----------------------------------------------------------------------
-
-function DFUI.Assist.AttackBarStartSwing()
-    if DFUI.Assist.AttackBarFrame then
-        HandleNextMeleeSwing(DFUI.Assist.AttackBarFrame)
-    end
-end
-
-function DFUI.Assist.AttackBarStartSwingOH()
-    -- OH is now detected automatically; kept as no-op for compat
-end
-
 function DFUI.Assist.AttackBarTest()
-    local state = DFUI.Assist.AttackBarState
-    local now   = GetTime()
-    local mh, oh = UnitAttackSpeed("player")
-    mh = mh or 2.0
-    if mh == 0 then mh = 2.0 end
-
-    local isDW = oh and oh > 0
-
-    state.isAttacking = true
-    state.isDualWield = isDW
-    state.mhSpeed   = mh
-    state.mhStart   = now
-    state.mhLandsAt = now + mh
-    state.ohSpeed   = oh or 0
-    state.extraAttacks = 0
-
-    local rangedSpeed = UnitRangedDamage("player")
-    rangedSpeed = rangedSpeed or 0
-    local hasRanged = rangedSpeed > 0
-
-    if hasRanged then
-        state.isRangedAttacking = true
-        state.rangedSpeed   = rangedSpeed
-        state.rangedStart   = now
-        state.rangedLandsAt = now + rangedSpeed
-    else
-        state.isRangedAttacking = false
-    end
-
-    if DFUI.Assist.AttackBarFrame then
-        local f = DFUI.Assist.AttackBarFrame
-        ApplyBarLayout(f)
-        f.bar:SetMinMaxValues(state.mhStart, state.mhLandsAt)
-        f:Show()
-
-        if isDW then
-            state.ohStart   = now
-            state.ohLandsAt = now + oh
-            f.ohBar:SetMinMaxValues(state.ohStart, state.ohLandsAt)
-            f.ohFrame:Show()
-        else
-            f.ohFrame:Hide()
-        end
-
-        if hasRanged then
-            f.rangedBar:SetStatusBarColor(0.2, 0.7, 0.3, 0.9)
-            f.rangedBar:SetMinMaxValues(state.rangedStart, state.rangedLandsAt)
-            f.rangedFrame:Show()
-        else
-            f.rangedFrame:Hide()
-        end
-
-        if f.StartOnUpdate then f.StartOnUpdate() end
-    end
+    local f = DFUI.Assist.AttackBarFrame
+    local en = DFUI.Assist:IsEnabled("uiAttackBar")
+    local master = DFUI.tempDB and DFUI.tempDB["Assist"] and DFUI.tempDB["Assist"].masterOn
+    DEFAULT_CHAT_FRAME:AddMessage("[攻击条] frame="..tostring(f ~= nil)
+        .."  uiAttackBar="..tostring(en).."  masterOn="..tostring(master))
+    if not f then return end
+    local s = DFUI.Assist.AttackBarState
+    local now = GetTime()
+    local mh = UnitAttackSpeed("player") or 2.0
+    if mh <= 0 then mh = 2.0 end
+    s.isAttacking = true
+    s.isDualWield = false
+    s.isRangedAttacking = false
+    s.mhSpeed = mh
+    s.mhStart = now
+    s.mhLandsAt = now + mh
+    ApplyBarLayout(f)
+    f.bar:SetMinMaxValues(s.mhStart, s.mhLandsAt)
+    f:Show()
+    f.ohFrame:Hide()
+    f.rangedFrame:Hide()
+    if f.StartOnUpdate then f.StartOnUpdate() end
 end
 
 ----------------------------------------------------------------------

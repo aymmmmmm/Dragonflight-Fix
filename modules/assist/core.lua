@@ -25,11 +25,11 @@ do
     if loc == "zhCN" or loc == "zhTW" then
         BINDING_HEADER_DFUI_ASSIST       = "DFUI 辅助功能"
         BINDING_NAME_DFUI_ASSIST_CONFIG  = "打开辅助配置"
-        BINDING_NAME_DFUI_ASSIST_TOGGLE  = "切换全部辅助"
+        BINDING_NAME_DFUI_ASSIST_TOGGLE  = "切换辅助总开关"
     else
         BINDING_HEADER_DFUI_ASSIST       = "DFUI Assist"
         BINDING_NAME_DFUI_ASSIST_CONFIG  = "Open Assist Config"
-        BINDING_NAME_DFUI_ASSIST_TOGGLE  = "Toggle All Assist"
+        BINDING_NAME_DFUI_ASSIST_TOGGLE  = "Toggle Assist Master"
     end
 end
 
@@ -219,7 +219,7 @@ function DFUI.Assist.ToggleMaster()
     if cur == false then cur = true else cur = false end
     DFUI:SetTempDB("Assist", "masterOn", cur)
     self.db.masterOn = cur
-    DFUI.Assist.Alert(cur and "辅助功能：已全部启用" or "辅助功能：已全部禁用",
+    DFUI.Assist.Alert(cur and "辅助总开关：开（已勾选功能生效）" or "辅助总开关：关（全部暂停）",
         1, 0.82, 0, cur and "warning" or nil)
 end
 
@@ -247,8 +247,6 @@ DFUI:NewDefaults("Assist", {
     uiQuickMark = { false },
     -- 数据
     rollMode    = { 2 },     -- 0放弃/1需求/2贪婪
-    attackBarX  = { false },
-    attackBarY  = { false },
     assistMigrated = { false },   -- 一次性重置标志（测试阶段：首次加载强制全关）
 })
 

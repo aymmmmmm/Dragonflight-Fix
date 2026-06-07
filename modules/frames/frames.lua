@@ -58,6 +58,10 @@ DFUI:NewMod("Frames", 2, function()
         -- BuffButton32 is a Turtle 1.18 extension (扩展 buff 槽); absent on 1.17.
         if BuffButton32 then table.insert(framesToMakeMovable, BuffButton32) end
 
+        -- 辅助功能·攻击计时条主框（副手/远程相对主框锚定，随主框一起移动）
+        local atkBar = _G["DFUIAssistAttackBar"]
+        if atkBar then table.insert(framesToMakeMovable, atkBar) end
+
 
         local function SaveFramePosition(frame)
             local name = frame:GetName()
@@ -212,6 +216,11 @@ DFUI:NewMod("Frames", 2, function()
                         DFUI.castbar.bar:Hide() -- bug fix
                     end
 
+                    -- 攻击计时条平时隐藏，布局模式下临时显示以便拖动
+                    if DFUI.Assist and DFUI.Assist.AttackBarFrame then
+                        DFUI.Assist.AttackBarFrame:Show()
+                    end
+
                     FramerateLabel:Show()
 
                     if DFUI.netStatsFrame then
@@ -231,6 +240,12 @@ DFUI:NewMod("Frames", 2, function()
                         if DFUI.castbar then
                             DFUI.castbar.bar:Show()
                             DFUI.castbar:Hide()
+                        end
+
+                        -- 退出布局模式：非战斗时把攻击条收回隐藏
+                        if DFUI.Assist and DFUI.Assist.AttackBarFrame
+                           and not UnitAffectingCombat("player") then
+                            DFUI.Assist.AttackBarFrame:Hide()
                         end
 
                         FramerateLabel:Hide()
