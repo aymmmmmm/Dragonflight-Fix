@@ -252,14 +252,31 @@ DFUI:NewMod("Character", 5, function()
             for i = 1, 3 do
                 local team = getglobal("ArenaFrameTeam" .. i)
                 if team and not team._dfSkinned then
-                    team:SetBackdrop({
-                        bgFile = "Interface\\Buttons\\WHITE8X8",
-                        edgeFile = "Interface\\Buttons\\WHITE8X8",
-                        edgeSize = 1,
-                    })
-                    team:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-                    team:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
-                    team._dfSkinned = true
+                    team._dfSkinned = true   -- 先占位：任何情况下都不反复执行
+                    -- 清掉第一版残留的独立 inset frame（CreateRetailInset 建的，reload 不销毁 frame）
+                    if team._dfInset then team._dfInset:Hide(); team._dfInset = nil end
+                    -- DF 真素材皮肤（纯装饰）：pcall 隔离 —— 万一报错也绝不连累 ArenaFrame 显示/子 Tab 点击
+                    local ok, err = pcall(function()
+                        if team.SetBackdrop then team:SetBackdrop(nil) end
+                        local MARBLE = TEX .. "interface\\ui-background-marble.tga"
+                        local UF_H   = TEX .. "panels\\df\\professions\\uiframe_h.tga"
+                        local UF_V   = TEX .. "panels\\df\\professions\\uiframe_v.tga"
+                        local abg = team:CreateTexture(nil, "BACKGROUND")
+                        abg:SetTexture(MARBLE); abg:SetAllPoints(team); abg:SetVertexColor(0.72, 0.72, 0.72)
+                        local atop = team:CreateTexture(nil, "BORDER")
+                        atop:SetTexture(UF_H); atop:SetTexCoord(0.0, 1.0, 0.9063, 0.9297)
+                        atop:SetPoint("TOPLEFT", team, "TOPLEFT", 0, 0); atop:SetPoint("TOPRIGHT", team, "TOPRIGHT", 0, 0); atop:SetHeight(3)
+                        local abot = team:CreateTexture(nil, "BORDER")
+                        abot:SetTexture(UF_H); abot:SetTexCoord(0.0, 1.0, 0.8672, 0.8906)
+                        abot:SetPoint("BOTTOMLEFT", team, "BOTTOMLEFT", 0, 0); abot:SetPoint("BOTTOMRIGHT", team, "BOTTOMRIGHT", 0, 0); abot:SetHeight(3)
+                        local alft = team:CreateTexture(nil, "BORDER")
+                        alft:SetTexture(UF_V); alft:SetTexCoord(0.4844, 0.5313, 0.0, 1.0)
+                        alft:SetPoint("TOPLEFT", team, "TOPLEFT", 0, 0); alft:SetPoint("BOTTOMLEFT", team, "BOTTOMLEFT", 0, 0); alft:SetWidth(2)
+                        local argt = team:CreateTexture(nil, "BORDER")
+                        argt:SetTexture(UF_V); argt:SetTexCoord(0.5313, 0.4844, 0.0, 1.0)
+                        argt:SetPoint("TOPRIGHT", team, "TOPRIGHT", 0, 0); argt:SetPoint("BOTTOMRIGHT", team, "BOTTOMRIGHT", 0, 0); argt:SetWidth(2)
+                    end)
+                    if not ok then DEFAULT_CHAT_FRAME:AddMessage("|cffff8800[DFUI arena skin] "..tostring(err)) end
                 end
             end
         end
@@ -889,7 +906,8 @@ DFUI:NewMod("Character", 5, function()
     local FR_L, FR_M, FR_R = CHAR_TEX.."barframe-left.tga", CHAR_TEX.."barframe-mid.tga", CHAR_TEX.."barframe-right.tga"
     local FILL_L, FILL_M, FILL_R = CHAR_TEX.."barfill-left.tga", CHAR_TEX.."barfill-mid.tga", CHAR_TEX.."barfill-right.tga"
     local BG_CAP, FR_CAP, FILL_CAP = 9, 9, 9   -- 3-slice 端帽渲染宽(可调)；FILL_CAP=BG_CAP 贴合凹槽
-    local DF_SKILL_BLUE = {0.03, 0.55, 1.0}
+    local DF_SKILL_BLUE = {0.22, 0.48, 0.72}   -- 柔和钢蓝（降饱和：提 R/压 B），游戏内可微调
+    local DF_SKILL_GRAY = {0.62, 0.62, 0.62}   -- 灰组真银灰（复用品质灰 :849），不再纯白满亮
     -- ⚠ 1.12 GetSkillLineInfo 护甲分组 header 真实文本 "护甲精通"(Armor Proficiencies)，旧名"护甲专精"留作兼容
     local GRAY_HEADERS = { ["护甲精通"] = true, ["护甲专精"] = true, ["职业技能"] = true, ["语言"] = true }
 
@@ -987,6 +1005,12 @@ DFUI:NewMod("Character", 5, function()
             if b and b.GetValue then
                 local r, g, bl = 1, 1, 1
                 if b.GetStatusBarColor then r, g, bl = b:GetStatusBarColor() end  -- vanilla 好感度 RGB
+                -- 降饱和(向感知灰混)+压明度：去掉 vanilla 荧光黄/绿，融 DF 暗调；保留红/橙/黄/绿 standing 区分
+                local sat, dim = 0.70, 0.82   -- sat 越小越灰，dim 越小越暗；两参游戏内可微调
+                local gray = r * 0.3 + g * 0.59 + bl * 0.11
+                r  = (r  * sat + gray * (1 - sat)) * dim
+                g  = (g  * sat + gray * (1 - sat)) * dim
+                bl = (bl * sat + gray * (1 - sat)) * dim
                 UpdateCustomFill(b, r, g, bl)
             end
         end
@@ -1109,7 +1133,7 @@ DFUI:NewMod("Character", 5, function()
             if b and b.GetValue then
                 local hdr = headerOf[offset + i]
                 if hdr and GRAY_HEADERS[hdr] then
-                    UpdateCustomFill(b, 1, 1, 1)   -- 灰组：银灰本色
+                    UpdateCustomFill(b, DF_SKILL_GRAY[1], DF_SKILL_GRAY[2], DF_SKILL_GRAY[3])   -- 灰组：真银灰
                 else
                     UpdateCustomFill(b, DF_SKILL_BLUE[1], DF_SKILL_BLUE[2], DF_SKILL_BLUE[3])  -- 蓝组：DF 蓝
                 end
