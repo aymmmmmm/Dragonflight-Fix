@@ -87,6 +87,7 @@ DFUI:NewMod("Gui-base", 2, function()
             [14] = "单位框架",
             [15] = "经验/声望",
             [16] = "诊断",
+            [17] = "辅助功能",
         }
     }
 
@@ -253,13 +254,59 @@ DFUI:NewMod("Gui-base", 2, function()
 
     function Setup:TabButtons()
         if not self.tabsCreated then
+            -- tab 按钮滚动容器（tab 数量超出 tabFrame 高度时可滚动）
+            local tabScroll = CreateFrame("ScrollFrame", "DFUITabScroll", self.tabFrame)
+            tabScroll:SetPoint("TOPLEFT", self.tabFrame, "TOPLEFT", 0, 0)
+            tabScroll:SetPoint("BOTTOMRIGHT", self.tabFrame, "BOTTOMRIGHT", 0, 0)
+            tabScroll:EnableMouseWheel(true)
+
+            local tabChild = CreateFrame("Frame", "DFUITabScrollChild", tabScroll)
+            tabChild:SetWidth(self.CONSTANTS.TAB_FRAME_WIDTH)
+            tabChild:SetHeight(20 + table.getn(Setup.tabs) * self.CONSTANTS.TAB_VERTICAL_SPACING)
+            tabScroll:SetScrollChild(tabChild)
+            self.tabScroll = tabScroll
+            self.tabChild = tabChild
+
+            -- 细滚动条（贴右边缘，不遮挡按钮）
+            local tabSlider = CreateFrame("Slider", "DFUITabSlider", tabScroll)
+            tabSlider:SetPoint("TOPRIGHT", tabScroll, "TOPRIGHT", 0, 0)
+            tabSlider:SetPoint("BOTTOMRIGHT", tabScroll, "BOTTOMRIGHT", 0, 0)
+            tabSlider:SetWidth(4)
+            tabSlider:SetOrientation("VERTICAL")
+            tabSlider:SetMinMaxValues(0, 0)
+            tabSlider:SetValue(0)
+            local sthumb = tabSlider:CreateTexture(nil, "OVERLAY")
+            sthumb:SetTexture("Interface\\Buttons\\WHITE8X8")
+            sthumb:SetWidth(4)
+            sthumb:SetHeight(40)
+            sthumb:SetVertexColor(1, .82, 0)
+            tabSlider:SetThumbTexture(sthumb)
+            self.tabSlider = tabSlider
+
+            tabSlider:SetScript("OnValueChanged", function()
+                tabScroll:SetVerticalScroll(this:GetValue())
+            end)
+            tabScroll:SetScript("OnMouseWheel", function()
+                local max = this:GetVerticalScrollRange()
+                local new = this:GetVerticalScroll() - arg1 * 30
+                if new < 0 then new = 0 end
+                if new > max then new = max end
+                this:SetVerticalScroll(new)
+                tabSlider:SetValue(new)
+            end)
+            tabScroll:SetScript("OnScrollRangeChanged", function()
+                local range = this:GetVerticalScrollRange()
+                tabSlider:SetMinMaxValues(0, range)
+                if range <= 0 then tabSlider:Hide() else tabSlider:Show() end
+            end)
+
             for i = 1, table.getn(Setup.tabs) do
-                local tab = CreateFrame("Button", "DFUITab" .. i, self.tabFrame)
+                local tab = CreateFrame("Button", "DFUITab" .. i, tabChild)
                 tab:SetHeight(self.CONSTANTS.TAB_BUTTON_HEIGHT)
                 tab:SetWidth(self.CONSTANTS.TAB_BUTTON_WIDTH)
 
                 local yOffset = -10 - (i - 1) * self.CONSTANTS.TAB_VERTICAL_SPACING
-                tab:SetPoint("TOP", self.tabFrame, "TOP", 0, yOffset)
+                tab:SetPoint("TOP", tabChild, "TOP", 0, yOffset)
 
                 local highlight = tab:CreateTexture(nil, "OVERLAY")
                 highlight:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")

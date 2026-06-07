@@ -1,0 +1,8 @@
+<Bindings>
+    <Binding name="DFUI_ASSIST_CONFIG" header="DFUI_ASSIST">
+        if DFUI and DFUI.Assist then DFUI.Assist.OpenConfig() end
+    </Binding>
+    <Binding name="DFUI_ASSIST_TOGGLE" header="DFUI_ASSIST">
+        if DFUI and DFUI.Assist then DFUI.Assist.ToggleMaster() end
+    </Binding>
+</Bindings>

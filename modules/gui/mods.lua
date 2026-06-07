@@ -32,6 +32,7 @@ DFUI:NewMod("Gui-mods", 3, function()
         {name = "面板皮肤", desc = "为暴雪原版窗口添加巨龙时代风格外观", modules = {"Bank", "Character", "Talents", "Merchant", "Mail", "OpenMail", "Trade", "TradeSkill", "Trainer", "QuestLog", "QuestDialog", "Gossip", "Social", "DressUp", "Help", "Inspect", "Macros", "SpellBook", "KeyBinding"}, hasSelectAll = true},
         {name = "全局设置", desc = "职业颜色、界面行为、装备对比等全局选项", modules = {"Colors", "Ui", "Frames", "ItemCompare"}},
         {name = "系统", desc = "菜单、插件管理、版本更新", modules = {"Menu", "Addons", "UpdateNotifier"}},
+        {name = "辅助功能", desc = "轻量辅助合集（自动化/安全/界面）", modules = {"Assist"}},
     }
 
     -- 创建分类背景面板

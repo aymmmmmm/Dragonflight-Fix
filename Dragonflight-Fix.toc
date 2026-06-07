@@ -85,6 +85,20 @@ modules\loot\roll.lua
 # modules\test.lua
 modules\dftex.lua
 
+# ASSIST (辅助功能，从 MiniAssist 并入)
+modules\assist\core.lua
+modules\assist\locales.lua
+modules\assist\quest.lua
+modules\assist\stand.lua
+modules\assist\autobag.lua
+modules\assist\bop.lua
+modules\assist\autoattack.lua
+modules\assist\autoroll.lua
+modules\assist\release.lua
+modules\assist\safety.lua
+modules\assist\attackbar.lua
+modules\assist\quickmark.lua
+
 
 # GUI
 modules\gui\tools.lua
@@ -98,3 +112,7 @@ modules\gui\prof.lua
 modules\gui\mods.lua
 modules\gui\shag.lua
 modules\gui\superwow.lua
+modules\gui\assist.lua
+
+# BINDINGS
+Bindings.xml
