@@ -230,23 +230,36 @@ DFUI:NewDefaults("Assist", {
     enabled    = { true },   -- DFUI 模块总启停（模块管理页，重载生效）
     masterOn   = { true },   -- 运行时总开关（键位/面板即时切换）
     -- 自动化（默认全部关闭，用户在配置页勾选才开启）
-    autoQuest   = { false },
-    autoStand   = { false },
-    autoBag     = { false },
-    autoBoP     = { false },
-    autoAttack  = { false },
-    autoRoll    = { false },
-    autoRelease = { false },
+    autoQuestAccept  = { false },
+    autoQuestTurnin  = { false },
+    autoStand        = { false },
+    autoBag          = { false },
+    autoBoP          = { false },
+    autoAttack       = { false },
+    autoRoll         = { false },
+    autoRelease      = { false },
+    autoDismount     = { false },
+    autoLearnReplace = { false },
+    autoUnlock       = { false },
+    autoSell         = { false },
+    autoRepair       = { false },
     -- 安全（默认关闭）
     safeHealth  = { false },
     safeBreath  = { false },
     safeElite   = { false },
     safeZone    = { false },
     -- 界面（默认关闭）
-    uiAttackBar = { false },
-    uiQuickMark = { false },
-    -- 数据
-    rollMode    = { 2 },     -- 0放弃/1需求/2贪婪
+    uiAttackBar  = { false },
+    uiQuickMark  = { false },
+    uiCombatAlert = { false },
+    -- 链接（默认关闭）
+    linkItemEnUS = { false },
+    linkPfQuest  = { false },
+    -- 数据：自动 Roll 按品质分别设（0放弃/1需求/2贪婪/3不自动）
+    rollGray    = { 2 },     -- 灰白：贪婪
+    rollGreen   = { 2 },     -- 绿：贪婪
+    rollBlue    = { 2 },     -- 蓝：贪婪
+    rollEpic    = { 3 },     -- 紫橙：不自动（贵重物默认留给玩家手点）
     assistMigrated = { false },   -- 一次性重置标志（测试阶段：首次加载强制全关）
 })
 
@@ -258,7 +271,7 @@ DFUI:NewMod("Assist", 20, function()
     local db = DFUI.Assist.db
     if db and not db.assistMigrated then
         local keys = {
-            "autoQuest", "autoStand", "autoBag", "autoBoP", "autoAttack", "autoRoll", "autoRelease",
+            "autoQuestAccept", "autoQuestTurnin", "autoStand", "autoBag", "autoBoP", "autoAttack", "autoRoll", "autoRelease",
             "safeHealth", "safeBreath", "safeElite", "safeZone", "uiAttackBar", "uiQuickMark",
         }
         for i = 1, table.getn(keys) do

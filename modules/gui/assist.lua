@@ -21,6 +21,7 @@ DFUI:NewMod("Gui-assist", 3, function()
         { prefix = "auto", title = L["grpAuto"] },
         { prefix = "safe", title = L["grpSafety"] },
         { prefix = "ui",   title = L["grpUI"] },
+        { prefix = "link", title = L["grpLink"] },
     }
 
     local function CreateCategoryPanel(parent, width, height)
@@ -55,11 +56,23 @@ DFUI:NewMod("Gui-assist", 3, function()
         return cb
     end
 
-    local function rollModeText()
-        local m = DFUI:GetTempDB("Assist", "rollMode") or 2
-        if m == 1 then return L["rollMode"] .. ": " .. L["rollNeed"] end
-        if m == 0 then return L["rollMode"] .. ": " .. L["rollPass"] end
-        return L["rollMode"] .. ": " .. L["rollGreed"]
+    -- 自动 Roll 各品质模式：0放弃/1需求/2贪婪/3不自动
+    local ROLL_Q = {
+        { key = "rollGray",  label = "rollQGray" },
+        { key = "rollGreen", label = "rollQGreen" },
+        { key = "rollBlue",  label = "rollQBlue" },
+        { key = "rollEpic",  label = "rollQEpic" },
+    }
+    local function rollModeName(m)
+        if m == 0 then return L["rollPass"] end
+        if m == 1 then return L["rollNeed"] end
+        if m == 3 then return L["rollSkip"] end
+        return L["rollGreed"]
+    end
+    local function rollBtnText(spec)
+        local m = DFUI:GetTempDB("Assist", spec.key)
+        if m == nil then m = 2 end
+        return L[spec.label] .. ":" .. rollModeName(m)
     end
 
     local function BuildPanel()
@@ -130,17 +143,23 @@ DFUI:NewMod("Gui-assist", 3, function()
                     local desc = mod and mod.desc
                     AddCheckboxRow(catPanel, iy, key, label, desc)
 
-                    -- autoRoll 行右侧加模式切换按钮
+                    -- autoRoll 行右侧：每个品质一个模式循环按钮（放弃/需求/贪婪/不自动）
                     if key == "autoRoll" then
-                        local rb = DFUI.tools.CreateButton(catPanel, rollModeText(), 130, 22, false, GOLD)
-                        rb:SetPoint("TOPRIGHT", catPanel, "TOPRIGHT", -PANEL_INSET, -iy)
-                        rb:SetScript("OnClick", function()
-                            local m = DFUI:GetTempDB("Assist", "rollMode") or 2
-                            m = math.mod(m + 1, 3)
-                            DFUI:SetTempDB("Assist", "rollMode", m)
-                            if DFUI.Assist.db then DFUI.Assist.db.rollMode = m end
-                            this:SetText(rollModeText())
-                        end)
+                        local BW, BG = 78, 4
+                        for qi = table.getn(ROLL_Q), 1, -1 do
+                            local spec = ROLL_Q[qi]
+                            local fromRight = table.getn(ROLL_Q) - qi
+                            local qb = DFUI.tools.CreateButton(catPanel, rollBtnText(spec), BW, 20, false, GOLD)
+                            qb:SetPoint("TOPRIGHT", catPanel, "TOPRIGHT", -PANEL_INSET - fromRight * (BW + BG), -iy)
+                            qb:SetScript("OnClick", function()
+                                local m = DFUI:GetTempDB("Assist", spec.key)
+                                if m == nil then m = 2 end
+                                m = math.mod(m + 1, 4)
+                                DFUI:SetTempDB("Assist", spec.key, m)
+                                if DFUI.Assist.db then DFUI.Assist.db[spec.key] = m end
+                                this:SetText(rollBtnText(spec))
+                            end)
+                        end
                     end
 
                     iy = iy + ROW_H

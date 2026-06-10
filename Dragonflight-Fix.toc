@@ -99,6 +99,14 @@ modules\assist\release.lua
 modules\assist\safety.lua
 modules\assist\attackbar.lua
 modules\assist\quickmark.lua
+modules\assist\dismount.lua
+modules\assist\learnreplace.lua
+modules\assist\unlock.lua
+modules\assist\sell.lua
+modules\assist\repair.lua
+modules\assist\combatalert.lua
+modules\assist\linkitemen.lua
+modules\assist\linkpfquest.lua
 
 
 # GUI
