@@ -54,6 +54,11 @@ end
 local function CaptureTrainerData()
     if not trainerDB then return end
     if not GetNumTrainerServices then return end
+    -- 每个训练师只「首访扫一次」：不同训练师教的技能不同 → 各自首访扫一次，按 key=法术名|rank
+    -- 幂等合并进 trainerDB 累积补全；已扫过的训练师再打开，完全不翻过滤器、不干预，原生窗口
+    -- 保持纯净（不再每次显示已学/未学）。以 UnitName("target") 作训练师标识（开窗必选中该 NPC）。
+    local who = UnitName and UnitName("target") or nil
+    if who and trainerDB._scanned and trainerDB._scanned[who] then return end
     local num = GetNumTrainerServices()
     if not num or num == 0 then return end
 
@@ -95,7 +100,8 @@ local function CaptureTrainerData()
 
     local curHeader = GENERAL or "General"
     local curValid = true
-    local captured = 0
+    local captured = 0   -- 本次该训练师有效条目数
+    local newCount = 0   -- 其中库里原先没有的「新」条目数（用于判断是否值得提示）
 
     for i = 1, num do
         local ok, nm, rk = pcall(GetTrainerServiceInfo, i)
@@ -119,7 +125,9 @@ local function CaptureTrainerData()
                     local lok, lv = pcall(GetTrainerServiceLevelReq, i)
                     if lok then levelReq = lv or 0 end
                 end
-                trainerDB[name .. "|" .. rank] = {
+                local key = name .. "|" .. rank
+                if trainerDB[key] == nil then newCount = newCount + 1 end
+                trainerDB[key] = {
                     name     = name,
                     rank     = rank,
                     rankNum  = RankNum(rank),
@@ -132,11 +140,28 @@ local function CaptureTrainerData()
         end
     end
 
-    trainerDB._captured = true
+    -- 还原成 vanilla 默认过滤（仅显示"可学"）：消除原生训练师窗口被强制列出"已学/等级不够"的污染。
+    -- 关项用 nil/false（WoW C 端 lua_toboolean：0 也算真，必须传 nil 才是关）。
+    pcall(function()
+        if SetTrainerServiceTypeFilter then
+            SetTrainerServiceTypeFilter("available", 1)
+            SetTrainerServiceTypeFilter("unavailable", nil)
+            SetTrainerServiceTypeFilter("used", nil)
+        end
+    end)
+
+    if captured > 0 then
+        trainerDB._captured = true   -- 标记该职业至少采集过一次（供 UI 判断库里是否已有数据）
+        if who then                  -- 记下该训练师已扫，之后再开它直接早退、不再翻过滤器
+            trainerDB._scanned = trainerDB._scanned or {}
+            trainerDB._scanned[who] = true
+        end
+    end
     InvalidateCache()
 
-    if captured > 0 and DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[DFUI 法术书]|r 已采集 " .. captured .. " 条可学法术")
+    -- 只在本次真有「新」技能进库时提示，避免反复开同一训练师重复刷屏
+    if newCount > 0 and DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[DFUI 法术书]|r 新采集 " .. newCount .. " 条可学法术")
     end
 
     -- 法术书若开着，立即刷新
@@ -283,7 +308,16 @@ end
 local function Msg(s) if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage(s) end end
 _G.SLASH_DFTRAINER1 = "/dftrainer"
 _G.SlashCmdList["DFTRAINER"] = function(cmdArg)
-    local filter = cmdArg and Trim(cmdArg) ~= "" and string.lower(Trim(cmdArg)) or nil
+    local raw = cmdArg and Trim(cmdArg) or ""
+    -- 强制重扫：清采集标记后立即重采（需训练师窗口开着）
+    if string.lower(raw) == "rescan" or string.lower(raw) == "scan" then
+        if trainerDB then for k in pairs(trainerDB) do trainerDB[k] = nil end end  -- 清空该职业脏数据后重扫
+        InvalidateCache()
+        CaptureTrainerData()
+        Msg("|cFF00FF00[DFTRAINER]|r 已清空该职业库并重新扫描（需训练师窗口开着）")
+        return
+    end
+    local filter = raw ~= "" and string.lower(raw) or nil
     local function hit(name) return (not filter) or (name and string.find(string.lower(name), filter, 1, true)) end
 
     -- 1) 原始训练师列表（仅在训练师窗口开着时有数据）
@@ -330,6 +364,14 @@ _G.SlashCmdList["DFTRAINER"] = function(cmdArg)
             end
         end
         Msg("  小计：采集=" .. kept .. " 跳过=" .. skipped)
+        -- 诊断同样会翻全过滤器，dump 完还原默认，避免污染原生训练师窗口
+        pcall(function()
+            if SetTrainerServiceTypeFilter then
+                SetTrainerServiceTypeFilter("available", 1)
+                SetTrainerServiceTypeFilter("unavailable", nil)
+                SetTrainerServiceTypeFilter("used", nil)
+            end
+        end)
     else
         Msg("  (不在训练师窗口，跳过原始列表)")
     end
@@ -337,10 +379,10 @@ _G.SlashCmdList["DFTRAINER"] = function(cmdArg)
     -- 2) 已采集 trainerDB
     if not trainerDB then Msg("|cFFff0000trainerDB=nil（未进世界?）|r"); return end
     local cnt = 0
-    for k, e in pairs(trainerDB) do if type(e) == "table" then cnt = cnt + 1 end end
+    for k, e in pairs(trainerDB) do if type(e) == "table" and e.name then cnt = cnt + 1 end end
     Msg("|cFF00FF00[trainerDB]|r 条数=" .. cnt .. " captured=" .. tostring(trainerDB._captured))
     for k, e in pairs(trainerDB) do
-        if type(e) == "table" and hit(e.name) then
+        if type(e) == "table" and e.name and hit(e.name) then
             Msg("  '" .. (e.name or "?") .. "' rank='" .. (e.rank or "") .. "' lv=" .. (e.levelReq or 0) .. " cat='" .. (e.category or "") .. "'")
         end
     end
