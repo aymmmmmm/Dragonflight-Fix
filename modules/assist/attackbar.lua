@@ -97,6 +97,26 @@ local function SetBarFontSize(fontString, size)
     end
 end
 
+-- 仅在文本变化时 SetText：避免 OnUpdate 每帧重布局 FontString（仿 cast.lua 的 _lastTimeStr 缓存）。
+-- %.1f 精度下同一 0.1s 窗口内多帧字符串相同，可挡掉约 5/6 的 SetText 调用。
+local function SetTextIfChanged(fs, str)
+    if fs._dfLastText ~= str then
+        fs:SetText(str)
+        fs._dfLastText = str
+    end
+end
+
+-- 填充：普通 Texture 用 SetWidth + SetTexCoord 模拟 StatusBar（仿 cast.lua UpdateBarVisual）。
+-- 避开 1.12/DXVK 下 StatusBar 每帧裁剪自定义大图(CastingBarStandard3 512×32)导致的卡顿。
+-- 纹理锚 LEFT 于父 frame，progress 0~1：宽度按比例、texcoord 横向裁剪。高度在 ApplyBarLayout 设。
+local function SetBarFill(tex, progress)
+    if progress < 0 then progress = 0 elseif progress > 1 then progress = 1 end
+    local w = BAR_WIDTH * progress
+    if w < 0.1 then w = 0.1 end   -- SetWidth(0) 在 1.12 行为异常，保留极小值
+    tex:SetWidth(w)
+    tex:SetTexCoord(0, progress, 0, 1)
+end
+
 local function ApplyBarLayout(f)
     if not f then return end
     local state = DFUI.Assist.AttackBarState
@@ -119,10 +139,12 @@ local function ApplyBarLayout(f)
     local fs = isMulti and FONT_SIZE_DUAL  or FONT_SIZE_SINGLE
 
     f:SetHeight(h)
+    if f.bar then f.bar:SetHeight(h) end
     SetBarFontSize(f.txt, fs)
 
     if f.ohFrame then
         f.ohFrame:SetHeight(h)
+        if f.ohBar then f.ohBar:SetHeight(h) end
         f.ohFrame:ClearAllPoints()
         f.ohFrame:SetPoint("TOP", f, "BOTTOM", 0, -BAR_GAP_DUAL)
         SetBarFontSize(f.ohTxt, fs)
@@ -130,6 +152,7 @@ local function ApplyBarLayout(f)
 
     if f.rangedFrame then
         f.rangedFrame:SetHeight(h)
+        if f.rangedBar then f.rangedBar:SetHeight(h) end
         SetBarFontSize(f.rangedTxt, fs)
         f.rangedFrame:ClearAllPoints()
         if not state.isAttacking then
@@ -261,11 +284,9 @@ local function HandleAutoAttackSwing(f)
         end
     end
 
-    f.bar:SetMinMaxValues(state.mhStart, state.mhLandsAt)
     f:Show()
 
     if state.isDualWield then
-        f.ohBar:SetMinMaxValues(state.ohStart, state.ohLandsAt)
         f.ohFrame:Show()
     else
         f.ohFrame:Hide()
@@ -296,11 +317,9 @@ local function HandleNextMeleeSwing(f)
         state.ohLandsAt = now + 0.2
     end
 
-    f.bar:SetMinMaxValues(state.mhStart, state.mhLandsAt)
     f:Show()
 
     if state.isDualWield then
-        f.ohBar:SetMinMaxValues(state.ohStart, state.ohLandsAt)
         f.ohFrame:Show()
     else
         f.ohFrame:Hide()
@@ -334,10 +353,9 @@ local function HandleRangedSwing(f)
     state.rangedStart   = now
     state.rangedLandsAt = now + speed
 
-    f.rangedBar:SetStatusBarColor(0.3, 0.7, 0.4, 1)
+    f.rangedBar:SetVertexColor(0.3, 0.7, 0.4)
 
     ApplyBarLayout(f)
-    f.rangedBar:SetMinMaxValues(state.rangedStart, state.rangedLandsAt)
     f.rangedFrame:Show()
     f:Show()
 
@@ -367,14 +385,12 @@ local function HandleHasteChange()
            and state.mhLandsAt > now then
             local timeLeft = (state.mhLandsAt - now) / (oldMH / state.mhSpeed)
             state.mhLandsAt = now + timeLeft
-            f.bar:SetMinMaxValues(state.mhStart, state.mhLandsAt)
         end
 
         if oldOH > 0 and state.ohSpeed > 0 and oldOH ~= state.ohSpeed
            and state.ohLandsAt > now then
             local timeLeft = (state.ohLandsAt - now) / (oldOH / state.ohSpeed)
             state.ohLandsAt = now + timeLeft
-            f.ohBar:SetMinMaxValues(state.ohStart, state.ohLandsAt)
         end
     end
 
@@ -386,7 +402,6 @@ local function HandleHasteChange()
             local timeLeft = (state.rangedLandsAt - now) / (oldRanged / newRanged)
             state.rangedSpeed   = newRanged
             state.rangedLandsAt = now + timeLeft
-            f.rangedBar:SetMinMaxValues(state.rangedStart, state.rangedLandsAt)
         end
     end
 end
@@ -413,10 +428,6 @@ local function HandleParryHaste()
             state.mhLandsAt = now + minimum
         else
             state.mhLandsAt = now + newTimeLeft
-        end
-        local f = DFUI.Assist.AttackBarFrame
-        if f then
-            f.bar:SetMinMaxValues(state.mhStart, state.mhLandsAt)
         end
     end
 end
@@ -446,14 +457,17 @@ function DFUI.Assist.CreateAttackBar()
     bg:SetAllPoints(f)
     bg:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarBackground.blp")
 
-    -- Main Hand StatusBar
-    local bar = CreateFrame("StatusBar", nil, f)
-    bar:SetAllPoints(f)
-    bar:SetStatusBarTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarStandard3.tga")
-    bar:SetStatusBarColor(0.85, 0.55, 0.2, 1)
+    -- Main Hand fill texture（普通 Texture，左对齐，宽度/texcoord 由 SetBarFill 推进）
+    local bar = f:CreateTexture(nil, "ARTWORK")
+    bar:SetPoint("LEFT", f, "LEFT", 0, 0)
+    bar:SetHeight(BAR_HEIGHT_SINGLE)
+    bar:SetWidth(0.1)
+    bar:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarStandard3.tga")
+    bar:SetVertexColor(0.85, 0.55, 0.2)
 
-    local txt = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    txt:SetPoint("CENTER", bar, "CENTER", 0, 0)
+    -- 文字 parent 外层 frame（非 bar）：bar 宽度随进度变，文字须固定居中
+    local txt = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    txt:SetPoint("CENTER", f, "CENTER", 0, 0)
     txt:SetTextColor(1, 1, 1)
     txt:SetText("攻击")
 
@@ -473,13 +487,15 @@ function DFUI.Assist.CreateAttackBar()
     ohBg:SetAllPoints(ohFrame)
     ohBg:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarBackground.blp")
 
-    local ohBar = CreateFrame("StatusBar", nil, ohFrame)
-    ohBar:SetAllPoints(ohFrame)
-    ohBar:SetStatusBarTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarStandard3.tga")
-    ohBar:SetStatusBarColor(0.3, 0.55, 0.8, 1)
+    local ohBar = ohFrame:CreateTexture(nil, "ARTWORK")
+    ohBar:SetPoint("LEFT", ohFrame, "LEFT", 0, 0)
+    ohBar:SetHeight(BAR_HEIGHT_DUAL)
+    ohBar:SetWidth(0.1)
+    ohBar:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarStandard3.tga")
+    ohBar:SetVertexColor(0.3, 0.55, 0.8)
 
-    local ohTxt = ohBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ohTxt:SetPoint("CENTER", ohBar, "CENTER", 0, 0)
+    local ohTxt = ohFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ohTxt:SetPoint("CENTER", ohFrame, "CENTER", 0, 0)
     ohTxt:SetTextColor(1, 1, 1)
     ohTxt:SetText("副手")
 
@@ -511,13 +527,15 @@ function DFUI.Assist.CreateAttackBar()
     rangedBg:SetAllPoints(rangedFrame)
     rangedBg:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarBackground.blp")
 
-    local rangedBar = CreateFrame("StatusBar", nil, rangedFrame)
-    rangedBar:SetAllPoints(rangedFrame)
-    rangedBar:SetStatusBarTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarStandard3.tga")
-    rangedBar:SetStatusBarColor(0.3, 0.7, 0.4, 1)
+    local rangedBar = rangedFrame:CreateTexture(nil, "ARTWORK")
+    rangedBar:SetPoint("LEFT", rangedFrame, "LEFT", 0, 0)
+    rangedBar:SetHeight(BAR_HEIGHT_SINGLE)
+    rangedBar:SetWidth(0.1)
+    rangedBar:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\castbar\\CastingBarStandard3.tga")
+    rangedBar:SetVertexColor(0.3, 0.7, 0.4)
 
-    local rangedTxt = rangedBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    rangedTxt:SetPoint("CENTER", rangedBar, "CENTER", 0, 0)
+    local rangedTxt = rangedFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    rangedTxt:SetPoint("CENTER", rangedFrame, "CENTER", 0, 0)
     rangedTxt:SetTextColor(1, 1, 1)
     rangedTxt:SetText("射击")
 
@@ -698,14 +716,12 @@ function DFUI.Assist.CreateAttackBar()
                         state.mhSpeed = UnitAttackSpeed("player") or 0
                         state.mhStart   = now
                         state.mhLandsAt = now + state.mhSpeed
-                        f.bar:SetMinMaxValues(state.mhStart, state.mhLandsAt)
                     end
                     local _, newOHSpd = UnitAttackSpeed("player")
                     if newOH ~= cachedOHLink and newOHSpd and newOHSpd > 0 then
                         state.ohSpeed   = newOHSpd
                         state.ohStart   = now
                         state.ohLandsAt = now + state.ohSpeed
-                        f.ohBar:SetMinMaxValues(state.ohStart, state.ohLandsAt)
                     end
                 end
                 cachedMHLink = newMH
@@ -732,24 +748,24 @@ function DFUI.Assist.CreateAttackBar()
         local ohActive = false
         local rangedActive = false
 
-        -- Main hand
+        -- Main hand  (min/max 已在 swing handler 设好，OnUpdate 只推进 value)
         if state.isAttacking and state.mhLandsAt > 0 then
-            f.bar:SetMinMaxValues(state.mhStart, state.mhLandsAt)
             if now < state.mhLandsAt then
-                f.bar:SetValue(now)
+                local total = state.mhLandsAt - state.mhStart
+                SetBarFill(f.bar, total > 0 and (now - state.mhStart) / total or 1)
                 local remaining = state.mhLandsAt - now
                 if state.isDualWield then
-                    f.txt:SetText(string.format("主手 %.1f", remaining))
+                    SetTextIfChanged(f.txt, string.format("主手 %.1f", remaining))
                 else
-                    f.txt:SetText(string.format("%.1f", remaining))
+                    SetTextIfChanged(f.txt, string.format("%.1f", remaining))
                 end
                 mhActive = true
             elseif now <= state.mhLandsAt + 0.5 then
-                f.bar:SetValue(state.mhLandsAt)
+                SetBarFill(f.bar, 1)
                 if state.isDualWield then
-                    f.txt:SetText("主手 就绪")
+                    SetTextIfChanged(f.txt, "主手 就绪")
                 else
-                    f.txt:SetText("Ready")
+                    SetTextIfChanged(f.txt, "Ready")
                 end
                 mhActive = true
             end
@@ -763,18 +779,18 @@ function DFUI.Assist.CreateAttackBar()
             if f.mhBg then f.mhBg:Hide() end
         end
 
-        -- Off-hand
+        -- Off-hand  (同上，去掉每帧冗余 SetMinMaxValues)
         if state.isAttacking and state.isDualWield and state.ohLandsAt > 0
            and state.ohLandsAt < now + 999999 then
-            f.ohBar:SetMinMaxValues(state.ohStart, state.ohLandsAt)
             if now < state.ohLandsAt then
-                f.ohBar:SetValue(now)
-                f.ohTxt:SetText(string.format("副手 %.1f", state.ohLandsAt - now))
+                local total = state.ohLandsAt - state.ohStart
+                SetBarFill(f.ohBar, total > 0 and (now - state.ohStart) / total or 1)
+                SetTextIfChanged(f.ohTxt, string.format("副手 %.1f", state.ohLandsAt - now))
                 f.ohFrame:Show()
                 ohActive = true
             elseif now <= state.ohLandsAt + 0.5 then
-                f.ohBar:SetValue(state.ohLandsAt)
-                f.ohTxt:SetText("副手 就绪")
+                SetBarFill(f.ohBar, 1)
+                SetTextIfChanged(f.ohTxt, "副手 就绪")
                 f.ohFrame:Show()
                 ohActive = true
             else
@@ -782,27 +798,27 @@ function DFUI.Assist.CreateAttackBar()
             end
         end
 
-        -- Ranged
+        -- Ranged  (同上，去掉每帧冗余 SetMinMaxValues)
         if state.isRangedAttacking and state.rangedLandsAt > 0 then
-            f.rangedBar:SetMinMaxValues(state.rangedStart, state.rangedLandsAt)
             if now < state.rangedLandsAt then
-                f.rangedBar:SetValue(now)
+                local total = state.rangedLandsAt - state.rangedStart
+                SetBarFill(f.rangedBar, total > 0 and (now - state.rangedStart) / total or 1)
                 local remaining = state.rangedLandsAt - now
-                f.rangedTxt:SetText(string.format("射击 %.1f", remaining))
+                SetTextIfChanged(f.rangedTxt, string.format("射击 %.1f", remaining))
                 f.rangedFrame:Show()
                 rangedActive = true
             elseif state.autoRepeatActive then
-                f.rangedBar:SetValue(state.rangedLandsAt)
+                SetBarFill(f.rangedBar, 1)
                 if state.isCasting then
-                    f.rangedTxt:SetText("射击 施法中")
+                    SetTextIfChanged(f.rangedTxt, "射击 施法中")
                 else
-                    f.rangedTxt:SetText("射击 就绪")
+                    SetTextIfChanged(f.rangedTxt, "射击 就绪")
                 end
                 f.rangedFrame:Show()
                 rangedActive = true
             elseif now <= state.rangedLandsAt + 0.5 then
-                f.rangedBar:SetValue(state.rangedLandsAt)
-                f.rangedTxt:SetText("射击 就绪")
+                SetBarFill(f.rangedBar, 1)
+                SetTextIfChanged(f.rangedTxt, "射击 就绪")
                 f.rangedFrame:Show()
                 rangedActive = true
             else
@@ -865,7 +881,6 @@ function DFUI.Assist.AttackBarTest()
     s.mhStart = now
     s.mhLandsAt = now + mh
     ApplyBarLayout(f)
-    f.bar:SetMinMaxValues(s.mhStart, s.mhLandsAt)
     f:Show()
     f.ohFrame:Hide()
     f.rangedFrame:Hide()
