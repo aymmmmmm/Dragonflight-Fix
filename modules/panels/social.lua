@@ -890,7 +890,7 @@ DFUI:NewMod("Social", 5, function()
                     info.func = function() if row.name then ChatFrame_SendTell(row.name) end end
                     UIDropDownMenu_AddButton(info)
                     info = {}; info.text = PARTY_INVITE or "邀请加入队伍"; info.notCheckable = 1
-                    info.func = function() if row.name and InviteUnit then InviteUnit(row.name) end end
+                    info.func = function() if row.name then if InviteUnit then InviteUnit(row.name) elseif InviteByName then InviteByName(row.name) end end end
                     UIDropDownMenu_AddButton(info)
                     info = {}; info.text = IGNORE_PLAYER or "屏蔽玩家"; info.notCheckable = 1
                     info.func = function() if row.name and AddIgnore then AddIgnore(row.name) end end
@@ -1209,7 +1209,7 @@ DFUI:NewMod("Social", 5, function()
                     info.func = function() if row.name then ChatFrame_SendTell(row.name) end end
                     UIDropDownMenu_AddButton(info)
                     info = {}; info.text = PARTY_INVITE or "邀请加入队伍"; info.notCheckable = 1
-                    info.func = function() if row.name and InviteUnit then InviteUnit(row.name) end end
+                    info.func = function() if row.name then if InviteUnit then InviteUnit(row.name) elseif InviteByName then InviteByName(row.name) end end end
                     UIDropDownMenu_AddButton(info)
                     info = {}; info.text = ADD_FRIEND or "添加好友"; info.notCheckable = 1
                     info.func = function() if row.name and AddFriend then AddFriend(row.name) end end
@@ -1563,7 +1563,11 @@ DFUI:NewMod("Social", 5, function()
                     info.func = function() if row.name then ChatFrame_SendTell(row.name) end end
                     UIDropDownMenu_AddButton(info)
                     info = {}; info.text = PARTY_INVITE or "邀请加入队伍"; info.notCheckable = 1
-                    info.func = function() if row.name and InviteUnit then InviteUnit(row.name) end end
+                    -- InviteUnit 在 vanilla 1.12 不存在(Turtle 同)，组队邀请走 InviteByName 兜底
+                    info.func = function() if row.name then if InviteUnit then InviteUnit(row.name) elseif InviteByName then InviteByName(row.name) end end end
+                    UIDropDownMenu_AddButton(info)
+                    info = {}; info.text = ADD_FRIEND or "添加好友"; info.notCheckable = 1
+                    info.func = function() if row.name and AddFriend then AddFriend(row.name) end end
                     UIDropDownMenu_AddButton(info)
                     info = {}; info.text = IGNORE_PLAYER or "屏蔽玩家"; info.notCheckable = 1
                     info.func = function() if row.name and AddIgnore then AddIgnore(row.name) end end
