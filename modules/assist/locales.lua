@@ -74,6 +74,8 @@ local enUS = {
     ["uiCombatAlertDesc"]= "Show a fading banner at the top of the screen when entering / leaving combat.",
     ["combatEnter"]   = "Entering Combat",
     ["combatLeave"]   = "Leaving Combat",
+    ["uiMarkKnown"]   = "Mark Known Recipes",
+    ["uiMarkKnownDesc"]= "Tint already-learned recipes/plans green at vendors and the auction house (dimmed when out of stock); quest items turn yellow.",
 
     -- links
     ["linkItemEnUS"]  = "Alt-Click Item -> English",
@@ -173,6 +175,8 @@ local zhCN = {
     ["uiCombatAlertDesc"]= "进入/离开战斗时在屏幕顶部弹出淡入淡出横幅提示。",
     ["combatEnter"]   = "进入战斗",
     ["combatLeave"]   = "离开战斗",
+    ["uiMarkKnown"]   = "标记已学配方",
+    ["uiMarkKnownDesc"]= "在商人和拍卖行把已学会的配方/图纸染绿（商人处缺货时变暗）；任务物品染黄。",
 
     -- links
     ["linkItemEnUS"]  = "Alt+点击物品转英文",

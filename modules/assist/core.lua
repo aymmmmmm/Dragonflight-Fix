@@ -252,6 +252,7 @@ DFUI:NewDefaults("Assist", {
     uiAttackBar  = { false },
     uiQuickMark  = { false },
     uiCombatAlert = { false },
+    uiMarkKnown   = { false },
     -- 链接（默认关闭）
     linkItemEnUS = { false },
     linkPfQuest  = { false },
