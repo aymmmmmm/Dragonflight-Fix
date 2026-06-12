@@ -318,3 +318,31 @@ end
 - `modules/gui/elem.lua` — **无 WorldMap 映射**
 - 世界地图回到原生（ShaguTweaks + ShaguPlates + pfQuest）状态
 - 本文档保留作为下次实施的起点
+
+---
+
+## 十四、阶段0 实证记录（2026-06-12，调查完成，校正旧结论）
+
+用临时 `/wmdump`（寄生 dftex.lua）在游戏内 dump（当前区域=暮色森林 Duskwood，最大化窗口模式，ShaguTweaks 已跑完后手动触发）。
+
+### WorldMapFrame 直属 21 个 Texture region —— 全是 chrome，无一是地形底图
+| 数量 | region 名 | 纹理路径 | 层 | 性质 |
+|---|---|---|---|---|
+| 1 | `BlackoutWorld` | Solid Texture (1365×768) | BACKGROUND | 全屏黑蒙版；ShaguTweaks worldmap-window.lua 已 `BlackoutWorld:Hide()`，**保持不动** |
+| 12 | `WorldMapFrameTexture1..12` | `Interface\WorldMap\UI-WorldMap-Top1-4 / Middle1-4 / Bottom1-4` | ARTWORK | 暴雪世界地图**框架背景纸**（满铺 4×3），**要隐藏** |
+| 8 | `WorldMapFrameMinimizedTexture1..8` | `UI-WorldMapMinimized-*`(TopLeft/Left/Top/...) | ARTWORK | 最小化模式 9-slice 边框，最大化下用不到，**要隐藏** |
+
+### 地形底图在子框 WorldMapDetailFrame（不在 WorldMapFrame 直属）
+`WorldMapDetailFrame` 有 41 个 region，首个 `Interface\WorldMap\Duskwood\Duskwood1` —— 当前区域地形 tile 在此。揭示纹理(`shagutweaks_mapreveal_onmap`)、pfQuest 图钉、坐标也都在 DetailFrame/WorldMapButton 子链。
+
+### 校正 §十一 旧结论
+旧"策略B 无差别隐藏 WorldMapFrame 直属纹理 → 底图消失"——**真相**：直属 20 个 `UI-WorldMap*` 是暴雪**框架背景纸**（非地形），地形在 DetailFrame 子框。隐藏这 20 个**不会动地形**；旧失败真因是**隐藏背景纸却没补背景**，地图区域露空（黑/无底）。本方案隐藏后用金属外框+羊皮纸内底**补背景**，对症。
+
+### 钉死隐藏策略（具名，零误伤）
+- 具名 `SetAlpha(0)`：`WorldMapFrameTexture1..12` + `WorldMapFrameMinimizedTexture1..8`（用 alpha 不用 Hide，防 vanilla 切区域 Show 恢复；需 hook `WorldMapFrame_Update`/OnShow 兜底重压）
+- 保留 `BlackoutWorld`（ShaguTweaks 管）
+- 地形/揭示/图钉/坐标全在 DetailFrame/Button 子框，不碰、自动保留
+- 隐藏后叠 DFUI 金属外框 + 羊皮纸内底补背景，地形 tile 叠其上
+
+### 子框清单（共存对象，overlay 不碰）
+WorldMapDetailFrame, WorldMapButton, WorldMapContinentDropDown, WorldMapZoneDropDown, WorldMapZoomOutButton, WorldMapMagnifyingGlassButton, WorldMapFrameCloseButton/Minimize/MaximizeButton, WorldMapPositioningGuide, WorldMapTooltip, **Atlas_WorldMap_Frame（Atlas 地图集插件，地图上有自己的 UI）**, shagutweaks_mapreveal_onmap

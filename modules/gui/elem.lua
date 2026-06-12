@@ -99,6 +99,7 @@ DFUI:NewMod("Gui-elem", 3, function()
             ["Micro"]   = {12, 1},
             ["Collector"] = {13, 1},
             ["Map"]     = {13, 2},
+            ["WorldMap"] = {13, 3},
             ["Player"]  = {14, 1},
             ["PVPIcon"]  = {14, 2},
             ["Target"]  = {14, 3},

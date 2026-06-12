@@ -304,7 +304,11 @@ DFUI:NewMod("TradeSkill", 5, function()
     -- ============================================================
     local panel = DFUI.CreatePaperDollFrame("DFUI_ProfessionFrame", UIParent, 964, 658, 1)
     panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 30, -104)
-    panel:SetFrameStrata("MEDIUM")
+    -- HIGH：压过背包(Bagshui 默认 MEDIUM)与其他 MEDIUM 面板，防其盖住配方区导致点不了。
+    -- strata 优先级 > frame level，整树压制；子 frame 未显式设 strata 故继承 panel 一起抬到 HIGH，
+    -- 内部相对 level 不变。不用 SetToplevel/Raise：那俩只提升 panel 自身 level、不递归子 frame，
+    -- 反会让 panel 背景盖住固定 level 的配方列表（1.12 SetFrameLevel 不递归坑）。
+    panel:SetFrameStrata("HIGH")
     panel:SetFrameLevel(25)
     panel:EnableMouse(true)
     panel:SetMovable(true)

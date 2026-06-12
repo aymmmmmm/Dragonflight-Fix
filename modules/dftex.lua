@@ -164,3 +164,104 @@ SlashCmdList["DFBAR"] = function()
     dumpLayers("SkillRankFrame2")
     dumpLayers("ReputationBar2")
 end
+
+-- ============================================================
+-- /wmdump : 世界地图纹理结构调查（重构阶段0 临时工具，调查完删除）
+--   dump WorldMapFrame / WorldMapButton / WorldMapDetailFrame 三框的直属
+--   Texture region：名字/路径/图层/尺寸/屏幕矩形/显隐/alpha，并列三框直接子框名
+--   目的：区分 chrome(要隐藏的暴雪边框) vs 地图底图(必须保留)，定隐藏策略
+--   用法：打开世界地图、稳定显示后再 /wmdump —— 绝不在登录瞬间跑
+--         (ShaguTweaks 缩放/窗口化未应用时屏幕矩形会失真)
+-- ============================================================
+local function wm_msg(s) DEFAULT_CHAT_FRAME:AddMessage(s) end
+
+local function wm_num(v)
+    if v == nil then return "?" end
+    return tostring(math.floor(v + 0.5))
+end
+
+local function wm_dumpFrame(name)
+    local f = getglobal(name)
+    if not f then wm_msg("|cffff6666"..name.." = nil|r"); return end
+    wm_msg("|cffffcc00===== "..name.." =====|r shown="..tostring(f:IsShown())
+        .." level="..tostring(f.GetFrameLevel and f:GetFrameLevel()))
+    if not f.GetRegions then return end
+    local regs = { f:GetRegions() }
+    local n = table.getn(regs)
+    local texCount = 0
+    for i = 1, n do
+        local r = regs[i]
+        if r and r.GetObjectType and r:GetObjectType() == "Texture" then
+            texCount = texCount + 1
+            local layer, sub = r:GetDrawLayer()
+            local tex = r:GetTexture()
+            if not tex or tex == "" then tex = "|cff888888(纯色/无文件)|r" end
+            wm_msg("  |cff66ccff["..tostring(layer).."."..tostring(sub or 0).."]|r "
+                ..(r:GetName() or "(匿名)")
+                .."  "..wm_num(r:GetWidth()).."x"..wm_num(r:GetHeight())
+                .."  rect L"..wm_num(r:GetLeft()).." R"..wm_num(r:GetRight())
+                .." T"..wm_num(r:GetTop()).." B"..wm_num(r:GetBottom())
+                .."  a"..tostring(r.GetAlpha and r:GetAlpha()).." vis"..tostring(r.IsVisible and r:IsVisible()))
+            wm_msg("      tex="..tex)
+        end
+    end
+    wm_msg("  |cff888888共 "..texCount.." 个 Texture region|r")
+end
+
+SLASH_WMDUMP1 = "/wmdump"
+-- 路径去掉公共前缀 Interface\WorldMap\，只留文件名/子路径，输出更短
+local function wm_short(tex)
+    if not tex then return "(纯色)" end
+    local s = string.gsub(tex, "^[Ii]nterface\\[Ww]orld[Mm]ap\\", "WM\\")
+    return s
+end
+
+SlashCmdList["WMDUMP"] = function()
+    local f = WorldMapFrame
+    if not f or not f.GetRegions then wm_msg("|cffff6666WorldMapFrame nil|r"); return end
+    wm_msg("|cffffcc00[WMDump]|r WorldMapFrame 各 region [图层] 名字 -> 路径(WM\\=Interface\\WorldMap\\)：")
+    local regs = { f:GetRegions() }
+    local c = 0
+    for i = 1, table.getn(regs) do
+        local r = regs[i]
+        if r and r.GetObjectType and r:GetObjectType() == "Texture" then
+            c = c + 1
+            wm_msg("  |cff66ccff["..tostring(r:GetDrawLayer()).."]|r "
+                ..(r:GetName() or "(匿名)").." -> "..wm_short(r:GetTexture()))
+        end
+    end
+    wm_msg("  |cff888888WorldMapFrame 共 "..c.." 个|r")
+    -- 佐证：地形底图是否在 DetailFrame 子框
+    local d = WorldMapDetailFrame
+    if d and d.GetRegions then
+        local dr = { d:GetRegions() }
+        local dc, first = 0, nil
+        for i = 1, table.getn(dr) do
+            local r = dr[i]
+            if r and r.GetObjectType and r:GetObjectType() == "Texture" then
+                dc = dc + 1
+                if not first then first = r:GetTexture() end
+            end
+        end
+        wm_msg("|cffffcc00WorldMapDetailFrame:|r "..dc.." 个 region，首个 -> "..wm_short(first))
+    end
+end
+
+-- /wmsize : 核对地图各层与 DFUI 边框/羊皮纸的真实屏幕矩形（看边框是否贴合地图）
+SLASH_WMSIZE1 = "/wmsize"
+SlashCmdList["WMSIZE"] = function()
+    local function sz(name)
+        local f = getglobal(name)
+        if not f then wm_msg("  |cffff6666" .. name .. " = nil|r"); return end
+        wm_msg("  " .. name .. ": " .. wm_num(f.GetWidth and f:GetWidth()) .. "x" .. wm_num(f.GetHeight and f:GetHeight())
+            .. "  lvl" .. tostring(f.GetFrameLevel and f:GetFrameLevel())
+            .. "  L" .. wm_num(f.GetLeft and f:GetLeft()) .. " R" .. wm_num(f.GetRight and f:GetRight())
+            .. " T" .. wm_num(f.GetTop and f:GetTop()) .. " B" .. wm_num(f.GetBottom and f:GetBottom()))
+    end
+    wm_msg("|cffffcc00[WMSize]|r 地图各层 vs DFUI 边框/羊皮纸 真实矩形：")
+    sz("WorldMapFrame")
+    sz("WorldMapButton")
+    sz("WorldMapDetailFrame")
+    sz("DFUI_WorldMapBg")
+    sz("DFUI_WorldMapInset")
+end
