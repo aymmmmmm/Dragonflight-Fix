@@ -106,6 +106,8 @@ modules\assist\sell.lua
 modules\assist\repair.lua
 modules\assist\combatalert.lua
 modules\assist\markknown.lua
+modules\assist\targetarrow.lua
+modules\assist\mobinfo.lua
 modules\assist\linkitemen.lua
 modules\assist\linkpfquest.lua
 

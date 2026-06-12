@@ -253,6 +253,9 @@ DFUI:NewDefaults("Assist", {
     uiQuickMark  = { false },
     uiCombatAlert = { false },
     uiMarkKnown   = { false },
+    uiTargetArrow = { false },
+    targetArrowStyle = { "Arrow2" },   -- 目标箭头样式（文件名，见 targetarrow.lua）
+    uiMobInfo    = { false },
     -- 链接（默认关闭）
     linkItemEnUS = { false },
     linkPfQuest  = { false },

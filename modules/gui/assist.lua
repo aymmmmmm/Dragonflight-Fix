@@ -143,6 +143,20 @@ DFUI:NewMod("Gui-assist", 3, function()
                     local desc = mod and mod.desc
                     AddCheckboxRow(catPanel, iy, key, label, desc)
 
+                    -- uiTargetArrow 行右侧：箭头样式循环按钮
+                    if key == "uiTargetArrow" then
+                        local SBW = 110
+                        local sb = DFUI.tools.CreateButton(catPanel,
+                            L["taStyle"] .. ": " .. DFUI.Assist.GetTargetArrowStyleLabel(),
+                            SBW, 20, false, GOLD)
+                        sb:SetPoint("TOPRIGHT", catPanel, "TOPRIGHT", -PANEL_INSET, -iy)
+                        sb:SetScript("OnClick", function()
+                            local lbl = DFUI.Assist.CycleTargetArrowStyle()
+                            -- CreateButton 的 FontString 在 .text（未 SetFontString），须直接写 .text
+                            this.text:SetText(L["taStyle"] .. ": " .. lbl)
+                        end)
+                    end
+
                     -- autoRoll 行右侧：每个品质一个模式循环按钮（放弃/需求/贪婪/不自动）
                     if key == "autoRoll" then
                         local BW, BG = 78, 4
@@ -157,7 +171,7 @@ DFUI:NewMod("Gui-assist", 3, function()
                                 m = math.mod(m + 1, 4)
                                 DFUI:SetTempDB("Assist", spec.key, m)
                                 if DFUI.Assist.db then DFUI.Assist.db[spec.key] = m end
-                                this:SetText(rollBtnText(spec))
+                                this.text:SetText(rollBtnText(spec))
                             end)
                         end
                     end

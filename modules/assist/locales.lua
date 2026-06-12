@@ -76,6 +76,15 @@ local enUS = {
     ["combatLeave"]   = "Leaving Combat",
     ["uiMarkKnown"]   = "Mark Known Recipes",
     ["uiMarkKnownDesc"]= "Tint already-learned recipes/plans green at vendors and the auction house (dimmed when out of stock); quest items turn yellow.",
+    ["uiTargetArrow"] = "Target Arrow Marker",
+    ["uiTargetArrowDesc"]= "Show an arrow above your current target's nameplate. Works with default, pfUI and ShaguPlates nameplates.",
+    ["taStyle"]       = "Style",
+    ["uiMobInfo"]     = "Mob Attributes Tooltip",
+    ["uiMobInfoDesc"] = "On mouseover of a hostile/neutral creature, append its armor, resistances, damage range and attack speed. Requires the server to expose these values (works on Turtle).",
+    ["tipArmor"]      = "Armor",
+    ["tipResist"]     = "Resist",
+    ["tipDamage"]     = "Damage",
+    ["tipSpeed"]      = "Speed",
 
     -- links
     ["linkItemEnUS"]  = "Alt-Click Item -> English",
@@ -177,6 +186,15 @@ local zhCN = {
     ["combatLeave"]   = "离开战斗",
     ["uiMarkKnown"]   = "标记已学配方",
     ["uiMarkKnownDesc"]= "在商人和拍卖行把已学会的配方/图纸染绿（商人处缺货时变暗）；任务物品染黄。",
+    ["uiTargetArrow"] = "目标箭头标记",
+    ["uiTargetArrowDesc"]= "在当前目标的姓名板上方显示一个箭头，方便辨认。兼容原版、pfUI 与 ShaguPlates 姓名板。右侧按钮切换箭头样式。",
+    ["taStyle"]       = "样式",
+    ["uiMobInfo"]     = "怪物属性提示",
+    ["uiMobInfoDesc"] = "鼠标悬停敌对/中立怪物时，在提示中追加护甲、抗性、伤害范围与攻击速度。数据需服务器支持（Turtle 可用）。",
+    ["tipArmor"]      = "护甲",
+    ["tipResist"]     = "抗性",
+    ["tipDamage"]     = "伤害",
+    ["tipSpeed"]      = "攻速",
 
     -- links
     ["linkItemEnUS"]  = "Alt+点击物品转英文",
