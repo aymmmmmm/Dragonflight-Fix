@@ -14,8 +14,8 @@
 | **角色面板** | `modules/panels/character.lua` | ✅ 完成 | 5 Tab + 品质边框 + 宠物 Tab 动态 |
 | **银行** | `modules/panels/bank.lua` | ✅ 完成 | 24+6 物品栏 DF 边框 |
 | **商人** | `modules/panels/merchant.lua` | ✅ 完成 | 2 Tab（商人/回购） |
-| **任务对话** | `modules/panels/questframe.lua` | ✅ 完成 | 木纹+右侧背景 |
-| **NPC 对话** | `modules/panels/gossip.lua` | ✅ 完成 | 木纹+书签 |
+| **任务对话** | `modules/panels/questframe.lua` | ✅ 完成 | 2026-06 重做：青铜框+羊皮纸+minimal滚动条+头像，共享 `questskin.lua`（见 §十） |
+| **NPC 对话** | `modules/panels/gossip.lua` | ✅ 完成 | 2026-06 重做：同上，共享 `questskin.lua`（见 §十） |
 | **任务日志** | `modules/panels/questlog.lua` | ✅ 完成 | 木纹+书签+左右背景 |
 | **社交** | `modules/panels/social.lua` | ✅ 完成 | 4 Tab + Guild 动态禁用；「查找(Who)」已全自制重写（自建搜索框 `DFUI_WhoSearchBox` + 行挂 `whoInset` 脱离 vanilla FauxScrollFrame + `whoOffset` 自管 + 三操作按钮 + `dfuiTryWho` 客户端防抖 `DFUI_WHO_CD`），详见下方 §4.5 与「五、补充已完成」 |
 
@@ -194,6 +194,7 @@ vanilla 寄生方案（行挂 `WhoListScrollFrame` 这一 FauxScrollFrame）会�
 | GameMenu（游戏菜单） | — | Fix 已有 menu.lua |
 | TalentFrame（天赋） | — | Fix 已有实现（含天赋规划） |
 | LootFrame（拾取） | — | Fix 已有实现，详见 `docs/loot-module-progress.md` |
+| AuctionFrame（拍卖行） | 高 | **TODO**（2026-06-12 用户确认列待办）：大型多 Tab（浏览/竞拍/拍卖）+ 大表格，结构最复杂、工作量最大，后续单独实施 |
 
 ## 八、纹理素材
 
@@ -224,3 +225,25 @@ panels/
 | `Dragonflight-Fix.toc` | `modules\panels\*.lua` 共 21 个文件已加入加载顺序（含工厂 paperdoll、全局换肤 scrollbar、任务经验 questlog_xp） |
 | `modules/gui/elem.lua` | moduleMapping 添加面板模块（待实证：具体条数以源码为准） |
 | `modules/ui/ui.lua` | 删除旧面板代码 + 暗色模式回调，保留 SpellBook 覆盖 |
+
+## 十、2026-06-13 接任务/闲聊重做 + 4 个 NPC 面板新增
+
+### 接任务(QuestFrame)/闲聊(GossipFrame) 重做
+旧「木纹+局部羊皮纸」风格推翻，照任务日志(questlog.lua)统一为青铜框风格，抽共享 helper `modules/panels/questskin.lua`：
+- `DFUI.SkinQuestStyleFrame(frame, opts)` → 返回 customBg：`CreatePaperDollFrame`(青铜框+岩石底) + 单张羊皮纸(`questlog_right_bg.blp`，`SetTexCoord(0,1,0,0.70)` 裁掉图下~30%黑边) + `CreateRetailInset` 凹陷槽 + 头像照 merchant(青铜框当圆环、不加独立金环) + NPC名字金色居中 + `CreateRedButton` 红关闭。
+- `DFUI.AttachMinimalScrolls(ownerFrame, specs)`：照 questlog 详情页范式接管普通 ScrollFrame 的 minimal 滚动条（箭头+滑块**常显**，range=0 时滑块占满/箭头变暗），含 `_dfMinimalScrolls` 守护防 reload 累积。
+- `questframe.lua`：接管 4 个详情 ScrollFrame + 6 按钮重定位（锚 customBg + `SetFrameLevel(+20)` 防被奖励/任务文字盖 + hook 各 panel OnShow 在 vanilla 重设 Decline 锚后重定位，`_dfBtnHooked` 守护）+ 物品 hover 极简隐藏。
+- `gossip.lua`：接管 GossipGreetingScrollFrame + 告别按钮重定位。
+
+### 4 个 NPC 面板新增（照 merchant 范式，frame 名取自 pfUI skins/blizzard/，1.12 验证）
+| 文件 | 面板 | 保留的特殊内容 |
+|---|---|---|
+| `taxi.lua` | 飞行管理员 TaxiFrame | 航点地图 TaxiRouteMap/航点按钮/连线（无头像 frameStyle=2） |
+| `petition.lua` | 请愿签名 PetitionFrame | 签名列表 + Sign/Cancel/Rename/Request 按钮 |
+| `guild_registrar.lua` | 公会注册 GuildRegistrarFrame | 公会名输入框/费用标签/按钮（双子框 +GreetingFrame） |
+| `tabard.lua` | 战袍设计 TabardFrame | 3D模型 TabardModel + 颜色器 Customization1..5 |
+
+基础换皮（青铜外框 + 红关闭 + 标题 + 头像），内部功能控件保留 vanilla 位置。**待游戏内实测调**：① portrait 存在性（无则改 frameStyle=2 免头像孔露岩石）② customBg 锚点是否包住固定尺寸内容（飞行地图316×352/战袍模型）③ 底部按钮是否掉出框外。隐藏纹理时跳过 portrait 避免误隐；`TaxiMerchant:SetTextColor` 判空（可能是 Frame）。
+
+### 待办
+- 拍卖行 AuctionFrame：见 §七（大型多 Tab，工作量最大，单独实施）
