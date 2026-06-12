@@ -6,6 +6,8 @@
 -- 复用 libtipscan 扫描器判定，不另建 tooltip。
 ----------------------------------------------------------------------
 
+setfenv(1, DFUI:GetEnv())   -- 跑在 DFUI.env：hooksecurefunc 等 env 内助手才可见（assist 文件无此行会取到 nil）
+
 local L = DFUI.Assist.L
 
 local COLOR = { r = 0.1, g = 1.0, b = 0.1 }

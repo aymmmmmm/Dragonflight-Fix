@@ -12,9 +12,11 @@
 -- 避免物品卡在光标上。
 ----------------------------------------------------------------------
 
+setfenv(1, DFUI:GetEnv())   -- 跑在 DFUI.env：hooksecurefunc 等 env 内助手才可见（assist 文件无此行会取到 nil）
+
 local L = DFUI.Assist.L
 
-local I            -- LibItem-enUS-1.0 实例
+local I          -- LibItem-enUS-1.0 实例
 local warned = false
 
 local function ensureLib()

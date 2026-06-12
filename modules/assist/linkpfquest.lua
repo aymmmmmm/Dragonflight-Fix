@@ -8,6 +8,8 @@
 -- pfUI.api.rgbhex 用自有难度色函数替代（DFUI 非 pfUI 环境）。
 ----------------------------------------------------------------------
 
+setfenv(1, DFUI:GetEnv())   -- 跑在 DFUI.env：hooksecurefunc 等 env 内助手才可见（assist 文件无此行会取到 nil）
+
 local L = DFUI.Assist.L
 local warned = false
 

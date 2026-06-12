@@ -7,6 +7,8 @@
 -- 可能不触发，届时仅默认背包可用（游戏内验证）。
 ----------------------------------------------------------------------
 
+setfenv(1, DFUI:GetEnv())   -- 跑在 DFUI.env：hooksecurefunc 等 env 内助手才可见（assist 文件无此行会取到 nil）
+
 local L = DFUI.Assist.L
 local scanner = DFUI_Libs.libtipscan:GetScanner("DFUIAssistUnlock")
 local _, playerClass = UnitClass("player")
