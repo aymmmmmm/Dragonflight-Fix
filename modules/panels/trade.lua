@@ -95,48 +95,51 @@ DFUI:NewMod("Trade", 5, function()
     TradeFrameRecipientNameText:SetPoint("TOPLEFT", TradeFrameRecipientPortrait, "TOPRIGHT", 12, -2)
 
     ---------------------------------------------------------------------------
-    -- 5b. 货币：左右各画 DF 大理石凹框 + 裸放 vanilla 金银铜
-    --     左 TradePlayerInputMoneyFrame=MoneyInputFrame compact(输入,永显)；
-    --     右 TradeRecipientMoneyFrame=只读(对方出钱才显)。
-    --     关键：凹框画成 bg(面板底框)自己的 region(非独立 frame)，跨 frame 恒在
-    --     money(parent=TradeFrame,高 level)之下 → 金银铜物理上绝不被盖；左右同函数=一致。
-    --     对方没钱时 SmallMoneyFrame 自隐但凹框 region 仍在 → 对称占位。
-    --     -14：下移到金环底缘以下，避免环下半弧压住框。
+    -- 5b. 货币：DF 大理石凹框直接画成 money frame 自身 region（根因修复）
+    --     ★旧方案（独立 box + OnUpdate 跟随 money level-1）在 1.12 跨 frame 层级
+    --       是动态竞态 → 框糊住金银铜/闪烁（多轮静态压 level + OnUpdate 全失败）。
+    --     ★根因解法：凹框作 moneyFrame 自身 region —— marble 放 BACKGROUND 最底
+    --       sublevel(-8)，金银铜图标(≥BACKGROUND/0)恒在其上；同 frame draw layer
+    --       绝对确定，物理上绝不遮挡，无需任何 OnUpdate。
+    --     边框(BORDER)只在外扩 pad 的四周，不覆盖中心图标 → 不挡金银铜。
+    --     对方没钱时 SmallMoneyFrame 自隐，右侧凹框随之消失（vanilla 行为，暂不占位）。
     ---------------------------------------------------------------------------
     local MARBLE_TEX = TEX .. "interface\\ui-background-marble.tga"
     local UIH_TEX    = TEX .. "panels\\df\\professions\\uiframe_h.tga"
     local UIV_TEX    = TEX .. "panels\\df\\professions\\uiframe_v.tga"
     local CORNER_TEX = TEX .. "interface\\generalframeinsetborders.tga"
-    -- 大理石凹框作 host(=box) 自己的 region；box level 运行时跟随 money-1 → 框恒在金银铜之下
-    local function DrawMoneyInset(host)
+    -- 凹框作 host(=moneyFrame)自身 region；marble 外扩 pad → 框比 money 略大
+    local function DrawMoneyInset(host, padL, padT, padR, padB)
         local eT, eB, eL, eR, cz = 3, 3, 2, 2, 5
         local marble = host:CreateTexture(nil, "BACKGROUND")
+        marble:SetDrawLayer("BACKGROUND", -8)        -- 最底：金银铜恒在其上
         marble:SetTexture(MARBLE_TEX)
-        marble:SetAllPoints(host)
-        local top = host:CreateTexture(nil, "ARTWORK")
+        marble:SetPoint("TOPLEFT",     host, "TOPLEFT",     -padL,  padT)
+        marble:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT",  padR, -padB)
+        local top = host:CreateTexture(nil, "BORDER")
         top:SetTexture(UIH_TEX); top:SetTexCoord(0.0, 1.0, 0.9063, 0.9297)
-        top:SetPoint("TOPLEFT",  host, "TOPLEFT",  0, 0)
-        top:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
+        top:SetPoint("TOPLEFT",  marble, "TOPLEFT",  0, 0)
+        top:SetPoint("TOPRIGHT", marble, "TOPRIGHT", 0, 0)
         top:SetHeight(eT)
-        local bot = host:CreateTexture(nil, "ARTWORK")
+        local bot = host:CreateTexture(nil, "BORDER")
         bot:SetTexture(UIH_TEX); bot:SetTexCoord(0.0, 1.0, 0.8672, 0.8906)
-        bot:SetPoint("BOTTOMLEFT",  host, "BOTTOMLEFT",  0, 0)
-        bot:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
+        bot:SetPoint("BOTTOMLEFT",  marble, "BOTTOMLEFT",  0, 0)
+        bot:SetPoint("BOTTOMRIGHT", marble, "BOTTOMRIGHT", 0, 0)
         bot:SetHeight(eB)
-        local left = host:CreateTexture(nil, "ARTWORK")
+        local left = host:CreateTexture(nil, "BORDER")
         left:SetTexture(UIV_TEX); left:SetTexCoord(0.4844, 0.5313, 0.0, 1.0)
-        left:SetPoint("TOPLEFT",    host, "TOPLEFT",    0, 0)
-        left:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT", 0, 0)
+        left:SetPoint("TOPLEFT",    marble, "TOPLEFT",    0, 0)
+        left:SetPoint("BOTTOMLEFT", marble, "BOTTOMLEFT", 0, 0)
         left:SetWidth(eL)
-        local right = host:CreateTexture(nil, "ARTWORK")
+        local right = host:CreateTexture(nil, "BORDER")
         right:SetTexture(UIV_TEX); right:SetTexCoord(0.5313, 0.4844, 0.0, 1.0)
-        right:SetPoint("TOPRIGHT",    host, "TOPRIGHT",    0, 0)
-        right:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
+        right:SetPoint("TOPRIGHT",    marble, "TOPRIGHT",    0, 0)
+        right:SetPoint("BOTTOMRIGHT", marble, "BOTTOMRIGHT", 0, 0)
         right:SetWidth(eR)
         local function corner(point, l, r, t, b)
-            local c = host:CreateTexture(nil, "ARTWORK")
+            local c = host:CreateTexture(nil, "BORDER")
             c:SetTexture(CORNER_TEX); c:SetTexCoord(l, r, t, b)
-            c:SetPoint(point, host, point, 0, 0)
+            c:SetPoint(point, marble, point, 0, 0)
             c:SetWidth(cz); c:SetHeight(cz)
         end
         corner("TOPLEFT",     0.703125, 0.828125, 0.03125, 0.28125)
@@ -145,39 +148,15 @@ DFUI:NewMod("Trade", 5, function()
         corner("BOTTOMRIGHT", 0.515625, 0.640625, 0.6875,  0.9375)
     end
 
-    local moneyPairs = {}
-    local MONEY_BOX_W, MONEY_BOX_H = 116, 24
-    local function CreateMoneyBox(portrait, moneyFrame)
+    -- money frame 重锚头像下方 + 凹框作其自身 region（pad 外扩，左右可分别调）
+    local function SetupMoney(portrait, moneyFrame, padL, padR)
         if not moneyFrame then return end
-        local box = CreateFrame("Frame", nil, bg)   -- 货币框载体（始终显示=对方没钱也占位对称）
-        box:SetWidth(MONEY_BOX_W)
-        box:SetHeight(MONEY_BOX_H)
-        box:SetPoint("TOPLEFT", portrait, "BOTTOMLEFT", 8, -14)
-        DrawMoneyInset(box)                          -- 大理石凹框作 box region
         moneyFrame:ClearAllPoints()
-        moneyFrame:SetPoint("LEFT", box, "LEFT", 6, 0)
-        table.insert(moneyPairs, { box = box, money = moneyFrame })
-        return box
+        moneyFrame:SetPoint("TOPLEFT", portrait, "BOTTOMLEFT", 14, -16)
+        DrawMoneyInset(moneyFrame, padL, 4, padR, 4)
     end
-    CreateMoneyBox(TradeFramePlayerPortrait,    TradePlayerInputMoneyFrame)
-    CreateMoneyBox(TradeFrameRecipientPortrait, TradeRecipientMoneyFrame)
-
-    -- ★真因：money 是 UIPanel 子 frame，FrameLevel 在显示时由 UIParent 动态决定，
-    --   加载时设的静态 box/bg level 对不上（常 ≥ money）→ 大理石框压住金银铜。
-    --   解法：运行时让 box level 跟随 money-1（同 strata），框恒在金银铜之下；
-    --   box parent=bg 始终显示 → 对方没出钱也保留框、左右对称。
-    local lvlWatcher = CreateFrame("Frame", nil, bg)
-    lvlWatcher:SetScript("OnUpdate", function()
-        if not TradeFrame:IsShown() then return end
-        for i = 1, table.getn(moneyPairs) do
-            local p = moneyPairs[i]
-            local target = p.money:GetFrameLevel() - 1
-            if target < 0 then target = 0 end
-            if p.box:GetFrameLevel() ~= target then
-                p.box:SetFrameLevel(target)
-            end
-        end
-    end)
+    SetupMoney(TradeFramePlayerPortrait,    TradePlayerInputMoneyFrame, 8, 10)
+    SetupMoney(TradeFrameRecipientPortrait, TradeRecipientMoneyFrame,   8, 10)
 
     ---------------------------------------------------------------------------
     -- 6. 高层覆盖框 titleHolder（金环挂这层确保盖住头像方角；
@@ -192,18 +171,8 @@ DFUI:NewMod("Trade", 5, function()
     --     绘制在 titleHolder(高 FrameLevel) 之上，盖住方形头像四角；
     --     环略大于头像，内孔透出脸部，SetTexture 整张 + 居中（不切片）。
     ---------------------------------------------------------------------------
-    local RING_TEX = TEX .. "unitframes\\df_portrait_ring.tga"
-    local RING_SIZE = 80
-    local function AddPortraitRing(portrait)
-        local ring = titleHolder:CreateTexture(nil, "OVERLAY")
-        ring:SetTexture(RING_TEX)
-        ring:SetWidth(RING_SIZE)
-        ring:SetHeight(RING_SIZE)
-        ring:SetPoint("CENTER", portrait, "CENTER", 0, 0)
-        return ring
-    end
-    AddPortraitRing(TradeFramePlayerPortrait)
-    AddPortraitRing(TradeFrameRecipientPortrait)
+    DFUI.AddPortraitRing(TradeFramePlayerPortrait, titleHolder)
+    DFUI.AddPortraitRing(TradeFrameRecipientPortrait, titleHolder)
 
     ---------------------------------------------------------------------------
     -- 7. 关闭按钮（对齐拾取窗口 21x21 红钮）
@@ -236,6 +205,13 @@ DFUI:NewMod("Trade", 5, function()
         -- 清除 vanilla ItemButton 的灰底凹槽 NormalTexture（pfUI 同款处理）
         -- 保留 IconTexture，让 slot_*.tga 透明中心区干净透出物品图标
         if btn.SetNormalTexture then btn:SetNormalTexture("") end
+        -- 深色凹槽底（照 loot.lua:141 范式 WHITE8X8+黑，BACKGROUND 层）：
+        -- 空槽透出深凹陷感，有物品时被 Icon/边框盖住；α 半透露一点岩石底（可调）
+        local slotBg = btn:CreateTexture(nil, "BACKGROUND")
+        slotBg:SetTexture("Interface\\Buttons\\WHITE8X8")
+        slotBg:SetAllPoints(btn)
+        slotBg:SetVertexColor(0, 0, 0, 0.55)
+        btn.dfuiBg = slotBg
         local border = btn:CreateTexture(nil, "OVERLAY")
         border:SetTexture(PROF_TEX .. "slot_neutral.tga")
         border:SetTexCoord(12/64, 51/64, 12/64, 51/64)
@@ -253,6 +229,23 @@ DFUI:NewMod("Trade", 5, function()
         AttachSlotBorder(GetSlotButton("TradePlayerItem", i))
         AttachSlotBorder(GetSlotButton("TradeRecipientItem", i))
     end
+
+    -- 第7槽(附魔/不会被交易)自带 UI-TradeFrame-EnchantIcon 纹理(子 region，
+    -- 不在第1步 TradeFrame:GetRegions() 直属遍历内) → 单独隐藏避免与 DF 风格冲突
+    local function HideEnchantIcon(slotName)
+        local slot = getglobal(slotName)
+        if not slot then return end
+        local rs = {slot:GetRegions()}
+        for i = 1, table.getn(rs) do
+            local r = rs[i]
+            if r.GetObjectType and r:GetObjectType() == "Texture" then
+                local t = r:GetTexture()
+                if t and string.find(t, "UI%-TradeFrame") then r:Hide() end
+            end
+        end
+    end
+    HideEnchantIcon("TradePlayerItem7")
+    HideEnchantIcon("TradeRecipientItem7")
 
     local slotWatcher = CreateFrame("Frame")
     slotWatcher:RegisterEvent("TRADE_SHOW")
