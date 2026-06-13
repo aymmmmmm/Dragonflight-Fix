@@ -279,6 +279,17 @@ DFUI:NewMod("WorldMap", 6, function()
             if old then old() end
             hideChrome()
         end)
+
+        -- 6) 裸滚轮缩放整个地图窗口（连金属框等比放大，不溢出）。
+        --    Ctrl/Shift 让给 ShaguTweaks 的缩放/透明度：HookScript 链式叠加，先跑其逻辑再跑本分支，不覆盖。
+        WorldMapFrame:EnableMouseWheel(1)
+        HookScript(WorldMapFrame, "OnMouseWheel", function()
+            if not IsControlKeyDown() and not IsShiftKeyDown() then
+                local s = WorldMapFrame:GetScale() + arg1 / 10  -- arg1 = 滚动方向(+1/-1)
+                if s < 0.5 then s = 0.5 elseif s > 1.6 then s = 1.6 end  -- 限幅防滚没/糊屏
+                WorldMapFrame:SetScale(s)
+            end
+        end)
     end
 
     local f = CreateFrame("Frame")
