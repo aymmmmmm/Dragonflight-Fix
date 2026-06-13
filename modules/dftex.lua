@@ -264,4 +264,6 @@ SlashCmdList["WMSIZE"] = function()
     sz("WorldMapDetailFrame")
     sz("DFUI_WorldMapBg")
     sz("DFUI_WorldMapInset")
+    sz("pfQuestMapDropdown")
+    sz("shagutweaks_mapreveal_onmap")
 end
