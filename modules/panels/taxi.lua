@@ -1,6 +1,9 @@
--- taxi.lua — 飞行管理员航点地图(TaxiFrame)换 DF 青铜框皮
--- 照 merchant 范式：换外框 + 红关闭 + 标题，保留地图(TaxiRouteMap)/航点(TaxiButtonN)/连线不动
--- 参考 pfUI skins/blizzard/taxi.lua（1.12 验证）；TaxiFrame 无头像、无底部按钮
+-- taxi.lua — 飞行管理员航点地图(TaxiFrame)换 DF 青铜框皮（共享 SkinQuestStyleFrame 工厂）
+-- TaxiFrame 可能 LoadOnDemand(登录时不存在)：延迟到 ADDON_LOADED / TAXIMAP_OPENED(打开飞行)时再换皮
+-- 工厂选项：hideMatch="Taxi"(只隐边框留地图) / skipParchment(露地图不要羊皮纸) /
+--   insetLevelOffset=8(描边浮地图上) / portraitUnit="player"(玩家头像)；无底部按钮、选点自动飞
+-- 铁律：换皮靠工厂 _dfQuestSkinned 守护"只在地图绘制前跑一次"——绝不每次开飞行重跑(会隐掉已画好的地图内容,守护是地图保命机制非仅防泄漏)
+--   装饰微调(头像/inset 几何)放 ApplyTaxiTweaks：只动自家 frame、不碰 TaxiFrame region/地图，可安全每次重应用(支持 /reload 调参)
 
 setfenv(1, DFUI:GetEnv())
 
@@ -9,43 +12,62 @@ DFUI:NewDefaults("Taxi", {
 })
 
 DFUI:NewMod("Taxi", 5, function()
-    if not TaxiFrame then return end
-    if TaxiFrame._dfTaxiSkinned then return end
+    -- ▼ inset 锚点可调（改完 /reload 即时生效）
+    local IN_L, IN_T, IN_R, IN_B = 6, -60, -16, 12  -- inset 锚点 左/上/右/下
+    -- ▲
 
-    -- 隐藏原生背景纹理（飞行框背景艺术），地图/航点是子 frame 不受影响
-    local regions = {TaxiFrame:GetRegions()}
-    for i = 1, table.getn(regions) do
-        local r = regions[i]
-        if r:GetObjectType() == "Texture" then r:Hide() end
+    -- 装饰重应用：只动自家 frame（头像/inset），绝不碰 TaxiFrame region 或地图 → 守护早返回(含 /reload)后可安全重应用
+    local function ApplyTaxiTweaks(bg)
+        if not bg then return end
+        -- 头像完全照搬 gossip：① NPC(飞行管理员=当前目标)的脸 ② gossip 工厂用的同一个 DFUI.AttachPortrait（BORDER+(-4,8)），金属环框住
+        if not bg.dfTaxiPortrait then
+            bg.dfTaxiPortrait = bg:CreateTexture(nil, "ARTWORK")
+            local gs = GossipFramePortrait and GossipFramePortrait:GetWidth()
+            if not gs or gs < 10 then gs = 60 end
+            bg.dfTaxiPortrait:SetWidth(gs)
+            bg.dfTaxiPortrait:SetHeight(gs)
+        end
+        SetPortraitTexture(bg.dfTaxiPortrait, UnitExists("target") and "target" or "player")  -- NPC 脸，取不到目标兜底玩家
+        if bg.portrait   then bg.portrait:Hide()   end   -- 隐工厂空槽
+        if bg.dfTaxiFace then bg.dfTaxiFace:Hide() end   -- 隐上一版残留纹理，防重影
+        DFUI.AttachPortrait(bg, bg.dfTaxiPortrait)       -- ← gossip 工厂里那一行，逐字照搬
+        -- inset 微调
+        local inset = getglobal("DFUI_TaxiBgInset")
+        if inset then
+            inset:ClearAllPoints()
+            inset:SetPoint("TOPLEFT",     bg, "TOPLEFT",     IN_L, IN_T)
+            inset:SetPoint("BOTTOMRIGHT", bg, "BOTTOMRIGHT", IN_R, IN_B)
+        end
     end
-    if TaxiFrame.DisableDrawLayer then TaxiFrame:DisableDrawLayer("BACKGROUND") end
-    if TaxiCloseButton then TaxiCloseButton:Hide() end
 
-    -- 青铜框（无头像 frameStyle=2），衬在地图之下
-    local customBg = DFUI.CreatePaperDollFrame("DFUI_TaxiBg", TaxiFrame, 384, 512, 2)
-    customBg:SetPoint("TOPLEFT", TaxiFrame, "TOPLEFT", 12, -12)
-    customBg:SetPoint("BOTTOMRIGHT", TaxiFrame, "BOTTOMRIGHT", -32, 72)
-    customBg:SetFrameLevel(TaxiFrame:GetFrameLevel() - 1)
-
-    -- 标题（飞行管理员名，金色居中顶部）
-    if TaxiMerchant then
-        TaxiMerchant:SetParent(customBg)
-        TaxiMerchant:ClearAllPoints()
-        TaxiMerchant:SetPoint("TOP", customBg, "TOP", 0, -6)
-        if TaxiMerchant.SetTextColor then TaxiMerchant:SetTextColor(1, 0.82, 0) end  -- 可能是 Frame，判空防崩
+    local function SkinTaxi()
+        if not TaxiFrame then return end
+        -- vanilla 飞行框关闭按钮真名 TaxiCloseButton（非 TaxiFrameCloseButton），工厂按名推导拿不到，必须显式隐
+        if TaxiCloseButton then TaxiCloseButton:Hide() end
+        -- 工厂 set-once 守护：只在 ADDON_LOADED（地图绘制前）真正换皮一次；之后早返回已存在 customBg。
+        --   绝不每次重跑——重跑在地图绘制后会破坏航点地图内容（守护=地图保命机制）
+        local bg = DFUI.SkinQuestStyleFrame(TaxiFrame, {
+            name             = "DFUI_TaxiBg",
+            width            = 384,
+            height           = 512,
+            panels           = {TaxiFrame},
+            hideMatch        = "Taxi",       -- 只隐边框艺术，绝不全隐：保留 TaxiRouteMap/航点/连线
+            skipParchment    = true,         -- inset 露航点地图，不要羊皮纸
+            insetLevelOffset = 8,            -- 抬高 inset 描边浮于高 level 地图之上、bg 隐藏不挡地图
+            nameText         = TaxiMerchant, -- 飞行管理员名（工厂内 SetTextColor 判空兜底）
+            onClose          = function() HideUIPanel(TaxiFrame) end,
+        })
+        -- 装饰微调每次安全重应用（含 /reload 守护早返回后）——只动自家 frame，不碰地图
+        ApplyTaxiTweaks(bg)
     end
 
-    -- 红关闭
-    local closeButton = DFUI.CreateRedButton(customBg, "close", function() HideUIPanel(TaxiFrame) end)
-    closeButton:SetPoint("TOPRIGHT", customBg, "TOPRIGHT", 0, -1)
-    closeButton:SetWidth(20)
-    closeButton:SetHeight(20)
-    closeButton:SetFrameLevel(customBg:GetFrameLevel() + 3)
+    -- TaxiFrame 可能 LoadOnDemand：已存在则即时换，否则等 addon 加载 / 飞行打开
+    if TaxiFrame then SkinTaxi() end
+    local f = CreateFrame("Frame")
+    f:RegisterEvent("ADDON_LOADED")
+    f:RegisterEvent("TAXIMAP_OPENED")
+    f:SetScript("OnEvent", function() SkinTaxi() end)
 
-    CenterFrame(TaxiFrame)
-    HookScript(TaxiFrame, "OnShow", function() customBg:Show() end)
-
-    TaxiFrame._dfTaxiSkinned = true
     local callbacks = {}
     DFUI:NewCallbacks("Taxi", callbacks)
 end)

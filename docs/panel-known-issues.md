@@ -209,3 +209,43 @@ questlog, social, macro, bank, dressup, gossip, inspect, keybinding, mail, merch
 - tradeskill — InputBox
 
 > 注：`AddSubBorder` 函数本身仍保留在 `core/tools.lua:86`（其他面板/降级路径仍用），此处仅指上述三处面板**移除了对它的调用**。当前 social.lua 已不调 AddSubBorder（who 改自建 `DFUI_WhoSearchBox`，`WhoFrameEditBox` 直接 `:Hide()`），tradeskill.lua 全自制无 InputBox 描边调用，character.lua SkillRankFrame 走进度条填充方案。
+
+---
+
+## 六、飞行管理员面板（taxi.lua）— 头像始终不对 ❌ 未解决（2026-06-13，盲改 5+ 轮失败，待截图）
+
+### 问题描述
+
+飞行管理员航点地图面板（`taxi.lua`）的头像（左上金属环里那张脸）用户反复反馈"不对"。用户明确要求"完全照搬 gossip 的头像和金属框"。即使代码层面已用 gossip 同一套机制，用户仍说"没改好"。**已解决：地图内容显示、inset 距离**；**未解决：头像**。
+
+### 已尝试的方案（按时间顺序，全部被否）
+
+| # | 做法 | 用户反馈 |
+|---|------|---------|
+| 1 | 工厂 `portraitUnit` 分支：`customBg.portrait`(工厂 OVERLAY 槽) `SetPortraitTexture("player")` + 60px + `AttachPortrait(-4,8)` | 偏下/没入孔 |
+| 2 | 改 54px @ (-4,10)（factory `portraitSize`/`portraitY` 选项） | 尺寸不对/没在框内 |
+| 3 | 加层级修复：`portrait:SetDrawLayer("BORDER")` + `edges[1]:SetDrawLayer("OVERLAY",7)`（金属环顶到头像上） | 还是在金属环下面/不对 |
+| 4 | 独立 BORDER 纹理 `dfTaxiFace`，尺寸=`GossipFramePortrait:GetWidth()`，(-4,8)，去掉 edges 提层 | 仍不对 |
+| 5 | 改 **NPC 脸**（`SetPortraitTexture` 用 `target`/`player` 兜底）+ 用 gossip **同一个 `DFUI.AttachPortrait`** 逐字照搬 | 仍没改好 |
+
+### 当前代码状态（taxi.lua `ApplyTaxiTweaks`）
+
+`bg.dfTaxiPortrait`（在 customBg 上 CreateTexture）→ `SetPortraitTexture(target/player)` → `DFUI.AttachPortrait(bg, bg.dfTaxiPortrait)`（= gossip 工厂里那一行，BORDER + (-4,8)，不 resize），尺寸初始化=`GossipFramePortrait:GetWidth()`。金属环 = `CreatePaperDollFrame` frameStyle=1 的 topLeft 角（与 gossip 同一工厂、同一角）。隐了工厂空槽 `bg.portrait` 与上一版 `bg.dfTaxiFace` 防重影。
+
+### 核心障碍
+
+**全程盲改（看不到游戏画面）**。理论上现在 taxi 头像与 gossip 用的是同一个 `DFUI.AttachPortrait` 函数 + 同尺寸 + NPC 脸 + 同金属环，几何应逐字一致，但用户仍说不对。存在**无法靠推理定位的视觉差异**。
+
+### 待排查方向（下次必须先做，别再盲改）
+
+1. **先要截图**：taxi 面板 + gossip 面板并排对比。盲改已 5+ 轮全废，无截图不要再动代码。
+2. **游戏内 dump 真实几何对比**：`bg.dfTaxiPortrait` vs `GossipFramePortrait` 的 `GetWidth/GetHeight/GetPoint/GetDrawLayer`，以及两个 `customBg` 的实际尺寸——验证"代码一致"是否真的"渲染一致"。
+3. **确认 NPC 脸取到没**：`UnitExists("target")` 在 `TAXIMAP_OPENED` 时是否=飞行管理员（若飞行管理员直接开地图不弹对话，目标可能不是它）。
+4. **怀疑点**：GossipFrame 与 TaxiFrame 尺寸不同 → 两个 customBg 尺寸不同 → 头像在环中的相对位置是否真的一样？（理论上锚点相对 TOPLEFT 固定，但需实测证伪）。
+5. **可能根本不是 taxi 代码问题**：用户期望的"对"也许与 gossip 实际渲染不符，需用户明确指认作为样板的面板/截图。
+
+### 不要破坏（已确认 OK，与头像无关）
+
+- 地图内容：靠工厂 `_dfQuestSkinned` **set-once 守护**（绝不每次开飞行重跑换皮，否则地图消失，见本节上方第十节教训 / `panel-skinning-progress.md`）。
+- inset 距离：用户认可当前 `IN_R=-16`。
+- 架构：守护 + `ApplyTaxiTweaks`（只动自家 frame、不碰 TaxiFrame region/地图）→ 安全 `/reload` 调参。

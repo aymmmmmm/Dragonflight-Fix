@@ -5,27 +5,7 @@
 
 setfenv(1, DFUI:GetEnv())
 
-local TEX = DFUI:GetInfoOrCons("tex")
-
-local PARCHMENT = TEX .. "panels\\questlog_right_bg.blp"     -- 羊皮纸(右图单张铺满)
-
--- 隐藏 vanilla 原生框体纹理（Quest 材质底 / DialogBox 边框）
-local function HidePanelTextures(panels)
-    for _, panel in ipairs(panels) do
-        if panel then
-            local regions = {panel:GetRegions()}
-            for i = 1, table.getn(regions) do
-                local r = regions[i]
-                if r:GetObjectType() == "Texture" then
-                    local tex = r:GetTexture()
-                    if tex and (string.find(tex, "Quest") or string.find(tex, "UI%-DialogBox")) then
-                        r:Hide()
-                    end
-                end
-            end
-        end
-    end
-end
+-- 纹理隐藏/羊皮纸/头像 复用 paperdoll.lua 工厂（DFUI.HidePanelTextures/CreateParchment/AttachPortrait）
 
 -- 共通换皮，返回 customBg（caller 用来接 minimal 滚动条 / 定位底部按钮）
 function DFUI.SkinQuestStyleFrame(frame, opts)
@@ -34,7 +14,10 @@ function DFUI.SkinQuestStyleFrame(frame, opts)
     if frame._dfQuestSkinned then return frame.dfCustomBg end
 
     -- 1. 隐藏 vanilla 纹理 + 原生关闭按钮
-    HidePanelTextures(opts.panels or {frame})
+    local panels = opts.panels or {frame}
+    for i = 1, table.getn(panels) do
+        DFUI.HidePanelTextures(panels[i], {match = opts.hideMatch or "Quest"})
+    end
     local vClose = getglobal(frame:GetName() .. "CloseButton")
     if vClose then vClose:Hide() end
 
@@ -46,27 +29,30 @@ function DFUI.SkinQuestStyleFrame(frame, opts)
     frame.dfCustomBg = customBg
     HookScript(frame, "OnShow", function() customBg:Show() end)
 
-    -- 3. 羊皮纸：单张右图，裁掉底部黑边(图下~30%为黑)取羊皮纸部分拉伸铺满阅读区
-    local parch = customBg:CreateTexture(nil, "ARTWORK")
-    parch:SetTexture(PARCHMENT)
-    parch:SetTexCoord(0, 1, 0, 0.70)
-    parch:SetPoint("TOPLEFT", customBg, "TOPLEFT", 6, -60)
-    parch:SetPoint("BOTTOMRIGHT", customBg, "BOTTOMRIGHT", -24, 6)
+    -- 3. 羊皮纸（复用工厂，默认裁底部黑边）；taxi 走 skipParchment 露航点地图
+    if not opts.skipParchment then
+        DFUI.CreateParchment(customBg, {6, -60, -24, 6})
+    end
 
     -- 4. 凹陷槽（框住羊皮纸，bg 隐藏露羊皮纸）
     local inset = DFUI.CreateRetailInset(customBg, {
         name        = (opts.name or "DFUI_Quest") .. "Inset",
-        anchors     = {6, -60, -24, 12},
+        anchors     = {6, -60, -24, 12},       -- 硬编码默认；taxi 的 inset 锚点由 ApplyTaxiTweaks 事后重锚
+        levelOffset = opts.insetLevelOffset,   -- nil → CreateRetailInset 内 or 1，与不传等价；taxi 传 8 浮于地图上
         followFrame = frame,
     })
     if inset and inset.bg then inset.bg:Hide() end
 
-    -- 5. 头像：照 merchant，reparent + CreatePaperDollFrame 自带青铜框当圆环（不加独立金环、不设尺寸）
-    if opts.portrait then
-        opts.portrait:SetParent(customBg)
-        opts.portrait:SetDrawLayer("BORDER", 0)
-        opts.portrait:ClearAllPoints()
-        opts.portrait:SetPoint("TOPLEFT", customBg, "TOPLEFT", -4, 8)
+    -- 5. 头像（复用工厂，青铜框当圆环）
+    -- portraitUnit（如 taxi="player"）：单位头像填进工厂自有 portrait 槽，几何微调由调用方事后调（taxi ApplyTaxiTweaks）；
+    -- 否则走原路径，把传入的 vanilla NPC 头像 opts.portrait 塞进圆环（quest/gossip）
+    if opts.portraitUnit and customBg.portrait then
+        SetPortraitTexture(customBg.portrait, opts.portraitUnit)
+        customBg.portrait:SetWidth(60)
+        customBg.portrait:SetHeight(60)
+        DFUI.AttachPortrait(customBg, customBg.portrait)
+    else
+        DFUI.AttachPortrait(customBg, opts.portrait)
     end
 
     -- 6. NPC 名字居中顶部（金色）
@@ -75,7 +61,7 @@ function DFUI.SkinQuestStyleFrame(frame, opts)
         opts.nameText:SetDrawLayer("OVERLAY", 1)
         opts.nameText:ClearAllPoints()
         opts.nameText:SetPoint("TOP", customBg, "TOP", 0, -6)
-        opts.nameText:SetTextColor(1, 0.82, 0)
+        if opts.nameText.SetTextColor then opts.nameText:SetTextColor(1, 0.82, 0) end  -- taxi 的 TaxiMerchant 防御判空（实为 FontString，恒真）
     end
 
     -- 7. 红关闭

@@ -238,12 +238,16 @@ panels/
 ### 4 个 NPC 面板新增（照 merchant 范式，frame 名取自 pfUI skins/blizzard/，1.12 验证）
 | 文件 | 面板 | 保留的特殊内容 |
 |---|---|---|
-| `taxi.lua` | 飞行管理员 TaxiFrame | 航点地图 TaxiRouteMap/航点按钮/连线（无头像 frameStyle=2） |
+| `taxi.lua` | 飞行管理员 TaxiFrame | 航点地图/航点/连线 ✅；**共享 SkinQuestStyleFrame** 工厂；头像 ❌ **未解决**（盲改 5+ 轮失败，详见 `panel-known-issues.md §六`，下次先要截图） |
 | `petition.lua` | 请愿签名 PetitionFrame | 签名列表 + Sign/Cancel/Rename/Request 按钮 |
 | `guild_registrar.lua` | 公会注册 GuildRegistrarFrame | 公会名输入框/费用标签/按钮（双子框 +GreetingFrame） |
 | `tabard.lua` | 战袍设计 TabardFrame | 3D模型 TabardModel + 颜色器 Customization1..5 |
 
-基础换皮（青铜外框 + 红关闭 + 标题 + 头像），内部功能控件保留 vanilla 位置。**待游戏内实测调**：① portrait 存在性（无则改 frameStyle=2 免头像孔露岩石）② customBg 锚点是否包住固定尺寸内容（飞行地图316×352/战袍模型）③ 底部按钮是否掉出框外。隐藏纹理时跳过 portrait 避免误隐；`TaxiMerchant:SetTextColor` 判空（可能是 Frame）。
+基础换皮（青铜外框 + 红关闭 + 标题 + 头像），内部功能控件保留 vanilla 位置。**待游戏内实测调**（petition/guild_registrar/tabard 适用）：① portrait 存在性（无则改 frameStyle=2 免头像孔露岩石）② customBg 锚点是否包住固定尺寸内容（战袍模型等）③ 底部按钮是否掉出框外。隐藏纹理时跳过 portrait 避免误隐。
+
+> **taxi.lua 已对齐工厂（2026-06-13）**：原手搓平行实现已废除，改为复用 `SkinQuestStyleFrame`。工厂新增 4 个向后兼容选项 `hideMatch`/`skipParchment`/`insetLevelOffset`/`portraitUnit`（taxi 传 `"Taxi"`/`true`/`8`/`"player"`），缺省值保证 quest/gossip **逐字节零回归**；另把 `nameText:SetTextColor` 判空收进工厂（兜底 TaxiMerchant）。**收益**：自动获得 `_dfQuestSkinned` 幂等守护 → 修掉原"无守护"版每次 `TAXIMAP_OPENED` 重建 frame + 叠 OnShow hook 的双重泄漏；红关闭 level 随工厂统一 +5。taxi 侧仅保留显式 `TaxiCloseButton:Hide()`（真名非 `TaxiFrameCloseButton`，工厂推导拿不到）。待实测项①③对 taxi 已落定（frameStyle=1+玩家头像、无底部按钮选点自动飞），仅②地图区锚点覆盖仍需游戏内目测。
+
+> **⚠️ taxi 血泪教训：守护是"地图保命机制"，不只是防泄漏（2026-06-13）**。曾为 /reload 调参在 SkinTaxi 开头加"清 `_dfQuestSkinned`、每次开飞行重跑工厂"的旁路 → **航点地图内容消失**。根因：`_dfQuestSkinned` 守护保证整套换皮**只在 `ADDON_LOADED`（地图绘制前）跑一次**；旁路让换皮在每次 `TAXIMAP_OPENED`（地图绘制后）重跑，破坏已画好的地图（pfUI/DragonflightUI 同样只 skin 一次）。**正确做法**：换皮严守 set-once；装饰性可调项（头像尺寸/位置/层级、inset 锚点、金属角层级）抽进 `ApplyTaxiTweaks(bg)`——**只动自家 frame（`customBg.portrait`/`getglobal("DFUI_TaxiBgInset")`/`customBg.edges`），绝不碰 TaxiFrame region/地图**，每次 SkinTaxi（含守护早返回/`/reload`）安全重应用 → 既能 /reload 调参又不伤地图。tunable 数值在 taxi 顶部常量单一来源；工厂只留结构性选项（hideMatch/skipParchment/insetLevelOffset/portraitUnit），几何微调不进工厂。头像"浮在金属上"用 `bg.portrait:SetDrawLayer("BORDER")` + 金属角 `edges[1]:SetDrawLayer("OVERLAY",7)` 压到环下。
 
 ### 待办
 - 拍卖行 AuctionFrame：见 §七（大型多 Tab，工作量最大，单独实施）
