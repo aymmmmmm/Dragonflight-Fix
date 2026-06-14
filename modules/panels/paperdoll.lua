@@ -373,3 +373,61 @@ function DFUI.CreatePaperDollFrame(name, parent, width, height, frameStyle)
 
     return frame
 end
+
+-- ============================================================
+-- 复用工厂（从各面板重复代码抽出）
+-- ============================================================
+
+local RING_TEX  = TEX .. "unitframes\\df_portrait_ring.tga"
+local PARCH_TEX = TEX .. "panels\\questlog_right_bg.blp"
+
+-- 隐藏面板原生纹理。opts.skip=不隐藏的 region(如头像)；opts.match=只隐藏贴图名含此串的(nil=全隐)
+function DFUI.HidePanelTextures(frame, opts)
+    if not frame then return end
+    opts = opts or {}
+    local regions = {frame:GetRegions()}
+    for i = 1, table.getn(regions) do
+        local r = regions[i]
+        if r:GetObjectType() == "Texture" and r ~= opts.skip then
+            if opts.match then
+                local tex = r:GetTexture()
+                if tex and string.find(tex, opts.match) then r:Hide() end
+            else
+                r:Hide()
+            end
+        end
+    end
+end
+
+-- 头像挂载：reparent 到 customBg 左上头像孔（青铜框当圆环），照 merchant 范式
+function DFUI.AttachPortrait(customBg, portrait, x, y)
+    if not portrait then return end
+    portrait:SetParent(customBg)
+    portrait:SetDrawLayer("BORDER", 0)
+    portrait:ClearAllPoints()
+    portrait:SetPoint("TOPLEFT", customBg, "TOPLEFT", x or -4, y or 8)
+end
+
+-- 独立金色头环（df_portrait_ring 整图，CENTER 锚头像）。holder 默认 portrait 的父(可传高 level 框盖方角)
+function DFUI.AddPortraitRing(portrait, holder, size)
+    if not portrait then return nil end
+    holder = holder or portrait:GetParent()
+    local ring = holder:CreateTexture(nil, "OVERLAY")
+    ring:SetTexture(RING_TEX)
+    ring:SetWidth(size or 80)
+    ring:SetHeight(size or 80)
+    ring:SetPoint("CENTER", portrait, "CENTER", 0, 0)
+    return ring
+end
+
+-- 羊皮纸：questlog_right_bg 单图，默认 SetTexCoord 裁底部黑边。anchors={TLx,TLy,BRx,BRy} 相对 parent
+function DFUI.CreateParchment(parent, anchors, opts)
+    opts = opts or {}
+    local parch = parent:CreateTexture(nil, "ARTWORK")
+    parch:SetTexture(opts.texture or PARCH_TEX)
+    local tc = opts.texcoord or {0, 1, 0, 0.70}
+    parch:SetTexCoord(tc[1], tc[2], tc[3], tc[4])
+    parch:SetPoint("TOPLEFT", parent, "TOPLEFT", anchors[1], anchors[2])
+    parch:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", anchors[3], anchors[4])
+    return parch
+end
