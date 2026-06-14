@@ -25,10 +25,7 @@ DFUI:NewMod("Merchant", 5, function()
     customBg:SetPoint("BOTTOMRIGHT", MerchantFrame, "BOTTOMRIGHT", -32, 55)
     customBg:SetFrameLevel(MerchantFrame:GetFrameLevel() - 1)
 
-    MerchantFramePortrait:SetParent(customBg)
-    MerchantFramePortrait:SetDrawLayer("BORDER", 0)
-    MerchantFramePortrait:ClearAllPoints()
-    MerchantFramePortrait:SetPoint("TOPLEFT", customBg, "TOPLEFT", -4, 8)
+    DFUI.AttachPortrait(customBg, MerchantFramePortrait)
 
     local closeButton = DFUI.CreateRedButton(customBg, "close", function() HideUIPanel(MerchantFrame) end)
     closeButton:SetPoint("TOPRIGHT", customBg, "TOPRIGHT", 0, -1)

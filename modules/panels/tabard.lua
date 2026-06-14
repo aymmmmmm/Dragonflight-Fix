@@ -14,34 +14,19 @@ DFUI:NewMod("Tabard", 5, function()
 
     -- 隐藏原生背景纹理（主框 + 费用框，跳过头像）
     local portrait = TabardFramePortrait
-    local regions = {TabardFrame:GetRegions()}
-    for i = 1, table.getn(regions) do
-        local r = regions[i]
-        if r:GetObjectType() == "Texture" and r ~= portrait then r:Hide() end
-    end
+    DFUI.HidePanelTextures(TabardFrame, {skip = portrait})
+    DFUI.HidePanelTextures(TabardFrameCostFrame)
     if TabardFrame.DisableDrawLayer then TabardFrame:DisableDrawLayer("BACKGROUND") end
-    if TabardFrameCostFrame then
-        local cr = {TabardFrameCostFrame:GetRegions()}
-        for i = 1, table.getn(cr) do
-            local r = cr[i]
-            if r:GetObjectType() == "Texture" then r:Hide() end
-        end
-    end
     if TabardFrameCloseButton then TabardFrameCloseButton:Hide() end
 
-    -- 青铜框（带头像孔 frameStyle=1），衬在模型/颜色器之下
-    local customBg = DFUI.CreatePaperDollFrame("DFUI_TabardBg", TabardFrame, 384, 512, 1)
+    -- 青铜框：有头像用 frameStyle=1(带孔)，无头像用 2(无孔)，自适应免露岩石；衬在模型/颜色器之下
+    local customBg = DFUI.CreatePaperDollFrame("DFUI_TabardBg", TabardFrame, 384, 512, (portrait and 1) or 2)
     customBg:SetPoint("TOPLEFT", TabardFrame, "TOPLEFT", 12, -12)
     customBg:SetPoint("BOTTOMRIGHT", TabardFrame, "BOTTOMRIGHT", -32, 72)
     customBg:SetFrameLevel(TabardFrame:GetFrameLevel() - 1)
 
-    -- 头像（照 merchant，青铜框当圆环）
-    if portrait then
-        portrait:SetParent(customBg)
-        portrait:SetDrawLayer("BORDER", 0)
-        portrait:ClearAllPoints()
-        portrait:SetPoint("TOPLEFT", customBg, "TOPLEFT", -4, 8)
-    end
+    -- 头像（复用工厂，青铜框当圆环）
+    DFUI.AttachPortrait(customBg, portrait)
 
     -- NPC 名字（金色居中顶部）
     if TabardFrameNameText then

@@ -50,6 +50,10 @@ modules\panels\scrollbar.lua
 modules\panels\bank.lua
 modules\panels\character.lua
 modules\panels\merchant.lua
+modules\panels\taxi.lua
+modules\panels\petition.lua
+modules\panels\guild_registrar.lua
+modules\panels\tabard.lua
 modules\panels\questskin.lua
 modules\panels\questframe.lua
 modules\panels\gossip.lua

@@ -14,32 +14,19 @@ DFUI:NewMod("GuildRegistrar", 5, function()
 
     -- 隐藏原生背景纹理（主框 + 问候子框，跳过头像）
     local portrait = GuildRegistrarFramePortrait
-    local frames = {GuildRegistrarFrame, GuildRegistrarGreetingFrame}
-    for _, f in ipairs(frames) do
-        if f then
-            local regions = {f:GetRegions()}
-            for i = 1, table.getn(regions) do
-                local r = regions[i]
-                if r:GetObjectType() == "Texture" and r ~= portrait then r:Hide() end
-            end
-        end
-    end
+    DFUI.HidePanelTextures(GuildRegistrarFrame, {skip = portrait})
+    DFUI.HidePanelTextures(GuildRegistrarGreetingFrame, {skip = portrait})
     if GuildRegistrarFrame.DisableDrawLayer then GuildRegistrarFrame:DisableDrawLayer("BACKGROUND") end
     if GuildRegistrarFrameCloseButton then GuildRegistrarFrameCloseButton:Hide() end
 
-    -- 青铜框（带头像孔 frameStyle=1）
-    local customBg = DFUI.CreatePaperDollFrame("DFUI_GuildRegBg", GuildRegistrarFrame, 384, 512, 1)
+    -- 青铜框：有头像用 frameStyle=1(带孔)，无头像用 2(无孔)，自适应免露岩石
+    local customBg = DFUI.CreatePaperDollFrame("DFUI_GuildRegBg", GuildRegistrarFrame, 384, 512, (portrait and 1) or 2)
     customBg:SetPoint("TOPLEFT", GuildRegistrarFrame, "TOPLEFT", 12, -12)
     customBg:SetPoint("BOTTOMRIGHT", GuildRegistrarFrame, "BOTTOMRIGHT", -32, 55)
     customBg:SetFrameLevel(GuildRegistrarFrame:GetFrameLevel() - 1)
 
-    -- 头像（照 merchant，青铜框当圆环）
-    if portrait then
-        portrait:SetParent(customBg)
-        portrait:SetDrawLayer("BORDER", 0)
-        portrait:ClearAllPoints()
-        portrait:SetPoint("TOPLEFT", customBg, "TOPLEFT", -4, 8)
-    end
+    -- 头像（复用工厂，青铜框当圆环）
+    DFUI.AttachPortrait(customBg, portrait)
 
     -- NPC 名字（金色居中顶部）
     if GuildRegistrarFrameNpcNameText then

@@ -14,27 +14,18 @@ DFUI:NewMod("Petition", 5, function()
 
     -- 隐藏原生背景纹理（跳过头像，避免误隐）
     local portrait = PetitionFramePortrait
-    local regions = {PetitionFrame:GetRegions()}
-    for i = 1, table.getn(regions) do
-        local r = regions[i]
-        if r:GetObjectType() == "Texture" and r ~= portrait then r:Hide() end
-    end
+    DFUI.HidePanelTextures(PetitionFrame, {skip = portrait})
     if PetitionFrame.DisableDrawLayer then PetitionFrame:DisableDrawLayer("BACKGROUND") end
     if PetitionFrameCloseButton then PetitionFrameCloseButton:Hide() end
 
-    -- 青铜框（带头像孔 frameStyle=1）
-    local customBg = DFUI.CreatePaperDollFrame("DFUI_PetitionBg", PetitionFrame, 384, 512, 1)
+    -- 青铜框：有头像用 frameStyle=1(带孔)，无头像用 2(无孔)，自适应免露岩石
+    local customBg = DFUI.CreatePaperDollFrame("DFUI_PetitionBg", PetitionFrame, 384, 512, (portrait and 1) or 2)
     customBg:SetPoint("TOPLEFT", PetitionFrame, "TOPLEFT", 12, -12)
     customBg:SetPoint("BOTTOMRIGHT", PetitionFrame, "BOTTOMRIGHT", -32, 55)
     customBg:SetFrameLevel(PetitionFrame:GetFrameLevel() - 1)
 
-    -- 头像（照 merchant，青铜框当圆环）
-    if portrait then
-        portrait:SetParent(customBg)
-        portrait:SetDrawLayer("BORDER", 0)
-        portrait:ClearAllPoints()
-        portrait:SetPoint("TOPLEFT", customBg, "TOPLEFT", -4, 8)
-    end
+    -- 头像（复用工厂，青铜框当圆环）
+    DFUI.AttachPortrait(customBg, portrait)
 
     -- NPC 名字框（PetitionNpcNameFrame 是 Frame，整体重锚顶部）
     if PetitionNpcNameFrame then
