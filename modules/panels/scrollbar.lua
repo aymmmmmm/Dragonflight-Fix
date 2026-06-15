@@ -196,9 +196,7 @@ DFUI:NewMod("Scrollbar", 6, function()
         "GuildInfoFrameScrollFrameScrollBar",
         "ChannelListScrollFrameScrollBar",
         "ChannelRosterScrollFrameScrollBar",
-        -- 训练师
-        "ClassTrainerListScrollFrameScrollBar",
-        "ClassTrainerDetailScrollFrameScrollBar",
+        -- 训练师两条（列表+详情）改由 trainer.lua 接管 DF minimal 滚动条，这里不染青铜
         -- 邮件
         "SendMailScrollFrameScrollBar",
         "OpenMailScrollFrameScrollBar",
