@@ -45,38 +45,31 @@ DFUI:NewMod("Trade", 5, function()
     divider:SetPoint("BOTTOM", bg, "BOTTOM", 0, 8)
 
     ---------------------------------------------------------------------------
-    -- 4. 头像：锚各自首槽正上方（自动对齐两栏 = 参考图布局）
-    --    向上留足空间放金环 + 名字(右上) + 金币(右下)。
-    --    不 reparent —— 保持 parent=TradeFrame，其 FrameLevel 高于 bg，
-    --    整体压在 bg 金属边框(ARTWORK/OVERLAY)之上，避免被角/边盖住。
+    -- 4. 头像：复用 DFUI.AttachPortrait 工厂摆放 + DFUI.AddPortraitRing 金环（section 6b）。
+    --    全插件 NPC 面板统一走 AttachPortrait；交易有玩家+对方两个自由位置头像，各调一次。
+    --    ★reparent 到高层 titleHolder(TradeFrame+5,高于 bg 金属边)→头像不被金属顶边盖；
+    --      环 OVERLAY > 头像 BORDER → 环框住头像方角。缝隙由"环+裁边"收，不再手写岩石底。
+    --    ★尺寸/裁边是头像属性(非摆放)，保留；裁边留最小消黑边量（圆环风固有，实测可调）。
     ---------------------------------------------------------------------------
+    -- 金环载体（高 FrameLevel 盖头像方角 + 承载头像/环）；提前建以供 AttachPortrait reparent
+    local titleHolder = CreateFrame("Frame", nil, TradeFrame)
+    titleHolder:SetAllPoints(TradeFrame)
+    titleHolder:SetFrameLevel(TradeFrame:GetFrameLevel() + 5)
+
     local PORTRAIT_SIZE = 58            -- 放大填满金环内孔（环 80，内孔约 60；实测可调）
-    local PORTRAIT_ZOOM = 0.10         -- SetTexCoord 裁掉脸贴图四周黑边（zoom in，实测可调）
-    local ROCK_TEX = TEX .. "interface\\UI-Background-Rock.blp"
+    local PORTRAIT_ZOOM = 0.10          -- 裁掉脸贴图四周黑边（圆环风固有，留最小量，实测可调）
 
-    -- 头像后垫暗岩石底（金属矿质感）：脸没填满内孔处露岩石而非黑；
-    -- 放 bg 层（FrameLevel 低于 portrait）→ 垫在脸之下、面板岩石底之上
-    local function AddPortraitRock(portrait)
-        local rock = bg:CreateTexture(nil, "ARTWORK")
-        rock:SetTexture(ROCK_TEX)
-        rock:SetWidth(PORTRAIT_SIZE)
-        rock:SetHeight(PORTRAIT_SIZE)
-        rock:SetPoint("CENTER", portrait, "CENTER", 0, 0)
-        return rock
-    end
-
-    -- 头像：放大填内孔 + 裁边去黑 + 垫岩石底（对齐 debug 反馈：消黑边、缝隙填金属矿）
-    local function SetupPortrait(portrait, anchorItem)
+    -- 摆放走 DFUI.AttachPortrait 工厂（reparent titleHolder + BORDER 层 + 锚 TOPLEFT+(x,y)）；
+    -- x,y 相对 titleHolder(=TradeFrame)左上，取自原坐标→位置不变（实测可调）
+    local function SetupPortrait(portrait, x, y)
+        if not portrait then return end
+        DFUI.AttachPortrait(titleHolder, portrait, x, y)
         portrait:SetWidth(PORTRAIT_SIZE)
         portrait:SetHeight(PORTRAIT_SIZE)
-        portrait:SetDrawLayer("BORDER", 0)
         portrait:SetTexCoord(PORTRAIT_ZOOM, 1 - PORTRAIT_ZOOM, PORTRAIT_ZOOM, 1 - PORTRAIT_ZOOM)
-        portrait:ClearAllPoints()
-        portrait:SetPoint("BOTTOMLEFT", anchorItem, "TOPLEFT", -12, 38)
-        AddPortraitRock(portrait)
     end
-    SetupPortrait(TradeFramePlayerPortrait,    TradePlayerItem1)
-    SetupPortrait(TradeFrameRecipientPortrait, TradeRecipientItem1)
+    SetupPortrait(TradeFramePlayerPortrait,    14,  -8)
+    SetupPortrait(TradeFrameRecipientPortrait, 183, -8)
 
     -- vanilla TradeFrame_Update 每次刷新调 SetPortraitTexture，会把 TexCoord 重置回 (0,1,0,1)，
     -- 裁边随之失效黑边重现 → post-hook(append=true) 在其后重设裁边，保持去黑边持续生效
@@ -108,14 +101,21 @@ DFUI:NewMod("Trade", 5, function()
     local UIH_TEX    = TEX .. "panels\\df\\professions\\uiframe_h.tga"
     local UIV_TEX    = TEX .. "panels\\df\\professions\\uiframe_v.tga"
     local CORNER_TEX = TEX .. "interface\\generalframeinsetborders.tga"
-    -- 凹框作 host(=moneyFrame)自身 region；marble 外扩 pad → 框比 money 略大
-    local function DrawMoneyInset(host, padL, padT, padR, padB)
+    -- ★列横向对齐基准 pad：货币凹框 + 物品凹框 + 附魔凹框三者共用同一基准，
+    --   marble 横向锚 item1（容器 153=整行宽，左右= item1.left+COL_PAD_L .. item1.right+COL_PAD_R），
+    --   因 item1.right=item6.right=item7.right（同列同宽）→ 三个凹框左右边严格对齐成一竖列（对齐根因修复）。
+    local COL_PAD_L, COL_PAD_R = 3, 3
+    -- 货币凹框纵向：相对 item1 顶的偏移 + 固定高，只覆盖金银铜行（实测微调）
+    local MONEY_TOP_DY, MONEY_H = 26, 24
+    -- 凹框横向锚 item1(对齐 items-inset)，纵向锚 item1 顶+固定高(覆盖币行)；
+    -- marble 仍是 host(money frame)的 texture → draw level 跟 money、金银铜恒在其上(no race)
+    local function DrawMoneyInset(host, item1)
         local eT, eB, eL, eR, cz = 3, 3, 2, 2, 5
         local marble = host:CreateTexture(nil, "BACKGROUND")
         marble:SetDrawLayer("BACKGROUND", -8)        -- 最底：金银铜恒在其上
         marble:SetTexture(MARBLE_TEX)
-        marble:SetPoint("TOPLEFT",     host, "TOPLEFT",     -padL,  padT)
-        marble:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT",  padR, -padB)
+        marble:SetPoint("TOPLEFT",     item1, "TOPLEFT",  COL_PAD_L,  MONEY_TOP_DY)
+        marble:SetPoint("BOTTOMRIGHT", item1, "TOPRIGHT", COL_PAD_R,  MONEY_TOP_DY - MONEY_H)
         local top = host:CreateTexture(nil, "BORDER")
         top:SetTexture(UIH_TEX); top:SetTexCoord(0.0, 1.0, 0.9063, 0.9297)
         top:SetPoint("TOPLEFT",  marble, "TOPLEFT",  0, 0)
@@ -148,27 +148,19 @@ DFUI:NewMod("Trade", 5, function()
         corner("BOTTOMRIGHT", 0.515625, 0.640625, 0.6875,  0.9375)
     end
 
-    -- money frame 重锚头像下方 + 凹框作其自身 region（pad 外扩，左右可分别调）
-    local function SetupMoney(portrait, moneyFrame, padL, padR)
-        if not moneyFrame then return end
+    -- money frame 重锚头像下方；凹框横向对齐 item 列(=对齐 items-inset)，纵向覆盖币行
+    local function SetupMoney(portrait, moneyFrame, item1)
+        if not moneyFrame or not item1 then return end
         moneyFrame:ClearAllPoints()
         moneyFrame:SetPoint("TOPLEFT", portrait, "BOTTOMLEFT", 14, -16)
-        DrawMoneyInset(moneyFrame, padL, 4, padR, 4)
+        DrawMoneyInset(moneyFrame, item1)
     end
-    SetupMoney(TradeFramePlayerPortrait,    TradePlayerInputMoneyFrame, 8, 10)
-    SetupMoney(TradeFrameRecipientPortrait, TradeRecipientMoneyFrame,   8, 10)
+    SetupMoney(TradeFramePlayerPortrait,    TradePlayerInputMoneyFrame, TradePlayerItem1)
+    SetupMoney(TradeFrameRecipientPortrait, TradeRecipientMoneyFrame,   TradeRecipientItem1)
 
     ---------------------------------------------------------------------------
-    -- 6. 高层覆盖框 titleHolder（金环挂这层确保盖住头像方角；
-    --    参考图(交易.png)顶部无"交易"标题文字 → 已移除标题，仅保留载体框）
-    ---------------------------------------------------------------------------
-    local titleHolder = CreateFrame("Frame", nil, TradeFrame)
-    titleHolder:SetAllPoints(TradeFrame)
-    titleHolder:SetFrameLevel(TradeFrame:GetFrameLevel() + 5)
-
-    ---------------------------------------------------------------------------
-    -- 6b. 头像金色圆环（DF retail playerframe portraitring-large 抠图整图）
-    --     绘制在 titleHolder(高 FrameLevel) 之上，盖住方形头像四角；
+    -- 6b. 头像金色圆环（DFUI.AddPortraitRing 工厂，df_portrait_ring 整图）
+    --     环挂 titleHolder(高 FrameLevel，section 4 已建)，OVERLAY 盖住头像方角；
     --     环略大于头像，内孔透出脸部，SetTexture 整张 + 居中（不切片）。
     ---------------------------------------------------------------------------
     DFUI.AddPortraitRing(TradeFramePlayerPortrait, titleHolder)
@@ -267,6 +259,60 @@ DFUI:NewMod("Trade", 5, function()
     end)
 
     ---------------------------------------------------------------------------
+    -- 8b. 物品槽凹陷大理石框（DF retail 结构补全）
+    --     retail：每侧 6 物品槽在独立凹陷框 ItemsInset、第7槽(附魔/"不会被交易")
+    --     在独立小凹框 EnchantInset 内。当前槽边框裸浮岩石底 → 补两组凹框。
+    --     ★复用工厂 DFUI.CreateRetailInset（marble 底+uiframe_h/v 9-slice 边+
+    --       generalframeinsetborders 四角），零自制贴图。
+    --     ★层级：凹框作 bg 子 frame（levelOffset=1 → level=bg+1=TradeFrame），
+    --       物品 ItemButton(TradeFrame+2)恒在其上 → marble 绝不盖图标，无需 OnUpdate。
+    --     ★锚"容器"TradePlayerItem1..7（153×37，含右侧物品名区）→ 整条行宽，
+    --       有物品时物品名落在大理石框内不外溢（用户确认的包裹范围）。
+    --     ★全程只对 inset 自身 ClearAllPoints+SetPoint，绝不碰 Trade*Item* 槽锚点
+    --       （遵循"换皮禁改框体大小/控件位置"铁律）。
+    ---------------------------------------------------------------------------
+    local tradeInsets = {}
+
+    -- pad 量级初值；终值游戏内实测（见铁律：marble 贴合行外缘/不盖图标）。
+    -- 水平 pad 保持小值：item 容器本就 153 全行宽，且避免内侧边触碰中央竖 divider
+    -- （player 右侧 / recipient 左侧贴近面板中线，与 divider 打架须实测收住）。
+    -- 横向 pad 复用货币段定义的 COL_PAD_L/R（三个凹框横向同基准 → 严格对齐成一竖列）
+    local ITEMS_PAD_T, ITEMS_PAD_B = 3, 3
+    local ENCH_GAP, ENCH_PAD_B = 4, 3
+
+    local function MakeItemsInset(name, item1, item6)
+        if not item1 or not item6 then return nil end
+        local ins = DFUI.CreateRetailInset(bg, { name = name })   -- parent=bg → level=TradeFrame
+        ins:ClearAllPoints()
+        ins:SetPoint("TOPLEFT",     item1, "TOPLEFT",      COL_PAD_L,  ITEMS_PAD_T)
+        ins:SetPoint("BOTTOMRIGHT", item6, "BOTTOMRIGHT",  COL_PAD_R, -ITEMS_PAD_B)
+        ins:Show()                                                -- 工厂默认 Hide，手动 Show
+        table.insert(tradeInsets, ins)
+        return ins
+    end
+
+    local function MakeEnchantInset(name, itemsInset, item7)
+        if not item7 then return nil end
+        local en = DFUI.CreateRetailInset(bg, { name = name })
+        en:ClearAllPoints()
+        -- 顶：items-inset 底下方留 GAP（"不会被交易"标签落此带内）；底/右：item7 容器
+        if itemsInset then
+            en:SetPoint("TOPLEFT", itemsInset, "BOTTOMLEFT", 0, -ENCH_GAP)
+        else
+            en:SetPoint("TOPLEFT", item7, "TOPLEFT", COL_PAD_L, ITEMS_PAD_T)
+        end
+        en:SetPoint("BOTTOMRIGHT", item7, "BOTTOMRIGHT", COL_PAD_R, -ENCH_PAD_B)
+        en:Show()
+        table.insert(tradeInsets, en)
+        return en
+    end
+
+    local playerItemsInset = MakeItemsInset("DFUI_TradePlayerItemsInset",    TradePlayerItem1,    TradePlayerItem6)
+    local recipItemsInset  = MakeItemsInset("DFUI_TradeRecipientItemsInset", TradeRecipientItem1, TradeRecipientItem6)
+    MakeEnchantInset("DFUI_TradePlayerEnchantInset",    playerItemsInset, TradePlayerItem7)
+    MakeEnchantInset("DFUI_TradeRecipientEnchantInset", recipItemsInset,  TradeRecipientItem7)
+
+    ---------------------------------------------------------------------------
     -- 9. 底部"交易/取消"按钮换皮（DF 金属文字按钮，对齐参考图）
     --    vanilla 按钮保活转发：alpha0 + Click 转发 + IsEnabled 镜像
     ---------------------------------------------------------------------------
@@ -304,6 +350,7 @@ DFUI:NewMod("Trade", 5, function()
     CenterFrame(TradeFrame)
     HookScript(TradeFrame, "OnShow", function()
         bg:Show()
+        for i = 1, table.getn(tradeInsets) do tradeInsets[i]:Show() end
     end)
 
     local callbacks = {}
