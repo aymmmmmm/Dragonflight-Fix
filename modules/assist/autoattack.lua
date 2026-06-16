@@ -19,6 +19,9 @@ local function ensureAttack()
     if not UnitExists("target") then return end
     if UnitIsDeadOrGhost("target") then return end
     if not UnitCanAttack("player", "target") then return end
+    -- 骑乘中不自动开打：AttackTarget() 会报 ERR_ATTACK_MOUNTED，
+    -- 被 dismount 模块捕获连锁下马（用户要的是手动按键才下马，进战斗不掉马）
+    if DFUI.Assist.IsMounted and DFUI.Assist.IsMounted() then return end
     AttackTarget()
 end
 

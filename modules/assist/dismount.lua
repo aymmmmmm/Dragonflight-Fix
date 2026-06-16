@@ -43,20 +43,31 @@ local shiftIcons = {
     "spell_shadow_shadowform",   -- 牧师 暗影形态
 }
 
--- 取消坐骑 buff
-local function CancelMount()
+-- 扫 buff 找坐骑 buff，返回 buff index（无则 nil）
+local function FindMountBuff()
     for i = 0, 31 do
         local tex = GetPlayerBuffTexture(i)
         if tex then
             scanner:SetPlayerBuff(i)
             for pi = 1, table.getn(mountPatterns) do
                 if scanner:FindText(mountPatterns[pi]) then
-                    CancelPlayerBuff(i)
-                    return
+                    return i
                 end
             end
         end
     end
+end
+
+-- 取消坐骑 buff
+local function CancelMount()
+    local i = FindMountBuff()
+    if i then CancelPlayerBuff(i) end
+end
+
+-- 是否骑乘（1.12 无 IsMounted API）。供其他模块查询，例如 autoattack
+-- 骑乘时跳过普攻，避免 AttackTarget() 报 ERR_ATTACK_MOUNTED 连锁下马。
+function DFUI.Assist.IsMounted()
+    return FindMountBuff() ~= nil
 end
 
 -- 解除形态（德鲁伊取消当前形态，萨满/牧师取消对应 buff）
