@@ -5,6 +5,7 @@ local TEX = DFUI:GetInfoOrCons("tex")
 local DF_GOLD = {1.00, 0.82, 0.00}        -- 标题金
 local SLOT    = TEX .. "panels\\df\\professions\\slot_blue.tga"  -- DF 图标边框（复用专业槽位素材）
 local NAME_GUTTER_X = 22                   -- 技能行名字左缘距"行左缘"的留白(留出 header 的 +/− 折叠按钮位;调大=名字更靠右)
+local RANK_GUTTER_X = 6                     -- 等级文字紧跟名字右侧的间隙(px)，游戏内可微调
 
 DFUI:NewDefaults("Trainer", {
     enabled = {true},
@@ -211,12 +212,22 @@ DFUI:NewMod("Trainer", 5, function()
         -- 绝对锚=天然幂等(每次设同一位置)，挂 OnShow + 0.1s OnUpdate 防 Turtle 刷新复位。
         local function ShiftRow(btn)
             if not btn or not btn:IsVisible() then return end      -- 行有数据才处理
+            local nameFS = btn.GetFontString and btn:GetFontString()  -- vanilla 行名字由 SetText 设置 = button NormalText
+            -- 先重锚名字(等级要相对它)；绝不动行 button / +/− 折叠按钮
+            if nameFS then
+                nameFS:ClearAllPoints()
+                nameFS:SetPoint("LEFT", btn, "LEFT", NAME_GUTTER_X, 0) -- 左对齐行左缘+留白，竖直居中
+            end
             local regions = {btn:GetRegions()}
             for i = 1, table.getn(regions) do
                 local r = regions[i]
-                if r.GetObjectType and r:GetObjectType() == "FontString" then
+                if r.GetObjectType and r:GetObjectType() == "FontString" and r ~= nameFS then
                     r:ClearAllPoints()
-                    r:SetPoint("LEFT", btn, "LEFT", NAME_GUTTER_X, 0)  -- 左对齐行左缘+留白，竖直居中
+                    if nameFS then
+                        r:SetPoint("LEFT", nameFS, "RIGHT", RANK_GUTTER_X, 0)  -- 等级紧跟名字右侧
+                    else
+                        r:SetPoint("LEFT", btn, "LEFT", NAME_GUTTER_X, 0)       -- 兜底:无 NormalText 时退回旧行为
+                    end
                 end
             end
         end
@@ -283,6 +294,18 @@ DFUI:NewMod("Trainer", 5, function()
             customBg:Show()
             ShiftAllRows()
         end)
+
+        -- 选中/翻页/筛选后 Turtle 即时刷新列表并把行 FontString 复位回 vanilla 原位 → 同帧重锚消除抖动
+        -- (原先只靠 0.1s OnUpdate 拉回,刷新与拉回有时间差→肉眼"抖一下",等级锚名字上跟随放大)。OnUpdate 降为兜底。
+        -- ⚠ setfenv 模块改全局函数必须经 _G(裸写落 DFUI env 表 → Blizzard 调的 _G.ClassTrainerFrame_Update 没被换),同 _G.SLASH_xxx 铁律
+        if _G.ClassTrainerFrame_Update and not _G._dfTrainerUpdateHooked then
+            _G._dfTrainerUpdateHooked = true
+            local _origTrainerUpdate = _G.ClassTrainerFrame_Update
+            _G.ClassTrainerFrame_Update = function()
+                _origTrainerUpdate()
+                ShiftAllRows()
+            end
+        end
     end
 
     local frame = CreateFrame("Frame")
