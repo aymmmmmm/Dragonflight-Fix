@@ -249,3 +249,55 @@ questlog, social, macro, bank, dressup, gossip, inspect, keybinding, mail, merch
 - 地图内容：靠工厂 `_dfQuestSkinned` **set-once 守护**（绝不每次开飞行重跑换皮，否则地图消失，见本节上方第十节教训 / `panel-skinning-progress.md`）。
 - inset 距离：用户认可当前 `IN_R=-16`。
 - 架构：守护 + `ApplyTaxiTweaks`（只动自家 frame、不碰 TaxiFrame region/地图）→ 安全 `/reload` 调参。
+
+---
+
+## 十一、训练师面板（ClassTrainerFrame）— 技能列表名字偏右 ✅ 已解决（2026-06-17）
+
+### 解决方式（当前实现）
+
+**真因**：与金属框几何无关。Turtle 把列表每行（header 行如"武器" + 技能行如"冲锋"，共用 `ClassTrainerSkillN` 槽）的**名字 FontString 摆到行最右**，左边大片空；header 的 `+/−` 折叠按钮在行左缘、锚点本就正确。症结 = 名字离 `+/−` 太远，不是框太窄。
+
+**修复**（`trainer.lua` `ShiftRow`）：对每行只重锚名字 FontString → `r:SetPoint("LEFT", btn, "LEFT", NAME_GUTTER_X, 0)`（默认 22，顶部常量，留白给 `+/−`），名字对齐到行左缘。**只动 FontString region，绝不动行 button**（动 button 会把 `+/−` 一起拖跑，它锚点本来是对的）；`+/−` 是行的独立元素，只重锚 FontString 天然不碰它。绝对锚幂等，挂 OnShow + 0.1s OnUpdate 防 Turtle 刷新复位。`/trdump [行号]` 重做为 dump 行结构（regions 类型/文字/左缘/锚点 + 子 frame），用于精修留白。
+
+**教训**：列表"超框"先怀疑**行内文本被服务端摆偏**，而非金属框尺寸；盲改 8+ 轮的根因 = 没要截图，一张 `_dev/ui/debug.png` 即定位。下方为已作废的错误排查记录（"金属框几何"方向，保留作历史）。
+
+**同会话续（宽度 + marble）**：① customBg 右边距 `-8 → -32` 对齐 `SkinQuestStyleFrame`（闲聊/社交等 384 宽面板；底距保留 60 不动按钮）。之前 `-8` 是"金属框几何"错方向遗留的硬贴右缘，已作废。② 列表凹陷改用 `CreateRetailInset` 工厂默认 marble 填充、详情凹陷 `bg:Hide()` 不填充（删了没人用的 `ROCK` 常量）；marble 未染色偏亮，若不搭暗框给 `listInset.bg` 加顶点色压暗即可。③ **职业/专业训练师共用 `ClassTrainerFrame`**（全仓库唯一训练师框，已 grep 核实），三项改动均为框级、`SkinClassTrainerFrame` 一次对两者生效。
+
+<details>
+<summary>历史诊断记录（错误方向"金属框几何"，已作废）</summary>
+
+### 问题描述
+
+`modules/panels/trainer.lua` 整体 DF 美化后（金属框 + NPC 头像/名 + 暗岩石双凹陷 + minimal 滑块 + 列表行/详情换皮，功能均正常），**技能列表仍超出训练师金属框边框**。
+
+### 已尝试（均未根治）
+
+1. `customBg` 右边距 `-32 → -12 → -40`（据 `/trdump` 实测收右边贴住内容右缘）
+2. 凹陷 `listInset`/`detailInset` 从「锚 customBg 猜测偏移」改为「锚 vanilla `ClassTrainerListScrollFrame`/`ClassTrainerDetailScrollFrame` 本身」（自对齐跟随真实内容）
+
+### `/trdump` 实测坐标（整窗 ClassTrainerFrame 384×512，左上为原点）
+
+```
+ClassTrainerFrame   384x512   锚 UIParent TOPLEFT (0,-104)   ← CenterFrame 未居中(独立小问题)
+customBg(金属框)              x:[12,344]  (BR offset -40)
+ListScrollFrame(vanilla列表) 296x184  锚 ClassTrainerFrame TOPRIGHT(-67,-96) → 实落 [21,317]×[96,280]
+Skill1(行)                   293x16   锚 ClassTrainerFrame TOPLEFT(22,-100)  → 实落 [22,315]
+DetailScrollFrame            296x119  锚 ListScrollFrame BOTTOMLEFT(0,-8)
+```
+
+### 分析与疑点
+
+- **水平方向行 `[22,315]` 在金属框 `[12,344]` 内，不该超出** → 超出大概率来自：
+  1. **垂直方向**：列表/详情向下超出金属框底部（customBg 底 ≈452，需核对列表/详情实际底 vs 452）
+  2. **金属框边框纹理厚度**：`CreatePaperDollFrame` frameStyle=1 的金属边有占位宽度，行可能触/压到边框
+  3. **未重启**：改 `customBg -40` 后若只 `/reload`，`_dfTrainerSkinned` 守护挡 skin 重应用 → 改动没生效
+
+### 下次必做（勿盲改）
+
+1. 重启 WoW.exe 后 `/trdump` 确认 `customBg p2 BR = -40` 已应用
+2. 给 `/trdump` 增打：每行 Y、列表底/详情底 vs customBg 底、金属框内沿坐标
+3. 或先要截图，标出"超出"的具体方位（上/下/左/右）
+4. 诊断命令 `/trdump` 已可用（**setfenv 模块必须 `_G.SLASH_xxx`/`_G.SlashCmdList` 注册**，裸写落 DFUI env 表 → `_G` 读不到 → 命令失效；照 `trainerdata.lua` 范式）
+
+</details>

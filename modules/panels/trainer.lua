@@ -2,9 +2,9 @@ setfenv(1, DFUI:GetEnv())
 
 local TEX = DFUI:GetInfoOrCons("tex")
 
-local ROCK    = {0.35, 0.32, 0.28}        -- DF 暗岩石凹陷底（对齐 spellbook/talents）
 local DF_GOLD = {1.00, 0.82, 0.00}        -- 标题金
 local SLOT    = TEX .. "panels\\df\\professions\\slot_blue.tga"  -- DF 图标边框（复用专业槽位素材）
+local NAME_GUTTER_X = 22                   -- 技能行名字左缘距"行左缘"的留白(留出 header 的 +/− 折叠按钮位;调大=名字更靠右)
 
 DFUI:NewDefaults("Trainer", {
     enabled = {true},
@@ -92,6 +92,8 @@ DFUI:NewMod("Trainer", 5, function()
         if ClassTrainerFrameCloseButton then ClassTrainerFrameCloseButton:Hide() end
 
         -- 2. DF 金属外框（CreatePaperDollFrame frameStyle=1）
+        --    锚点对齐 SkinQuestStyleFrame 标准(闲聊/社交等)：TOPLEFT(12,-12) / 右边距 -32，
+        --    使训练师框宽与其它 384 宽面板一致(ClassTrainerFrame 同为 vanilla 384)；底距保持 60 不动底部按钮布局。
         local customBg = DFUI.CreatePaperDollFrame("DFUI_TrainerBg", ClassTrainerFrame, 384, 512, 1)
         customBg:SetPoint("TOPLEFT", ClassTrainerFrame, "TOPLEFT", 12, -12)
         customBg:SetPoint("BOTTOMRIGHT", ClassTrainerFrame, "BOTTOMRIGHT", -32, 60)
@@ -116,25 +118,26 @@ DFUI:NewMod("Trainer", 5, function()
             if ClassTrainerGreetingText.SetJustifyH then ClassTrainerGreetingText:SetJustifyH("CENTER") end
         end
 
-        -- 5. 凹陷区（DF 暗岩石 CreateRetailInset）—— 上=技能列表区, 下=详情区。
-        --    levelOffset=0 → inset.level = customBg.level(=ClassTrainerFrame-1) < 列表行/详情(挂 ClassTrainerFrame)，凹陷底沉底。
+        -- 5. 凹陷区（CreateRetailInset）—— 上=技能列表区(marble 填充), 下=详情区(不填充)。
+        --    parent=customBg + levelOffset=0 → inset.level = customBg.level(=ClassTrainerFrame-1) < 列表行/详情(挂 ClassTrainerFrame)，凹陷底沉底。
+        --    左/顶/底跟 vanilla ScrollFrame(自适应真实列表/详情)，右缘锚 customBg 内沿铺满。
         local listInset = DFUI.CreateRetailInset(customBg, {
-            name = "DFUI_TrainerListInset", bg = "interface\\UI-Background-Rock.blp", levelOffset = 0,
+            name = "DFUI_TrainerListInset", levelOffset = 0,   -- 用工厂默认 marble 底填充(不再覆盖成岩石)
         })
         listInset:ClearAllPoints()
-        listInset:SetPoint("TOPLEFT", customBg, "TOPLEFT", 6, -60)   -- 顶部留 60 给头像/NPC名（同 SkinQuestStyleFrame inset 顶距）
-        listInset:SetPoint("RIGHT", customBg, "RIGHT", -2, 0)
-        listInset:SetHeight(190)
-        listInset.bg:SetVertexColor(ROCK[1], ROCK[2], ROCK[3])
+        listInset:SetPoint("TOPLEFT", ClassTrainerListScrollFrame, "TOPLEFT", -4, 4)
+        listInset:SetPoint("BOTTOM",  ClassTrainerListScrollFrame, "BOTTOM", 0, -4)
+        listInset:SetPoint("RIGHT",   customBg, "RIGHT", -9, 0)  -- 右铺满到金属框内沿(列表靠左,右侧 marble 填满)
         listInset:Show()
 
         local detailInset = DFUI.CreateRetailInset(customBg, {
-            name = "DFUI_TrainerDetailInset", bg = "interface\\UI-Background-Rock.blp", levelOffset = 0,
+            name = "DFUI_TrainerDetailInset", levelOffset = 0,
         })
         detailInset:ClearAllPoints()
-        detailInset:SetPoint("TOPLEFT", listInset, "BOTTOMLEFT", 0, -3)
-        detailInset:SetPoint("BOTTOMRIGHT", customBg, "BOTTOMRIGHT", -2, 30)
-        detailInset.bg:SetVertexColor(ROCK[1], ROCK[2], ROCK[3])
+        detailInset:SetPoint("TOPLEFT", ClassTrainerDetailScrollFrame, "TOPLEFT", -4, 4)
+        detailInset:SetPoint("BOTTOM",  ClassTrainerDetailScrollFrame, "BOTTOM", 0, -4)
+        detailInset:SetPoint("RIGHT",   customBg, "RIGHT", -9, 0)
+        detailInset.bg:Hide()   -- 下面详情区不填充(只留凹陷边框，不铺 marble)
         detailInset:Show()
 
         -- 6. 按钮重定位 + DF 红色关闭按钮
@@ -202,6 +205,27 @@ DFUI:NewMod("Trainer", 5, function()
             })
         end
 
+        -- 技能列表对齐：用户实测 header 行(如"武器")+技能行(如"冲锋")的"名字"偏右、离 +/− 折叠按钮太远。
+        -- 把每行名字 FontString 的左缘重锚到「行左缘 + NAME_GUTTER_X」，对齐到边框内容左侧。
+        -- ⚠ 只重锚名字 FontString，绝不动行 button / +/− 折叠按钮(它锚点本来是对的)。
+        -- 绝对锚=天然幂等(每次设同一位置)，挂 OnShow + 0.1s OnUpdate 防 Turtle 刷新复位。
+        local function ShiftRow(btn)
+            if not btn or not btn:IsVisible() then return end      -- 行有数据才处理
+            local regions = {btn:GetRegions()}
+            for i = 1, table.getn(regions) do
+                local r = regions[i]
+                if r.GetObjectType and r:GetObjectType() == "FontString" then
+                    r:ClearAllPoints()
+                    r:SetPoint("LEFT", btn, "LEFT", NAME_GUTTER_X, 0)  -- 左对齐行左缘+留白，竖直居中
+                end
+            end
+        end
+        local function ShiftAllRows()
+            for i = 1, CLASS_TRAINER_SKILLS_DISPLAYED do
+                ShiftRow(getglobal("ClassTrainerSkill" .. i))
+            end
+        end
+
         -- thumb 同步：独立节流 OnUpdate(0.1s)，读 vanilla 状态反推，不碰任何 update 链路
         if listSB or detailSB then
             local syncT = 0
@@ -210,6 +234,7 @@ DFUI:NewMod("Trainer", 5, function()
                 if syncT < 0.1 then return end
                 syncT = 0
                 if not ClassTrainerFrame:IsVisible() then return end
+                ShiftAllRows()
                 if listSB then
                     local total = GetNumTrainerServices()
                     local m = math.max(0, total - CLASS_TRAINER_SKILLS_DISPLAYED)
@@ -256,6 +281,7 @@ DFUI:NewMod("Trainer", 5, function()
         CenterFrame(ClassTrainerFrame)
         HookScript(ClassTrainerFrame, "OnShow", function()
             customBg:Show()
+            ShiftAllRows()
         end)
     end
 
@@ -269,6 +295,45 @@ DFUI:NewMod("Trainer", 5, function()
 
     if ClassTrainerFrame then
         SkinClassTrainerFrame()
+    end
+
+    -- 诊断：开训练师面板后 /trdump [行号]，dump 该行(默认1)的真实结构——
+    --   regions(FontString 名字/Texture) 各自 类型/文字/锚点/左缘 + 子 frame(如 +/− 折叠按钮) 左缘，
+    --   用来精确量"名字 vs +/−"间距、确认名字是不是 button 的 FontString region。
+    -- ⚠ setfenv 模块必须用 _G 注册斜杠命令(裸写 SLASH_xxx 落 DFUI env 表→_G 读不到→命令失效)，照 trainerdata.lua 范式
+    _G.SLASH_DFTRDUMP1 = "/trdump"
+    _G.SlashCmdList["DFTRDUMP"] = function(msg)
+        local function p(s) DEFAULT_CHAT_FRAME:AddMessage(s) end
+        local function n(v) return v and string.format("%.0f", v) or "?" end
+        local function pt(o)
+            if not o or not o.GetPoint then return "-" end
+            local a, rel, rp, x, y = o:GetPoint(1)
+            if not a then return "no-point" end
+            local rn = (rel and rel.GetName and rel:GetName()) or "parent"
+            return a .. ">" .. tostring(rn) .. "." .. tostring(rp) .. "(" .. n(x) .. "," .. n(y) .. ")"
+        end
+        local idx = tonumber(msg) or 1
+        local btn = getglobal("ClassTrainerSkill" .. idx)
+        if not btn then p("ClassTrainerSkill" .. idx .. " 不存在(先开训练师面板)"); return end
+        p("== ClassTrainerSkill" .. idx .. " vis=" .. tostring(btn:IsVisible())
+          .. " L=" .. n(btn:GetLeft()) .. " w=" .. n(btn:GetWidth())
+          .. " 锚=" .. pt(btn) .. " text=" .. tostring(btn.GetText and btn:GetText()) .. " ==")
+        local rs = {btn:GetRegions()}
+        for i = 1, table.getn(rs) do
+            local r = rs[i]
+            local ot = (r.GetObjectType and r:GetObjectType()) or "?"
+            local extra = ""
+            if ot == "FontString" and r.GetText then extra = " '" .. tostring(r:GetText()) .. "'"
+            elseif ot == "Texture" and r.GetTexture then extra = " " .. tostring(r:GetTexture()) end
+            p("  reg[" .. i .. "] " .. ot .. " L=" .. n(r:GetLeft()) .. " " .. pt(r) .. extra)
+        end
+        local ks = {btn:GetChildren()}
+        for i = 1, table.getn(ks) do
+            local c = ks[i]
+            p("  kid[" .. i .. "] " .. ((c.GetObjectType and c:GetObjectType()) or "?")
+              .. " " .. tostring((c.GetName and c:GetName()) or "?")
+              .. " L=" .. n(c:GetLeft()) .. " " .. pt(c))
+        end
     end
 
     local callbacks = {}
