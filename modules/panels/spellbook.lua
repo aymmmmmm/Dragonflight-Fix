@@ -275,7 +275,8 @@ DFUI:NewMod("SpellBook", 5, function()
                 if spellName and spellName ~= "" then
                     local key1 = GetBindingKey(binding)
                     -- 跳过鼠标滚轮绑定：本地化后是"鼠标滚轮"长串，塞图标角落又长又丑
-                    if key1 and key1 ~= "" and key1 ~= "MOUSEWHEELUP" and key1 ~= "MOUSEWHEELDOWN" then
+                    -- 用 string.find 包含匹配，连带挡住 ALT-/CTRL-/SHIFT- 修饰键+滚轮组合
+                    if key1 and key1 ~= "" and not string.find(key1, "MOUSEWHEEL") then
                         if GetBindingText then key1 = GetBindingText(key1, "KEY_") end
                         -- 同名多绑只保留第一个找到的（vanilla 行为）
                         if not spellbook.actionBindMap[spellName] then
