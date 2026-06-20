@@ -733,12 +733,14 @@ DFUI:NewMod("Character", 5, function()
 
     honorSubTab1 = CreateSubTab(customBg, "荣誉", 50)
     honorSubTab1:SetPoint("TOPLEFT", customBg, "TOPLEFT", 55, -28)
-    honorSubTab1:SetFrameLevel(customBg:GetFrameLevel() + 2)
+    -- 必须高于 HonorFrame/ArenaFrame(均 honorInset+1=customBg+2、setAllPoints+enableMouse 铺满整面板)，
+    -- 否则同层级 + 空间全覆盖 → 子 tab 点击被全屏 HonorFrame 吞掉(竞技场子 tab 点了没反应的根因)
+    honorSubTab1:SetFrameLevel(honorInset:GetFrameLevel() + 2)
     honorSubTab1:SetSelected(true)
 
     honorSubTab2 = CreateSubTab(customBg, "竞技场", 55)
     honorSubTab2:SetPoint("LEFT", honorSubTab1, "RIGHT", 2, 0)
-    honorSubTab2:SetFrameLevel(customBg:GetFrameLevel() + 2)
+    honorSubTab2:SetFrameLevel(honorInset:GetFrameLevel() + 2)
 
     -- 子 Tab 只在荣誉主 Tab 选中时显示
     honorSubTab1:Hide()
