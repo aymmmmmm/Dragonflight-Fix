@@ -116,6 +116,7 @@ modules\assist\targetarrow.lua
 modules\assist\mobinfo.lua
 modules\assist\linkitemen.lua
 modules\assist\linkpfquest.lua
+modules\assist\guildalert.lua
 
 
 # GUI

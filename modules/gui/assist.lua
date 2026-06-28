@@ -22,6 +22,7 @@ DFUI:NewMod("Gui-assist", 3, function()
         { prefix = "safe", title = L["grpSafety"] },
         { prefix = "ui",   title = L["grpUI"] },
         { prefix = "link", title = L["grpLink"] },
+        { prefix = "guild", title = L["grpGuild"] },
     }
 
     local function CreateCategoryPanel(parent, width, height)

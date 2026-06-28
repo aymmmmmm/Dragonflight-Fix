@@ -259,6 +259,9 @@ DFUI:NewDefaults("Assist", {
     -- 链接（默认关闭）
     linkItemEnUS = { false },
     linkPfQuest  = { false },
+    -- 公会播报（默认关闭）
+    guildCombatAlert = { false },
+    guildSimMode     = { false },
     -- 数据：自动 Roll 按品质分别设（0放弃/1需求/2贪婪/3不自动）
     rollGray    = { 2 },     -- 灰白：贪婪
     rollGreen   = { 2 },     -- 绿：贪婪

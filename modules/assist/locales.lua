@@ -13,6 +13,7 @@ local enUS = {
     ["grpSafety"]     = "Safety",
     ["grpUI"]         = "Interface",
     ["grpLink"]       = "Links",
+    ["grpGuild"]      = "Guild Broadcast",
 
     -- automation
     ["autoQuestAccept"]    = "Auto Accept Quests",
@@ -92,6 +93,14 @@ local enUS = {
     ["linkPfQuest"]   = "Ctrl-Click Quest -> English",
     ["linkPfQuestDesc"]= "Ctrl+click a quest in the quest log to insert its English-name link into chat. Requires pfQuest.",
 
+    -- guild broadcast
+    ["guildCombatAlert"]    = "Guild Combat Broadcast",
+    ["guildCombatAlertDesc"]= "Auto-post meme-style alerts to guild chat at 20%/10% HP, on death, and after surviving a dangerous fight. Works for any character.",
+    ["guildSimMode"]        = "Simulation Mode (preview only)",
+    ["guildSimModeDesc"]    = "Print broadcasts locally to your chat frame instead of sending to guild. Use for testing with /dfgb.",
+    ["gbTestOn"]            = "Queued sample broadcasts (20%/10%/death/survive). Enable Simulation Mode to preview locally.",
+    ["gbTestOff"]           = "Enable 'Guild Combat Broadcast' first (Assist panel).",
+
     -- messages
     ["learnReplaceFmt"]= "Slot #%s updated to %s (%s)",
     ["sellIncome"]    = "Sold junk for",
@@ -123,6 +132,7 @@ local zhCN = {
     ["grpSafety"]     = "安全模块",
     ["grpUI"]         = "界面",
     ["grpLink"]       = "链接",
+    ["grpGuild"]      = "公会播报",
 
     -- automation
     ["autoQuestAccept"]    = "自动接受任务",
@@ -201,6 +211,14 @@ local zhCN = {
     ["linkItemEnUSDesc"]= "Alt+左键点击物品（装备/背包/商人/拾取/聊天）→ 在聊天框插入英文名链接。",
     ["linkPfQuest"]   = "Ctrl+点击任务转英文",
     ["linkPfQuestDesc"]= "在任务日志里 Ctrl+点击任务 → 在聊天框插入英文名任务链接。需 pfQuest。",
+
+    -- 公会播报
+    ["guildCombatAlert"]    = "公会战斗播报",
+    ["guildCombatAlertDesc"]= "血量 20%/10%、阵亡、以及脱险后，自动往公会频道发段子式播报（吃席通报）。任意角色可用。",
+    ["guildSimMode"]        = "模拟模式（只本地预览）",
+    ["guildSimModeDesc"]    = "播报只打印到自己的聊天框、不发公会，便于用 /dfgb 测试。",
+    ["gbTestOn"]            = "已排入样例播报（20%/10%/阵亡/脱险）。开「模拟模式」可在聊天框预览。",
+    ["gbTestOff"]           = "请先在辅助面板勾选「公会战斗播报」。",
 
     -- messages
     ["learnReplaceFmt"]= "编号 #%s 按钮已更新为 %s（%s）",
