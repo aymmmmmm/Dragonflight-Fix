@@ -84,6 +84,8 @@ function CreateStatusBar(parent, width, height, animConfig)
         local pct = self.val_ / self.max
         if pct <= 0.001 then
             pct = 0.001
+        elseif pct > 1 then
+            pct = 1
         end
         if self.fillDirection == 'RIGHT_TO_LEFT' then
             self.fill:SetTexCoord(1-pct, 1, 0, 1)
@@ -99,10 +101,14 @@ function CreateStatusBar(parent, width, height, animConfig)
         if self.val ~= val then
             local currentTime = GetTime()
             local oldVal = self.val
-            if val < oldVal and not instant and self.enableCutout and currentTime > self.cutoutSuppressed then
-                -- calculate old and new percentages
+            if val < oldVal and not instant and self.enableCutout and currentTime > self.cutoutSuppressed and self.max > 0 then
+                -- calculate old and new percentages (clamped to [0,1] so a power-type
+                -- switch — where oldVal belongs to the previous power and far exceeds the
+                -- new max — can't drive TexCoord/width out of bounds)
                 local oldPct = oldVal / self.max
                 local newPct = val / self.max
+                if oldPct > 1 then oldPct = 1 elseif oldPct < 0 then oldPct = 0 end
+                if newPct > 1 then newPct = 1 elseif newPct < 0 then newPct = 0 end
                 local cutWidth = self:GetWidth() * (oldPct - newPct)
 
                 -- acquire cutout texture from pool (avoids permanent allocation)
