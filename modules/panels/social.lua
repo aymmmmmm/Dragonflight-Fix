@@ -1541,7 +1541,80 @@ DFUI:NewMod("Social", 5, function()
                 -- 不调 GuildFrame_Update：它把列头 H2 重设回 vanilla 宽/位 → 点击成员区域列头往左跳
                 -- vanilla GuildFrameButton OnClick 内会调 GuildMemberDetailFrame:Show()
                 -- 我们 hide vanilla button 后这条路径丢失，手动补上（vanilla 自带 OnShow 填充数据）
-                if GuildMemberDetailFrame then GuildMemberDetailFrame:Show() end
+                if GuildMemberDetailFrame then
+                    GuildMemberDetailFrame:Show()
+                    -- DF 换皮：岩石底 + 钻石金属框 + 红关闭 + 金标题（无羊皮纸；守护幂等，仅首次执行）
+                    if not GuildMemberDetailFrame._dfSkinned then
+                        local gmd = GuildMemberDetailFrame
+                        -- 1. 清 vanilla 纹理(_dfKeep 跳过自建) + backdrop + 原生关闭按钮
+                        local regions = {gmd:GetRegions()}
+                        for i = 1, table.getn(regions) do
+                            local r = regions[i]
+                            if r.GetObjectType and r:GetObjectType() == "Texture" and not r._dfKeep then
+                                r:SetTexture(nil); r:Hide()
+                            end
+                        end
+                        if gmd.SetBackdrop then gmd:SetBackdrop(nil) end
+                        local vc = getglobal("GuildMemberDetailCloseButton")
+                        if vc then vc:Hide() end
+                        -- 2. 岩石底铺满(压暗，衬白字)
+                        local rb = gmd:CreateTexture(nil, "BACKGROUND")
+                        rb:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\interface\\UI-Background-Rock.blp")
+                        rb:SetDrawLayer("BACKGROUND")
+                        rb:SetAllPoints(gmd)
+                        rb:SetVertexColor(0.55, 0.55, 0.55)
+                        rb._dfKeep = true
+                        -- 3. 钻石金属框(四周外扩1px)
+                        local bd = DFUI.ApplyDiamondMetalBorder(gmd, {name = "DFUI_GuildMemberDetailBorder", cornerSize = 30})
+                        bd:ClearAllPoints()
+                        bd:SetPoint("TOPLEFT",     gmd, "TOPLEFT",     -1,  1)
+                        bd:SetPoint("BOTTOMRIGHT", gmd, "BOTTOMRIGHT",  1, -1)
+                        -- 4. 红关闭(替代 vanilla close)
+                        local cb = DFUI.CreateRedButton(gmd, "close", function() gmd:Hide() end)
+                        cb:SetPoint("TOPRIGHT", gmd, "TOPRIGHT", -2, -2)
+                        cb:SetWidth(20); cb:SetHeight(20)
+                        cb:SetFrameLevel(gmd:GetFrameLevel() + 6)
+                        -- 5. 文字配色：成员名金、信息白
+                        if GuildMemberDetailName then GuildMemberDetailName:SetTextColor(1, 0.82, 0) end
+                        local whiteFS = {"GuildMemberDetailLevel", "GuildMemberDetailRankText", "GuildMemberDetailZoneText", "GuildMemberDetailOnlineText"}
+                        for i = 1, table.getn(whiteFS) do
+                            local fs = getglobal(whiteFS[i])
+                            if fs and fs.SetTextColor then fs:SetTextColor(1, 1, 1) end
+                        end
+                        -- 6. 两个备注框暗凹陷底(清纹理 + 深 WHITE8X8 底 + CreateRetailInset 凹陷描边)
+                        local noteBgs = {"GuildMemberNoteBackground", "GuildMemberOfficerNoteBackground"}
+                        for i = 1, table.getn(noteBgs) do
+                            local nb = getglobal(noteBgs[i])
+                            if nb then
+                                local nr = {nb:GetRegions()}
+                                for j = 1, table.getn(nr) do
+                                    local r = nr[j]
+                                    if r.GetObjectType and r:GetObjectType() == "Texture" and not r._dfKeep then
+                                        r:SetTexture(nil); r:Hide()
+                                    end
+                                end
+                                if nb.SetBackdrop then nb:SetBackdrop(nil) end
+                                local nbBg = nb:CreateTexture(nil, "BACKGROUND")
+                                nbBg:SetTexture("Interface\\Buttons\\WHITE8X8")
+                                nbBg:SetAllPoints(nb)
+                                nbBg:SetVertexColor(0.05, 0.05, 0.06, 0.9)
+                                nbBg._dfKeep = true
+                                local ni = DFUI.CreateRetailInset(nb, {name = noteBgs[i] .. "DFInset", anchors = {1, -1, -1, 1}, followFrame = gmd})
+                                if ni and ni.bg then ni.bg:Hide() end
+                            end
+                        end
+                        -- 7. 底部按钮重锚到底部同一水平线 + 左右对称(vanilla 原本两按钮锚点 y 不一致→不对齐)
+                        if GuildMemberRemoveButton then
+                            GuildMemberRemoveButton:ClearAllPoints()
+                            GuildMemberRemoveButton:SetPoint("BOTTOMRIGHT", gmd, "BOTTOM", -6, 4)
+                        end
+                        if GuildMemberGroupInviteButton then
+                            GuildMemberGroupInviteButton:ClearAllPoints()
+                            GuildMemberGroupInviteButton:SetPoint("BOTTOMLEFT", gmd, "BOTTOM", 6, 4)
+                        end
+                        GuildMemberDetailFrame._dfSkinned = true
+                    end
+                end
                 -- 根因：GuildMemberDetailFrame:Show 在 refreshGuildRows(设回 H2)之后才执行，把区域列头 H2
                 -- 宽度改回 vanilla(~105)→右锚下左缘左移 31px。这里(Show 之后、最后一步)设回 74，无人再覆盖。
                 if GuildFrameColumnHeader2 then
