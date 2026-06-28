@@ -1159,3 +1159,203 @@ function DFUI.MeasureWidth(text, font)
     fs:SetText(text)
     return fs:GetStringWidth() or 0
 end
+
+-- ============================================================
+-- DFUI.ApplyDiamondMetalBorder — DF 通用九宫格"金属边框 diamond metal"
+-- 往现有 frame 贴一圈 DF 金属外框（4 角钻石 + 4 边金属条），对标 ApplyInnerFrame。
+-- 素材：8 块原生 128×128 整图（media\tex\diamondmetal\frame_*），零大-atlas 切片。
+-- 几何要点（已实测 alpha 包围盒，源自 uiframediamondmetal2x / vertical2x）：
+--   · 角瓦片：L 形金属 + 钻石(尖伸到 row7/col6)，绘制为 cornerSize×cornerSize。
+--   · 边瓦片：金属条厚 34/128、距外侧留 16/128 边距 → 边的"横轴"必须 = cornerSize，
+--     仅拉伸长轴；金属条厚度内禀(随 cornerSize 等比)，方能与角无缝对齐。
+--   · 默认 overhang = cornerSize/8 (=16/128)：金属外沿正好齐 frame 边界、钻石外凸(还原 DF)。
+-- opts:
+--   cornerSize (默认 64)      4 角定尺(正方)，控整体大小；素材 128 的 0.5x
+--   edgeThickness (默认 cz)   边横轴尺寸；为无缝对齐应保持 = cornerSize，仅高级覆盖
+--   tint (默认 {1,1,1,1})     染色；diamond metal 自带金属色默认不染
+--   blendMode (默认 "BLEND")  深底提亮传 "ADD"(vertexColor 钳 1，提亮靠 ADD 不靠 tint>1)
+--   drawLayer (默认 "OVERLAY")
+--   levelOffset (默认 5)      borderFrame 层级 = frame 层级 + 此值
+--   overhang (默认 cz/8)      角向 frame 外凸像素；边随角走，传 0 即齐平内贴
+--   showBackground (默认关)   true 时给 frame 加深色底(挂 frame 背景层，不盖 border)
+--   bgColor (默认暗蓝)        showBackground 的底色 {r,g,b,a}
+--   name                      可选 borderFrame 全局名
+-- 返回：borderFrame 挂 .corners={tl,tr,bl,br} / .edges={top,bot,left,right} / .bg(可选)
+-- ============================================================
+local DM_TEX = RIT_TEX .. "diamondmetal\\"
+
+function DFUI.ApplyDiamondMetalBorder(frame, opts)
+    opts = opts or {}
+    local cz    = opts.cornerSize    or 64
+    local et    = opts.edgeThickness or cz
+    local tint  = opts.tint          or {1, 1, 1, 1}
+    local blend = opts.blendMode     or "BLEND"
+    local layer = opts.drawLayer     or "OVERLAY"
+    local lvl   = opts.levelOffset   or 5
+    local ov    = opts.overhang
+    if ov == nil then ov = cz / 8 end
+    local bgColor = opts.bgColor or {0.06, 0.06, 0.09, 0.90}
+
+    local bf = CreateFrame("Frame", opts.name, frame)
+    bf:SetAllPoints(frame)
+    bf:SetFrameLevel(frame:GetFrameLevel() + lvl)
+
+    if opts.showBackground then
+        local bg = frame:CreateTexture(nil, "BACKGROUND")   -- 挂 frame 背景层，居 children 之下
+        bg:SetTexture("Interface\\Buttons\\WHITE8X8")
+        bg:SetAllPoints(frame)
+        bg:SetVertexColor(bgColor[1], bgColor[2], bgColor[3], bgColor[4] or 1)
+        bf.bg = bg
+    end
+
+    local function newTex(file)
+        local t = bf:CreateTexture(nil, layer)
+        t:SetTexture(DM_TEX .. file)
+        t:SetTexCoord(0, 1, 0, 1)        -- 原生整图整张贴(非天赋版补 POT 的 UV 切片)
+        t:SetBlendMode(blend)
+        t:SetVertexColor(tint[1], tint[2], tint[3], tint[4] or 1)
+        return t
+    end
+
+    -- 4 角（带 overhang 外凸；各自定尺 cz×cz）
+    local tl = newTex("frame_corner_tl"); tl:SetWidth(cz); tl:SetHeight(cz); tl:SetPoint("TOPLEFT",     bf, "TOPLEFT",     -ov,  ov)
+    local tr = newTex("frame_corner_tr"); tr:SetWidth(cz); tr:SetHeight(cz); tr:SetPoint("TOPRIGHT",    bf, "TOPRIGHT",     ov,  ov)
+    local bl = newTex("frame_corner_bl"); bl:SetWidth(cz); bl:SetHeight(cz); bl:SetPoint("BOTTOMLEFT",  bf, "BOTTOMLEFT",  -ov, -ov)
+    local br = newTex("frame_corner_br"); br:SetWidth(cz); br:SetHeight(cz); br:SetPoint("BOTTOMRIGHT", bf, "BOTTOMRIGHT",  ov, -ov)
+    bf.corners = {tl=tl, tr=tr, bl=bl, br=br}
+
+    -- 上下边（角间横向拉伸，高 et=cz；顶/底对齐角）
+    local top = newTex("frame_edge_top"); top:SetHeight(et)
+    top:SetPoint("TOPLEFT", tl, "TOPRIGHT", 0, 0); top:SetPoint("TOPRIGHT", tr, "TOPLEFT", 0, 0)
+    local bot = newTex("frame_edge_bot"); bot:SetHeight(et)
+    bot:SetPoint("BOTTOMLEFT", bl, "BOTTOMRIGHT", 0, 0); bot:SetPoint("BOTTOMRIGHT", br, "BOTTOMLEFT", 0, 0)
+
+    -- 左右边（角间纵向拉伸，宽 et=cz；左/右对齐角）
+    local lft = newTex("frame_edge_left"); lft:SetWidth(et)
+    lft:SetPoint("TOPLEFT", tl, "BOTTOMLEFT", 0, 0); lft:SetPoint("BOTTOMLEFT", bl, "TOPLEFT", 0, 0)
+    local rgt = newTex("frame_edge_right"); rgt:SetWidth(et)
+    rgt:SetPoint("TOPRIGHT", tr, "BOTTOMRIGHT", 0, 0); rgt:SetPoint("BOTTOMRIGHT", br, "TOPRIGHT", 0, 0)
+    bf.edges = {top=top, bot=bot, left=lft, right=rgt}
+
+    return bf
+end
+
+-- ============================================================
+-- DFUI.CreateDiamondMetalBorder — 建子 frame 再贴金属边框（对标 CreateRetailInset）
+-- opts 透传给 ApplyDiamondMetalBorder，额外支持：
+--   anchors {tlx,tly,brx,bry}  子 frame 相对 parent 的双锚定位(缺省 SetAllPoints)
+--   followFrame / followFrames 跟随目标 frame 显隐(单个 / 多个互斥)
+-- 返回 child frame；边框挂 child.border(.corners/.edges 在其上)。
+-- ============================================================
+function DFUI.CreateDiamondMetalBorder(parent, opts)
+    opts = opts or {}
+    local child = CreateFrame("Frame", opts.name, parent)
+    local a = opts.anchors
+    if a then
+        child:SetPoint("TOPLEFT",     parent, "TOPLEFT",     a[1], a[2])
+        child:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", a[3], a[4])
+    else
+        child:SetAllPoints(parent)
+    end
+
+    -- 浅拷贝 opts 去掉 name(避免与 child 重名)，转交 Apply
+    local o2 = {}
+    for k, v in pairs(opts) do o2[k] = v end
+    o2.name = nil
+    child.border = DFUI.ApplyDiamondMetalBorder(child, o2)
+
+    -- 跟随显隐（可选）—— 复用 CreateRetailInset 同款逻辑
+    local follows = opts.followFrames or (opts.followFrame and {opts.followFrame})
+    if follows then
+        local function checkVisible()
+            for _, f in ipairs(follows) do
+                if f and f:IsVisible() then child:Show(); return end
+            end
+            child:Hide()
+        end
+        checkVisible()
+        for _, f in ipairs(follows) do
+            if f then
+                HookScript(f, "OnShow", checkVisible)
+                HookScript(f, "OnHide", checkVisible)
+            end
+        end
+    end
+
+    return child
+end
+
+-- ============================================================
+-- DFUI.CreateDiamondMetalHeader — DF 通用九宫格"金属标题座 header"
+-- 水平 3-slice：左端帽(2钻石封左+上+下) + 中段tile(上下金属线+凹暗区,横向拉伸,承载标题) + 右端帽。
+-- 默认骑在 parent 顶边居中(CENTER 锚 parent TOP)，可与 ApplyDiamondMetalBorder 组合：边框围一圈 + 标题座叠顶。
+-- 素材：header_{left,tile,right}.tga，源 128×156(高非POT)补 POT 128×256 → SetTexCoord V 取 0..156/256。
+-- opts:
+--   width (默认 200)            标题座宽(由调用方按标题长度定)
+--   height (默认 40)            标题座高
+--   capWidth (默认 h*128/156)   端帽宽(保持钻石 aspect，勿令 2*capWidth>width)
+--   text (默认无)               居中标题文字；返回的 .text 可后续 SetText 改
+--   font (默认 GameFontNormalLarge) 字体对象名(字符串)或字体对象
+--   textColor (默认 DF 暖金)     {r,g,b,a}
+--   tint (默认 {1,1,1,1}) / blendMode("BLEND") / drawLayer("OVERLAY")
+--   levelOffset (默认 6)        层级 = parent 层级 + 此值(比主边框 5 高一层叠顶部)
+--   yOffset (默认 0)            垂直微调(默认 header 中心骑 parent 顶边)
+--   name
+-- 返回：header frame 挂 .left / .tile / .right / .text
+-- ============================================================
+local HDR_V = 156 / 256   -- 0.609375，header 内容高占补 POT(256) 的比例
+
+function DFUI.CreateDiamondMetalHeader(parent, opts)
+    opts = opts or {}
+    local w     = opts.width      or 200
+    local h     = opts.height     or 40
+    local capW  = opts.capWidth   or (h * 128 / 156)
+    local tint  = opts.tint       or {1, 1, 1, 1}
+    local blend = opts.blendMode  or "BLEND"
+    local layer = opts.drawLayer  or "OVERLAY"
+    local lvl   = opts.levelOffset or 6
+    local yoff  = opts.yOffset    or 0
+
+    local hdr = CreateFrame("Frame", opts.name, parent)
+    hdr:SetWidth(w)
+    hdr:SetHeight(h)
+    hdr:SetPoint("CENTER", parent, "TOP", 0, yoff)
+    hdr:SetFrameLevel(parent:GetFrameLevel() + lvl)
+
+    local function newTex(file)
+        local t = hdr:CreateTexture(nil, layer)
+        t:SetTexture(DM_TEX .. file)
+        t:SetTexCoord(0, 1, 0, HDR_V)    -- 高补 POT(256)，取内容区前 156 行
+        t:SetBlendMode(blend)
+        t:SetVertexColor(tint[1], tint[2], tint[3], tint[4] or 1)
+        return t
+    end
+
+    -- 中段先建(端帽覆盖其端部接缝)，横向拉伸
+    local tile = newTex("header_tile")
+    tile:SetPoint("TOPLEFT",     hdr, "TOPLEFT",      capW, 0)
+    tile:SetPoint("BOTTOMRIGHT", hdr, "BOTTOMRIGHT", -capW, 0)
+
+    local left = newTex("header_left"); left:SetWidth(capW)
+    left:SetPoint("TOPLEFT",    hdr, "TOPLEFT",    0, 0)
+    left:SetPoint("BOTTOMLEFT", hdr, "BOTTOMLEFT", 0, 0)
+
+    local right = newTex("header_right"); right:SetWidth(capW)
+    right:SetPoint("TOPRIGHT",    hdr, "TOPRIGHT",    0, 0)
+    right:SetPoint("BOTTOMRIGHT", hdr, "BOTTOMRIGHT", 0, 0)
+
+    hdr.left, hdr.tile, hdr.right = left, tile, right
+
+    -- 内置居中标题文字（落在 tile 凹暗区）
+    local fontObj = opts.font
+    if type(fontObj) == "string" then fontObj = _G[fontObj] end
+    local fs = hdr:CreateFontString(nil, "OVERLAY")
+    fs:SetFontObject(fontObj or GameFontNormalLarge)
+    local tc = opts.textColor or {0.95, 0.85, 0.55}
+    fs:SetTextColor(tc[1], tc[2], tc[3], tc[4] or 1)
+    fs:SetPoint("CENTER", hdr, "CENTER", 0, 0)
+    if opts.text then fs:SetText(opts.text) end
+    hdr.text = fs
+
+    return hdr
+end

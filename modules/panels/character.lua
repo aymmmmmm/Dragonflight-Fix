@@ -167,19 +167,49 @@ DFUI:NewMod("Character", 5, function()
         local regions = {ReputationDetailFrame:GetRegions()}
         for i = 1, table.getn(regions) do
             local r = regions[i]
-            if r.GetObjectType and r:GetObjectType() == "Texture" then
-                r:SetTexture(nil); r:Hide()
+            if r.GetObjectType and r:GetObjectType() == "Texture" and not r._dfKeep then
+                r:SetTexture(nil); r:Hide()   -- _dfKeep 跳过下面自建的羊皮纸/岩石(否则重跑时被清掉→羊皮纸消失)
             end
         end
+        ReputationDetailFrame:SetBackdrop(nil)   -- 清 vanilla 原生 backdrop / 旧 SetBackdrop 残留（GetRegions 清不到 backdrop，是两层框根因）
+        local rdVClose = getglobal("ReputationDetailCloseButton")
+        if rdVClose then rdVClose:Hide() end     -- 隐藏 vanilla 原生关闭按钮（用自制红关闭替代）
         if not ReputationDetailFrame._dfSkinned then
-            ReputationDetailFrame:SetBackdrop({
-                bgFile = "Interface\\Buttons\\WHITE8X8",
-                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-                edgeSize = 14,
-                insets = {left = 4, right = 4, top = 4, bottom = 4},
+            -- 羊皮纸 + 钻石金属框 + 红关闭（替代自制 SetBackdrop；参考 quest/gossip 风格，边框用 diamond）
+            -- 1. 深色底铺满（承载底部复选框区，截图底部为深色）
+            local rdBg = ReputationDetailFrame:CreateTexture(nil, "BACKGROUND")
+            rdBg:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\interface\\UI-Background-Rock.blp")
+            rdBg:SetDrawLayer("BACKGROUND")   -- 不用 sublevel 第二参(1.12 不可靠)，靠 layer 分离
+            rdBg:SetAllPoints(ReputationDetailFrame)
+            rdBg:SetVertexColor(0.55, 0.55, 0.55)   -- 岩石底压暗，衬底部复选框文字（可调）
+            rdBg._dfKeep = true                     -- 防被上面清纹理循环清掉
+            -- 2. 羊皮纸盖中上区（标题+描述），降到背景层防盖 vanilla 文字
+            local rdParch = DFUI.CreateParchment(ReputationDetailFrame, {8, -10, -8, 68})   -- 底边向下拉伸2px(70→68)齐凹陷下边，顶复原-10
+            rdParch:SetDrawLayer("BORDER")   -- BORDER 高于岩石 BACKGROUND、低于 vanilla 文字 ARTWORK
+            rdParch._dfKeep = true                  -- 防被上面清纹理循环清掉
+            -- 2b. 羊皮纸凹陷描边（增质感；大理石 bg 隐藏露羊皮纸，同 quest/gossip）
+            local rdInset = DFUI.CreateRetailInset(ReputationDetailFrame, {
+                name        = "DFUI_ReputationDetailInset",
+                anchors     = {6, -8, -6, 68},
+                followFrame = ReputationDetailFrame,
             })
-            ReputationDetailFrame:SetBackdropColor(0.06, 0.06, 0.06, 0.92)
-            ReputationDetailFrame:SetBackdropBorderColor(0.45, 0.38, 0.28, 1)
+            if rdInset and rdInset.bg then rdInset.bg:Hide() end
+            -- 3. 钻石金属边框（不传 showBackground，底已由上面提供）
+            local rdBorder = DFUI.ApplyDiamondMetalBorder(ReputationDetailFrame, {
+                name       = "DFUI_ReputationDetailBorder",
+                cornerSize = 30,
+            })
+            rdBorder:ClearAllPoints()   -- 边框四周外扩 1px
+            rdBorder:SetPoint("TOPLEFT",     ReputationDetailFrame, "TOPLEFT",     -1,  1)
+            rdBorder:SetPoint("BOTTOMRIGHT", ReputationDetailFrame, "BOTTOMRIGHT",  1, -1)
+            -- 4. 红关闭（vanilla detail 无 close 按钮）
+            local rdClose = DFUI.CreateRedButton(ReputationDetailFrame, "close", function() ReputationDetailFrame:Hide() end)
+            rdClose:SetPoint("TOPRIGHT", ReputationDetailFrame, "TOPRIGHT", -2, -2)
+            rdClose:SetWidth(20); rdClose:SetHeight(20)
+            rdClose:SetFrameLevel(ReputationDetailFrame:GetFrameLevel() + 6)
+            -- 5. 文字配色：标题金、描述深褐（羊皮纸上可读）
+            if ReputationDetailFactionName then ReputationDetailFactionName:SetTextColor(1, 0.82, 0) end
+            if ReputationDetailFactionDescription then ReputationDetailFactionDescription:SetTextColor(1, 1, 1) end
             ReputationDetailFrame._dfSkinned = true
         end
     end
