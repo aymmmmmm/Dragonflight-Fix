@@ -616,14 +616,18 @@ DFUI:NewMod("Loot", 1, function()
     -- Module entry point
     ---------------------------------------------------------------------------
     local f = CreateFrame("Frame")
-    f:RegisterEvent("PLAYER_ENTERING_WORLD")
+    f:RegisterEvent("PLAYER_LOGIN")            -- roll/anchor 在 LOGIN 建，早于 frames 的 PEW handler → 稳定接入移动系统
+    f:RegisterEvent("PLAYER_ENTERING_WORLD")   -- 主 loot 面板保持 PEW
     f:SetScript("OnEvent", function()
-        f:UnregisterEvent("PLAYER_ENTERING_WORLD")
-        Init()
-
-        -- Initialize roll module (defined in roll.lua, shares Loot's enabled state)
-        if DFUI.InitLootRoll then
-            DFUI.InitLootRoll()
+        if event == "PLAYER_LOGIN" then
+            f:UnregisterEvent("PLAYER_LOGIN")
+            -- Initialize roll module (defined in roll.lua, shares Loot's enabled state)
+            if DFUI.InitLootRoll then
+                DFUI.InitLootRoll()
+            end
+        elseif event == "PLAYER_ENTERING_WORLD" then
+            f:UnregisterEvent("PLAYER_ENTERING_WORLD")
+            Init()
         end
     end)
 

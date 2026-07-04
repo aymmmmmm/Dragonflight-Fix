@@ -45,7 +45,6 @@ DFUI:NewMod("Frames", 2, function()
 
             -- loot module
             DFUI.lootFrame,
-            DFUI.rollAnchor,
         }
 
         -- orbs + track button
@@ -61,6 +60,10 @@ DFUI:NewMod("Frames", 2, function()
         -- 辅助功能·攻击计时条主框（副手/远程相对主框锚定，随主框一起移动）
         local atkBar = _G["DFUIAssistAttackBar"]
         if atkBar then table.insert(framesToMakeMovable, atkBar) end
+
+        -- 拾取投骰锚点（在 PLAYER_LOGIN 建，早于本 handler；同攻击条走 _G 条件 insert）
+        local rollAnc = _G["DFUIRollAnchor"]
+        if rollAnc then table.insert(framesToMakeMovable, rollAnc) end
 
 
         local function SaveFramePosition(frame)
@@ -139,6 +142,8 @@ DFUI:NewMod("Frames", 2, function()
         local flag -- flag to hide/show certain elements like castbar etc.
         local function MakeFrameMovable(frame)
             if not frame then return end
+            if frame._dfMovableInit then return end  -- 防重复接入（reload/主动接入双触发）
+            frame._dfMovableInit = true
 
             frame:EnableMouse(true)
             frame:SetMovable(true)
@@ -221,6 +226,9 @@ DFUI:NewMod("Frames", 2, function()
                         DFUI.Assist.AttackBarFrame:Show()
                     end
 
+                    -- 拾取面板平时隐藏，布局模式下显示示例框以便拖动定位
+                    if DFUI.ShowRollPreview then DFUI.ShowRollPreview() end
+
                     FramerateLabel:Show()
 
                     if DFUI.netStatsFrame then
@@ -247,6 +255,9 @@ DFUI:NewMod("Frames", 2, function()
                            and not UnitAffectingCombat("player") then
                             DFUI.Assist.AttackBarFrame:Hide()
                         end
+
+                        -- 退出布局模式：收回拾取面板示例框
+                        if DFUI.HideRollPreview then DFUI.HideRollPreview() end
 
                         FramerateLabel:Hide()
 

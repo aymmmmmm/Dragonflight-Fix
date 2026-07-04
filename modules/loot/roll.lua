@@ -38,6 +38,7 @@ DFUI.InitLootRoll = function()
     ---------------------------------------------------------------------------
     local rollFrames = {}
     local rollCache = {}
+    local anchor  -- 拾取框堆叠基准；在 Setup 区赋值，供 RelayoutRolls/预览共享
 
     ---------------------------------------------------------------------------
     -- Chat message pattern matching (for roll tracking)
@@ -73,6 +74,20 @@ DFUI.InitLootRoll = function()
     ---------------------------------------------------------------------------
     -- Helpers
     ---------------------------------------------------------------------------
+    -- 紧凑重排：仅对可见框，从 anchor 底部向上堆叠，消除空洞
+    local function RelayoutRolls()
+        local shown = 0
+        for i = 1, MAX_ROLLS do
+            local rf = rollFrames[i]
+            if rf and rf:IsShown() then
+                rf:ClearAllPoints()
+                rf:SetPoint("BOTTOM", anchor, "BOTTOM",
+                    0, shown * (ROLL_HEIGHT + ROLL_SPACING))
+                shown = shown + 1
+            end
+        end
+    end
+
     local function GetDB(key)
         return DFUI:GetTempDB("Loot", key)
     end
@@ -317,6 +332,7 @@ DFUI.InitLootRoll = function()
             frame:Hide()
             frame.rollID = nil
             frame.itemname = nil
+            RelayoutRolls()
         end)
         frame.closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -4)
         frame.closeBtn:SetWidth(18)
@@ -375,6 +391,7 @@ DFUI.InitLootRoll = function()
         frame.passBtn.count:SetText(cPass > 0 and cPass or "")
 
         frame:Show()
+        RelayoutRolls()
     end
 
     ---------------------------------------------------------------------------
@@ -386,6 +403,7 @@ DFUI.InitLootRoll = function()
                 rollFrames[i]:Hide()
                 rollFrames[i].rollID = nil
                 rollFrames[i].itemname = nil
+                RelayoutRolls()
                 return
             end
         end
@@ -408,17 +426,16 @@ DFUI.InitLootRoll = function()
     ---------------------------------------------------------------------------
     -- Setup
     ---------------------------------------------------------------------------
-    local anchor = CreateFrame("Frame", "DFUIRollAnchor", UIParent)
+    anchor = CreateFrame("Frame", "DFUIRollAnchor", UIParent)
     anchor:SetWidth(ROLL_WIDTH)
     anchor:SetHeight(ROLL_HEIGHT)
     anchor:SetPoint("CENTER", UIParent, "CENTER", 0, -120)
+    anchor:Show()  -- overlay 是 anchor 的子框，父须 shown 子才可见（布局模式金色框依赖此）
     DFUI.rollAnchor = anchor
 
     for i = 1, MAX_ROLLS do
         rollFrames[i] = CreateRollFrame(i)
-        rollFrames[i]:SetPoint("TOP", anchor, "TOP",
-            0, -(i - 1) * (ROLL_HEIGHT + ROLL_SPACING))
-        rollFrames[i]:Hide()
+        rollFrames[i]:Hide()  -- 锚定交给 RelayoutRolls（向上堆叠、紧凑重排）
     end
 
     -- Replace global function (pfUI approach) — handles START_LOOT_ROLL
@@ -469,6 +486,43 @@ DFUI.InitLootRoll = function()
             return
         end
     end)
+
+    ---------------------------------------------------------------------------
+    -- Layout-mode preview (布局模式下临时显示示例框，供 Ctrl+Shift+Alt 拖动定位)
+    ---------------------------------------------------------------------------
+    function DFUI.ShowRollPreview()
+        -- 有真实 roll 正在显示则不打扰
+        for i = 1, MAX_ROLLS do
+            if rollFrames[i] and rollFrames[i]:IsShown() then return end
+        end
+        local rf = rollFrames[1]
+        if not rf then return end
+        rf._isPreview = true
+        rf.rollID = nil  -- timer OnUpdate / 投骰按钮靠 rollID==nil 安全空转
+        rf.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+        rf.iconBorder:SetVertexColor(1, 0.82, 0, 1)
+        rf:SetBackdropBorderColor(1, 0.82, 0, 0.6)
+        rf.itemName:SetText("拾取面板（示例）")
+        rf.itemName:SetTextColor(1, 0.82, 0)
+        rf.bindText:SetText("Ctrl+Shift+Alt 拖动此框调整位置")
+        rf.bindText:SetTextColor(0.8, 0.8, 0.8, 1)
+        rf.timer:SetMinMaxValues(0, 1)
+        rf.timer:SetValue(1)
+        rf.needBtn.count:SetText("")
+        rf.greedBtn.count:SetText("")
+        rf.passBtn.count:SetText("")
+        rf:Show()
+        RelayoutRolls()
+    end
+
+    function DFUI.HideRollPreview()
+        local rf = rollFrames[1]
+        if rf and rf._isPreview then
+            rf._isPreview = nil
+            rf:Hide()
+            RelayoutRolls()
+        end
+    end
 
     DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[DFUI]|r LootRoll 模块已加载")
 end
