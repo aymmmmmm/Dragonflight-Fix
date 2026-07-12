@@ -96,6 +96,7 @@ DFUI:NewMod("Gui-elem", 3, function()
             ["SpellBook"] = {11, 22},
             ["KeyBinding"] = {11, 23},
             ["TradeSkill"] = {11, 24},
+            ["ItemText"] = {11, 25},
             ["Micro"]   = {12, 1},
             ["Collector"] = {13, 1},
             ["Map"]     = {13, 2},

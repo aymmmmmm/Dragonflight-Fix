@@ -1,10 +1,10 @@
 # 面板美化实施进度
 
-> 最后更新：2026-05-31（社交「查找」全自制重写完成；面板数复核）
+> 最后更新：2026-07-12（书籍阅读面板 ItemTextFrame 新增，见 §十一）
 
-## 一、已完成的面板（19 个）
+## 一、已完成的面板（20 个）
 
-> 复核（toc 加载 `modules\panels\*.lua` 共 21 个）：其中 `paperdoll.lua` 是工厂函数、`scrollbar.lua` 是全局滚动条换肤、`questlog_xp.lua` 是任务经验估算（非美化面板），其余 19 个均为已美化面板。下表 Phase 1~3 列出主要面板，第五节「补充已完成」列出后续追加的面板。
+> 复核（toc 加载 `modules\panels\*.lua` 共 22 个）：其中 `paperdoll.lua` 是工厂函数、`scrollbar.lua` 是全局滚动条换肤、`questlog_xp.lua` 是任务经验估算（非美化面板），其余 20 个均为已美化面板。下表 Phase 1~3 列出主要面板，第五节「补充已完成」列出后续追加的面板。
 
 ### Phase 1：基础设施 + 高频面板
 
@@ -162,7 +162,7 @@
 - 角色面板技能/声望滚动条与社交好友/公会滚动条**不接管**，保留 vanilla 原生亮金箭头（由 character.lua / social.lua 各自处理）。
 - 触发：`PLAYER_ENTERING_WORLD` 延迟 0.5s + `ADDON_LOADED` 延迟 0.2s 两路 `ApplyAll()`。
 
-## 六、补充已完成（计入第一节 19 个）
+## 六、补充已完成（计入第一节 20 个）
 
 以下面板继 Phase 1~3 之后陆续完成，已计入第一节面板总数。源码均在 `modules/panels/` 并由 `Dragonflight-Fix.toc` 加载。
 
@@ -222,7 +222,7 @@ panels/
 
 | 文件 | 修改内容 |
 |------|---------|
-| `Dragonflight-Fix.toc` | `modules\panels\*.lua` 共 21 个文件已加入加载顺序（含工厂 paperdoll、全局换肤 scrollbar、任务经验 questlog_xp） |
+| `Dragonflight-Fix.toc` | `modules\panels\*.lua` 共 22 个文件已加入加载顺序（含工厂 paperdoll、全局换肤 scrollbar、任务经验 questlog_xp） |
 | `modules/gui/elem.lua` | moduleMapping 添加面板模块（待实证：具体条数以源码为准） |
 | `modules/ui/ui.lua` | 删除旧面板代码 + 暗色模式回调，保留 SpellBook 覆盖 |
 
@@ -251,3 +251,13 @@ panels/
 
 ### 待办
 - 拍卖行 AuctionFrame：见 §七（大型多 Tab，工作量最大，单独实施）
+
+## 十一、2026-07-12 书籍阅读面板（ItemTextFrame）新增
+
+背包书籍/信件、世界铭牌/墓碑的阅读面板，`modules/panels/itemtext.lua`，模块名 `ItemText`。共享 `SkinQuestStyleFrame` + `AttachMinimalScrolls` 工厂（与 quest/gossip 视觉统一），材质变体(Stone/Bronze/Marble/Silver)统一收敛为 DF 羊皮纸（材质四角 Hide + no-op Show 挡 `ITEM_TEXT_READY` 运行时重 Show）；金环内 `UI-QuestLog-BookIcon` 56×56 照 questlog 配方；翻页排（页码居中+箭头两侧）重锚 customBg 顶部岩石带。
+
+**三个 1.12 特例坑（均以 1.12.1 build 5803 官方 FrameXML 实证，游戏内两轮踩出）**：
+1. **右侧边框复用法术书贴图** `Interface\Spellbook\UI-SpellbookPanel-TopRight/BotRight`——按 "ItemText" 名匹配必漏右半边 → 对 ItemTextFrame 全量 `HidePanelTextures(frame, {})`（源码证实边框无运行时重 Show，一次隐藏永久）。
+2. **原生自带未命名 Spellbook-Icon** 58×58 region（BACKGROUND 层）——不隐藏会与自加图标叠成两层。
+3. **滚动条轨道贴图命名不走 quest 家族约定**：叫 `ItemTextScrollFrameTop/Middle/Bottom`（`$parentTop` 挂 ScrollFrame 名下，非 `$parentScrollBarTop`）→ 工厂 `keepArrowsHideTrack` 按 `<滚动条名>Top` 查找落空，须对 `ItemTextScrollFrame` 本体再做一次全量隐藏（其中 Middle 是无贴图路径的纯黑半透明，名匹配也抓不到）。
+4. 附：`ItemTextCloseButton` 无 "Frame" 前缀，工厂按 `frame:GetName().."CloseButton"` 推导不到，手动隐藏（同 taxi）。

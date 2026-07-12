@@ -57,6 +57,7 @@ modules\panels\tabard.lua
 modules\panels\questskin.lua
 modules\panels\questframe.lua
 modules\panels\gossip.lua
+modules\panels\itemtext.lua
 modules\panels\questlog.lua
 modules\panels\questlog_xp.lua
 modules\panels\social.lua
