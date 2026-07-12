@@ -37,7 +37,10 @@ local PROF_BG_KEY = {
     ["Tailoring"]="tailoring", ["裁缝"]="tailoring",
     ["Beast Training"]="default", ["宠物训练"]="default",
     ["野兽训练"]="default", ["宠物技能"]="default", ["训练野兽"]="default",
-    ["Survival"]="survival", ["生存"]="survival",
+    -- 生存→inscription: Turtle 自定义专业无 DF 对应画，用 recipe 系铭文图（卷轴/羽毛笔）。
+    -- 旧 bg_survival.tga(specialization 系铭文)素材天生近全黑，游戏里视觉≈无背景，弃用。
+    ["Survival"]="inscription", ["生存"]="inscription",
+    ["Jewelcrafting"]="jewelcrafting", ["珠宝加工"]="jewelcrafting", ["珠宝"]="jewelcrafting",
 }
 
 -- ============================================================
@@ -267,6 +270,14 @@ DFUI:NewMod("TradeSkill", 5, function()
     -- API 专业名 → 法术名 映射（GetTradeSkillLine 返回名与法术名不同时，仅采矿需要）
     local PROF_API_TO_SPELL = {
         ["Mining"] = "Smelting", ["采矿"] = "熔炼",
+    }
+
+    -- Craft API 名可信任的专业；生存的 GetCraftName() 乱报（"烹饪"/nil），
+    -- craft 模式下报了这表以外的名即视为误报，走 knownProfessions 兜底
+    local CRAFT_CAPABLE = {
+        ["附魔"]=true, ["Enchanting"]=true,
+        ["训练野兽"]=true, ["宠物训练"]=true, ["Beast Training"]=true, ["Pet Training"]=true,
+        ["生存"]=true, ["Survival"]=true,
     }
 
     -- 法术名 → 显示名（Tab / 标题显示用，仅宠物训练需要）
@@ -1764,6 +1775,7 @@ DFUI:NewMod("TradeSkill", 5, function()
         ["Beast Training"] = true, ["宠物训练"] = true,
         ["野兽训练"] = true, ["宠物技能"] = true, ["训练野兽"] = true,
         ["Survival"] = true, ["生存"] = true,
+        ["Jewelcrafting"] = true, ["珠宝加工"] = true, ["珠宝"] = true,
     }
 
     -- 扫描法术书综合 tab（第1页），匹配已知专业名
@@ -1805,6 +1817,9 @@ DFUI:NewMod("TradeSkill", 5, function()
                 pendingTab = tab
                 CastSpell(captured.spellIndex, BOOKTYPE_SPELL)
             end, nil, (i == 1 and 2 or 4))
+            -- 携带法术书里的真实法术名（tab 池复用，必须每次重设）：
+            -- OpenProfession 用它定专业身份，不依赖会乱报的 GetCraftName()
+            tab.profName = captured.name
             -- 首建时按当前专业名高亮（外部施法打开的回退；点 tab 打开由 OpenProfession 用 pendingTab 处理）
             if currentName and prof.name == currentName then
                 tab:SetSelected(true)
@@ -1829,30 +1844,37 @@ DFUI:NewMod("TradeSkill", 5, function()
         -- 不 Hide 原生面板! 用 SetAlpha(0) 保持 API 连接
         -- ADDON_LOADED hook 已处理原生面板透明化
 
-        -- 记录当前专业名（转换为 Tab 上显示的法术名）
-        local apiName
-        if mode == "tradeskill" then apiName = GetTradeSkillLine()
-        elseif mode == "craft" then apiName = GetCraftName and GetCraftName() or nil end
-        activeProfName = PROF_API_TO_SPELL[apiName] or apiName
-
-        -- 切换右侧专业背景画（按需加载：只在 Open 时切一次，OnHide 释放）
-        -- SetTexCoord 重设保险 (1.12 SetTexture 通常不重置 TexCoord, 但保险起见)
-        local bgKey = PROF_BG_KEY[apiName] or PROF_BG_KEY[activeProfName] or "default"
-        detailBg:SetTexture(PROF_TEX .. "bg_" .. bgKey .. ".tga")
-        if bgKey == "survival" then
-            -- bg_survival 取自 DF specialization-background 系列(铭文)，内容区 708×522，UV 来自 _html_dict 字典
-            detailBg:SetTexCoord(0.000977, 0.692383, 0.000977, 0.510742)
-        else
-            -- 其余取自 recipe-background 系列，内容区 676×549
-            detailBg:SetTexCoord(0, 339/512, 0, 275/512)
-        end
-        detailBg:SetVertexColor(1, 1, 1, 1)
-
-        -- 扫描法术书专业（需在设置图标前完成，避免首次打开没 texture）
+        -- 扫描法术书专业（上移到专业身份判定前：craft 误报兜底要查 knownProfessions）
         if not profScanned then
             ScanSpellbookForProfessions()
             if table.getn(knownProfessions) > 0 then profScanned = true end
         end
+
+        -- 记录当前专业名（转换为 Tab 上显示的法术名）
+        local apiName
+        if mode == "tradeskill" then apiName = GetTradeSkillLine()
+        elseif mode == "craft" then apiName = GetCraftName and GetCraftName() or nil end
+        -- 专业身份三级优先：点击的 tab 法术名 > craft 误报兜底 > API 名
+        -- （生存走 Craft API 且 GetCraftName() 乱报"烹饪"/nil，不能拿它当 key）
+        local profName = pendingTab and pendingTab.profName
+        if not profName and mode == "craft" and not CRAFT_CAPABLE[apiName] then
+            -- 外部施法打开 + API 名不在 craft 信任表 = 误报，回退到法术书里已知的生存
+            for _, prof in ipairs(knownProfessions) do
+                if prof.name == "生存" or prof.name == "Survival" then
+                    profName = prof.name
+                    break
+                end
+            end
+        end
+        activeProfName = profName or PROF_API_TO_SPELL[apiName] or apiName
+
+        -- 切换右侧专业背景画（按需加载：只在 Open 时切一次，OnHide 释放）
+        -- SetTexCoord 重设保险 (1.12 SetTexture 通常不重置 TexCoord, 但保险起见)
+        local bgKey = PROF_BG_KEY[activeProfName] or PROF_BG_KEY[apiName] or "default"
+        detailBg:SetTexture(PROF_TEX .. "bg_" .. bgKey .. ".tga")
+        -- 全部取自 recipe-background 系列(1024² BLP 半缩成 512² TGA)，内容区 676×549→339×275
+        detailBg:SetTexCoord(0, 339/512, 0, 275/512)
+        detailBg:SetVertexColor(1, 1, 1, 1)
 
         -- 左上角图标保持玩家职业图标（不随专业切换）
 
