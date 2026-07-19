@@ -14,7 +14,12 @@ DFUI.Assist:register({
         LOOT_BIND_CONFIRM = function(self)
             local slot = arg1
             if slot then
-                ConfirmLootSlot(slot)
+                -- 1.12 无 ConfirmLootSlot(TBC+ API)：再次 LootSlot 即确认（同 loot.lua HandleBindConfirm）
+                if ConfirmLootSlot then
+                    ConfirmLootSlot(slot)
+                else
+                    LootSlot(slot)
+                end
             end
             if StaticPopup_Hide then
                 StaticPopup_Hide("LOOT_BIND")
