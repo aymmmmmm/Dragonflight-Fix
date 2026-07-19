@@ -431,3 +431,140 @@ function DFUI.CreateParchment(parent, anchors, opts)
     parch:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", anchors[3], anchors[4])
     return parch
 end
+
+-- ============================================================
+-- DF 子 Tab（缩小版金属 Tab，与 CreatePaperDollFrame 主 Tab 同风格）
+-- 从 character.lua 荣誉/竞技场子 Tab 提升为共享工厂（inspect 天赋树 Tab 复用）
+-- ApplySubTabSkin(tab, tabWidth)：在既有 Button 上贴皮，不建文字、不 SetWidth。
+--   选中态文字色：有 tab._label 用它染色；否则交给 Button 自身状态色
+--   （配合 SetTextColor/SetDisabledTextColor + PanelTemplates 的 Disable/Enable）
+-- CreateSubTab(parent, text, tabWidth)：新建 Button + 文字 + 贴皮
+-- ============================================================
+
+local SUBTAB_TEX = TEX .. "interface\\uiframetabs.blp"
+
+function DFUI.ApplySubTabSkin(tab, tabWidth)
+    local w = tabWidth or tab:GetWidth()
+    if not w or w == 0 then w = 55 end
+    local edgeW = w / 2
+    local h = 28
+    local selH = 30
+
+    -- 未选中态
+    local left = tab:CreateTexture(nil, "BACKGROUND")
+    left:SetTexture(SUBTAB_TEX)
+    left:SetWidth(edgeW)
+    left:SetHeight(h)
+    left:SetPoint("TOPLEFT", tab, "TOPLEFT", -3, 0)
+    left:SetTexCoord(0.015625, 0.5625, 0.957031, 0.816406)  -- v 翻转：贴合 inset 上沿
+
+    local right = tab:CreateTexture(nil, "BACKGROUND")
+    right:SetTexture(SUBTAB_TEX)
+    right:SetWidth(edgeW)
+    right:SetHeight(h)
+    right:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 5, 0)
+    right:SetTexCoord(0.015625, 0.59375, 0.808594, 0.667969)  -- v 翻转
+
+    local middle = tab:CreateTexture(nil, "BACKGROUND")
+    middle:SetTexture(SUBTAB_TEX)
+    middle:SetHeight(h)
+    middle:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
+    middle:SetPoint("TOPRIGHT", right, "TOPLEFT", 0, 0)
+    middle:SetTexCoord(0, 0.015625, 0.316406, 0.175781)  -- v 翻转
+
+    -- 选中态
+    local leftSel = tab:CreateTexture(nil, "BACKGROUND")
+    leftSel:SetTexture(SUBTAB_TEX)
+    leftSel:SetWidth(edgeW)
+    leftSel:SetHeight(selH)
+    leftSel:SetPoint("TOPLEFT", tab, "TOPLEFT", -1, 0)
+    leftSel:SetTexCoord(0.015625, 0.5625, 0.660156, 0.496094)  -- v 翻转
+    leftSel:Hide()
+
+    local rightSel = tab:CreateTexture(nil, "BACKGROUND")
+    rightSel:SetTexture(SUBTAB_TEX)
+    rightSel:SetWidth(edgeW)
+    rightSel:SetHeight(selH)
+    rightSel:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 6, 0)
+    rightSel:SetTexCoord(0.015625, 0.59375, 0.488281, 0.324219)  -- v 翻转
+    rightSel:Hide()
+
+    local middleSel = tab:CreateTexture(nil, "BACKGROUND")
+    middleSel:SetTexture(SUBTAB_TEX)
+    middleSel:SetHeight(selH)
+    middleSel:SetPoint("TOPLEFT", leftSel, "TOPRIGHT", 0, 0)
+    middleSel:SetPoint("TOPRIGHT", rightSel, "TOPLEFT", 0, 0)
+    middleSel:SetTexCoord(0, 0.015625, 0.167969, 0.00390625)  -- v 翻转
+    middleSel:Hide()
+
+    -- 高亮（鼠标悬停）
+    local hlLeft = tab:CreateTexture(nil, "HIGHLIGHT")
+    hlLeft:SetTexture(SUBTAB_TEX)
+    hlLeft:SetWidth(edgeW)
+    hlLeft:SetHeight(h)
+    hlLeft:SetPoint("TOPLEFT", tab, "TOPLEFT", -3, 0)
+    hlLeft:SetTexCoord(0.015625, 0.5625, 0.957031, 0.816406)  -- v 翻转
+    hlLeft:SetBlendMode("ADD")
+    hlLeft:SetAlpha(0.4)
+
+    local hlRight = tab:CreateTexture(nil, "HIGHLIGHT")
+    hlRight:SetTexture(SUBTAB_TEX)
+    hlRight:SetWidth(edgeW)
+    hlRight:SetHeight(h)
+    hlRight:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 5, 0)
+    hlRight:SetTexCoord(0.015625, 0.59375, 0.808594, 0.667969)  -- v 翻转
+    hlRight:SetBlendMode("ADD")
+    hlRight:SetAlpha(0.4)
+
+    local hlMiddle = tab:CreateTexture(nil, "HIGHLIGHT")
+    hlMiddle:SetTexture(SUBTAB_TEX)
+    hlMiddle:SetHeight(h)
+    hlMiddle:SetPoint("TOPLEFT", hlLeft, "TOPRIGHT", 0, 0)
+    hlMiddle:SetPoint("TOPRIGHT", hlRight, "TOPLEFT", 0, 0)
+    hlMiddle:SetTexCoord(0, 0.015625, 0.316406, 0.175781)  -- v 翻转
+    hlMiddle:SetBlendMode("ADD")
+    hlMiddle:SetAlpha(0.4)
+
+    function tab:SetSelected(selected)
+        if self._dfSelState == selected then return end
+        self._dfSelState = selected
+        if selected then
+            left:Hide(); right:Hide(); middle:Hide()
+            leftSel:Show(); rightSel:Show(); middleSel:Show()
+            hlLeft:SetHeight(selH); hlRight:SetHeight(selH); hlMiddle:SetHeight(selH)
+            if self._label then self._label:SetTextColor(1, 1, 1) end
+        else
+            left:Show(); right:Show(); middle:Show()
+            leftSel:Hide(); rightSel:Hide(); middleSel:Hide()
+            hlLeft:SetHeight(h); hlRight:SetHeight(h); hlMiddle:SetHeight(h)
+            if self._label then self._label:SetTextColor(1, 0.82, 0) end
+        end
+    end
+
+    -- 运行时宽度变化（如 PanelTemplates_TabResize 按文字重排宽）后重算左右块宽
+    function tab:RefreshSubTabWidth()
+        local cur = self:GetWidth()
+        if not cur or cur == 0 or cur == self._dfSubTabW then return end
+        self._dfSubTabW = cur
+        local e = cur / 2
+        left:SetWidth(e); right:SetWidth(e)
+        leftSel:SetWidth(e); rightSel:SetWidth(e)
+        hlLeft:SetWidth(e); hlRight:SetWidth(e)
+    end
+
+    return tab
+end
+
+function DFUI.CreateSubTab(parent, text, tabWidth)
+    tabWidth = tabWidth or 55
+    local tab = CreateFrame("Button", nil, parent)
+    tab:SetWidth(tabWidth)
+    tab:SetHeight(24)
+
+    local label = tab:CreateFontString(nil, "BORDER", "GameFontNormalSmall")
+    label:SetPoint("CENTER", tab, "CENTER", 0, -2)
+    label:SetText(text)
+    tab._label = label
+
+    return DFUI.ApplySubTabSkin(tab, tabWidth)
+end
