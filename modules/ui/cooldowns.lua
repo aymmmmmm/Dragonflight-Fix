@@ -62,8 +62,12 @@ DFUI:NewMod("Cooldowns", 5, function()
             end
         end
 
+        -- 实时读当前档案配置（闭包 setup 在切换档案后指向旧表）
+        local db = DFUI.tempDB.Cooldowns or setup
+        local minDur = db.minDuration or 1.5
         local remaining = this.duration - (GetTime() - this.start)
-        if remaining >= 0 then
+        -- 剩余时间低于最小显示时长即隐藏数字
+        if remaining >= minDur then
             local font = this.text:GetFont()
             if not font then
                 this.text:SetFont('Fonts\\FRIZQT__.TTF', 14, 'OUTLINE')
@@ -105,13 +109,16 @@ DFUI:NewMod("Cooldowns", 5, function()
             cooldownFrame:SetPoint('BOTTOMRIGHT', parent, 'BOTTOMRIGHT', 1, -1)
         end
 
-        if not setup.showText then
+        -- 实时读当前档案配置（闭包 setup 在切换档案后指向旧表）
+        local db = DFUI.tempDB.Cooldowns or setup
+        if not db.showText then
             if cooldownFrame.cdText then cooldownFrame.cdText:Hide() end
             return
         end
 
-        local minDur = setup.minDuration or 1.5
-        if start == 0 or duration == 0 or duration < minDur then
+        -- 总时长 ≤1.5 秒的冷却（GCD）从不显示数字，滑条只管"剩余多少秒后藏"
+        local minDur = db.minDuration or 1.5
+        if start == 0 or duration == 0 or duration <= 1.5 or duration < minDur then
             if cooldownFrame.cdText then cooldownFrame.cdText:Hide() end
             return
         end

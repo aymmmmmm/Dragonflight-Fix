@@ -1065,7 +1065,12 @@ DFUI:NewMod("Auras", 2, function()
         btn.timer:SetJustifyH("CENTER")
         btn.timer:Hide()
         if isDebuff then
-            btn.count = btn:CreateFontString(nil, "OVERLAY")
+            -- 层数放在高于 cooldown Model 的子帧上：1.12 同帧同层 FontString
+            -- 绘制顺序无保证，跨 frame 按 frameLevel 排序才可靠，保证层数永远压在倒计时/转圈之上
+            local countFrame = CreateFrame("Frame", nil, btn)
+            countFrame:SetAllPoints(btn)
+            countFrame:SetFrameLevel(btn:GetFrameLevel() + 2)
+            btn.count = countFrame:CreateFontString(nil, "OVERLAY")
             btn.count:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
             btn.count:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
             btn.count:Hide()
