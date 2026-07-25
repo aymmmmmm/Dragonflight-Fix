@@ -58,6 +58,13 @@ local function CreateInsetBackdrop(frame, bgAlpha)
     R:SetPoint("TOPRIGHT", cTR, "BOTTOMRIGHT", 0, 0)
     R:SetPoint("BOTTOMRIGHT", cBR, "TOPRIGHT", 0, 0)
     R:SetWidth(EW)
+    -- 导出 {texture, 文件路径, UV表} 供 /dftexfix heal 重设（TGA 偶发缺图止血）
+    frame.dfBorderTex = {
+        {cTL, UIFRAME_CORNER_TEX, UI_TC_CTL}, {cTR, UIFRAME_CORNER_TEX, UI_TC_CTR},
+        {cBL, UIFRAME_CORNER_TEX, UI_TC_CBL}, {cBR, UIFRAME_CORNER_TEX, UI_TC_CBR},
+        {T, UIFRAME_H_TEX, UI_TC_T}, {B, UIFRAME_H_TEX, UI_TC_B},
+        {L, UIFRAME_V_TEX, UI_TC_L}, {R, UIFRAME_V_TEX, UI_TC_R},
+    }
 end
 
 DFUI:NewMod("Social", 5, function()
@@ -245,10 +252,28 @@ DFUI:NewMod("Social", 5, function()
     -- bgAlpha=0.85：与查找框搜索框同款黑底，BACKGROUND 层不挡 vanilla 文字（OVERLAY/ARTWORK）
     if GuildFrameNotesText then
         -- 仅画边框线条无黑底（bgAlpha=0），左右外扩 5px、上边框上移 18px；零调用 EditBox 任何方法
-        local guildMotdBg = CreateFrame("Frame", nil, GuildFrame)
+        local guildMotdBg = CreateFrame("Frame", "DFUI_GuildMotdBg", GuildFrame)
         guildMotdBg:SetPoint("TOPLEFT",     GuildFrameNotesText, "TOPLEFT",     -5, 18)
         guildMotdBg:SetPoint("BOTTOMRIGHT", GuildFrameNotesText, "BOTTOMRIGHT",  5,  0)
         CreateInsetBackdrop(guildMotdBg, 0)
+
+        -- MOTD 文字防随机遮盖：GuildFrame 与 customBg 同级(FriendsFrame+1) tie，
+        -- 1.12 同级跨 frame 绘制顺序随 Show/Hide 重排不稳 → customBg 岩石底偶发盖住文字。
+        -- FontString → SetParent 到 guildInset(customBg+1，恒高于 customBg)；锚点自动保留，
+        -- guildMotdBg 锚文字、文字锚 vanilla 原目标，无锚点环；guildInset followFrame=GuildFrame，
+        -- 显隐与原父等价。非 region（Turtle 魔改兜底）→ 提 FrameLevel
+        local function liftMotd(obj)
+            if not obj then return end
+            if obj.GetObjectType and obj:GetObjectType() == "FontString" then
+                obj:SetParent(guildInset)
+                -- 入 inset 后稳压其 BACKGROUND 大理石/ARTWORK 描线（FontString SetDrawLayer 有 Reforged ui.lua:181 先例）
+                if obj.SetDrawLayer then obj:SetDrawLayer("OVERLAY") end
+            elseif obj.SetFrameLevel then
+                obj:SetFrameLevel(customBg:GetFrameLevel() + 2)
+            end
+        end
+        liftMotd(GuildFrameNotesText)
+        liftMotd(GuildFrameNotesLabel)   -- "今日公会信息"标签本体，一并提升
     end
 
     -- Guild 列表 vanilla button 由下方 DFUI_GuildRow 系统接管（参考 FriendRow 模式）
@@ -259,6 +284,18 @@ DFUI:NewMod("Social", 5, function()
         anchors     = {3, -58, -6, 6},
         followFrame = RaidFrame,
     })
+
+    -- Tab 切换显隐兜底：显式 Show 本页 inset / Hide 其余，不纯依赖 vanilla OnShow/OnHide hook 链
+    -- （hook 前段报错或被其他插件覆盖时 inset 会滞留错误状态）。幂等、仅点 tab 时执行
+    local socialInsets = {friendsInset, whoInset, guildInset, raidInset}
+    local function showOnlyInset(active)
+        for i = 1, 4 do
+            local ins = socialInsets[i]
+            if ins then
+                if ins == active then ins:Show() else ins:Hide() end
+            end
+        end
+    end
 
     -- 好友 Tab 内"好友列表 / 屏蔽列表"子切换按钮
     -- vanilla 1.12 共 4 个 ToggleTab，分别在好友/屏蔽两个 ScrollFrame 上方：
@@ -702,6 +739,7 @@ DFUI:NewMod("Social", 5, function()
         FriendsFrame_ShowSubFrame("FriendsListFrame")
         PanelTemplates_SetTab(FriendsFrame, 1)
         FriendsFrame_Update()
+        showOnlyInset(friendsInset)
         -- 覆盖"重复点同一 Tab，inset 已 Show 不再触发 OnShow"路径
         if deferFit then deferFit() end
     end, 70)
@@ -712,6 +750,7 @@ DFUI:NewMod("Social", 5, function()
         FriendsFrame_ShowSubFrame("WhoFrame")
         PanelTemplates_SetTab(FriendsFrame, 2)
         FriendsFrame_Update()
+        showOnlyInset(whoInset)
         if deferFit then deferFit() end
     end, 60)
 
@@ -721,6 +760,7 @@ DFUI:NewMod("Social", 5, function()
         FriendsFrame_ShowSubFrame("GuildFrame")
         PanelTemplates_SetTab(FriendsFrame, 3)
         FriendsFrame_Update()
+        showOnlyInset(guildInset)
         if deferFit then deferFit() end
     end, 60)
 
@@ -2177,6 +2217,7 @@ DFUI:NewMod("Social", 5, function()
         FriendsFrame_ShowSubFrame("RaidFrame")
         PanelTemplates_SetTab(FriendsFrame, 4)
         FriendsFrame_Update()
+        showOnlyInset(raidInset)
     end, 60)
 
     local originalToggleFriendsFrame = _G.ToggleFriendsFrame

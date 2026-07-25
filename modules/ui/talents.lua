@@ -528,14 +528,19 @@ DFUI:NewMod("Talents", 1, function()
 
             -- 凹槽背景插画：每职业天赋一张整图(retail 4块合成,内容320×384→POT512²,无黑底)
             -- 单张 BLEND 铺满 inset 内部,稳定不闪(取代旧 4 块 ADD 拼接的时有时无)
+            -- 注意：SetTexture 错帧拆分对偶发缺图无效(512²时代实测,解码发生在首次渲染刻)，
+            -- 缺图止血走 /dftexfix heal / auto（重设纹理=重掷解码骰子）
             local _, _, _, fileName = GetTalentTabInfo(i)
+            local illustPath = 'Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\talents\\illust_' .. (fileName or 'warriorarms')
             local illust = inset:CreateTexture(nil, 'BACKGROUND')
             illust:SetDrawLayer('BACKGROUND', 2)
-            illust:SetTexture('Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\talents\\illust_' .. (fileName or 'warriorarms'))
+            illust:SetTexture(illustPath)
             illust:SetTexCoord(0, 1, 0, 1)  -- 整图已预裁为显示内容区(从512²原图裁x38~282/y0~384铺满256²,_tools/tga_crop_resize.js)，全采=更高有效分辨率不糊；框体高瘦比例由 inset 拉回
             illust:SetAllPoints(inset)   -- 跟随 inset 真实尺寸(实测249×391,硬编码必错);SetTexCoord 仅裁采样不影响铺满
             illust:SetAlpha(0.9)
             treeFrames[i].illust = illust
+            inset.illust = illust        -- 导出：inset 有全局名 DFUI_TalentInsetN，/dftexfix 由此可达
+            inset.illustPath = illustPath
 
             branchArrays[i] = {}
             branchTextures[i] = {}
@@ -1043,6 +1048,18 @@ DFUI:NewMod("Talents", 1, function()
             frame:Hide()
         else
             frame:Show()
+            -- 受控自愈：默认关闭；/dftexfix heal 实验证实"重设可救活缺图"后由 /dftexfix auto 1|2 启用
+            -- 每次开面板至多 3 次 SetTexture（非每帧）；auto 1=仅 GetTexture 为 nil 时，auto 2=强制
+            local healMode = DFUI_CUR_PROFILE and DFUI_CUR_PROFILE['TexFixAutoHeal']
+            if healMode then
+                for i = 1, 3 do
+                    local t = treeFrames[i] and treeFrames[i].illust
+                    local p = treeFrames[i] and treeFrames[i].inset and treeFrames[i].inset.illustPath
+                    if t and p and (healMode == 2 or not t:GetTexture()) then
+                        t:SetTexture(nil); t:SetTexture(p); t:SetTexCoord(0, 1, 0, 1)
+                    end
+                end
+            end
             Update()
         end
     end
