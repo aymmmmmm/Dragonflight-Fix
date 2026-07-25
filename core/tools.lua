@@ -446,7 +446,7 @@ end
 --       followFrame = ReputationFrame,   -- 可选，跟随其 OnShow/OnHide 显示
 --       -- 以下均可选（有默认值）
 --       name        = "DFUI_XXX_Inset",
---       bg          = "interface\\ui-background-marble.tga",  -- TEX 内相对路径
+--       bg          = "interface\\ui-background-marble.blp",  -- TEX 内相对路径
 --       edgeTop     = 5, edgeBot = 3, edgeLeft = 2, edgeRight = 2,
 --       cornerSize  = 5,
 --       levelOffset = 1,
@@ -473,13 +473,13 @@ function DFUI.CreateRetailInset(parent, opts)
 
     -- 背景大理石底
     local bg = inset:CreateTexture(nil, "BACKGROUND")
-    bg:SetTexture(RIT_TEX .. (opts.bg or "interface\\ui-background-marble.tga"))
+    bg:SetTexture(RIT_TEX .. (opts.bg or "interface\\ui-background-marble.blp"))
     bg:SetAllPoints(inset)
     inset.bg = bg
 
     -- 4 边纹理（来自 tradeskill 已验证 TGA）
-    local TEX_H = RIT_TEX .. "panels\\df\\professions\\uiframe_h.tga"
-    local TEX_V = RIT_TEX .. "panels\\df\\professions\\uiframe_v.tga"
+    local TEX_H = RIT_TEX .. "panels\\df\\professions\\uiframe_h.blp"
+    local TEX_V = RIT_TEX .. "panels\\df\\professions\\uiframe_v.blp"
 
     local top = inset:CreateTexture(nil, "ARTWORK")
     top:SetTexture(TEX_H)
@@ -533,7 +533,7 @@ function DFUI.CreateRetailInset(parent, opts)
     end
 
     -- 4 角（generalframeinsetborders atlas）
-    local TEX_CORNER = RIT_TEX .. "interface\\generalframeinsetborders.tga"
+    local TEX_CORNER = RIT_TEX .. "interface\\generalframeinsetborders.blp"
     local function makeCorner(point, l, r, t, b)
         local c = inset:CreateTexture(nil, "OVERLAY")
         c:SetTexture(TEX_CORNER)

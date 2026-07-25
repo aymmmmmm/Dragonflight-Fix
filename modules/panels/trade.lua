@@ -97,10 +97,10 @@ DFUI:NewMod("Trade", 5, function()
     --     边框(BORDER)只在外扩 pad 的四周，不覆盖中心图标 → 不挡金银铜。
     --     对方没钱时 SmallMoneyFrame 自隐，右侧凹框随之消失（vanilla 行为，暂不占位）。
     ---------------------------------------------------------------------------
-    local MARBLE_TEX = TEX .. "interface\\ui-background-marble.tga"
-    local UIH_TEX    = TEX .. "panels\\df\\professions\\uiframe_h.tga"
-    local UIV_TEX    = TEX .. "panels\\df\\professions\\uiframe_v.tga"
-    local CORNER_TEX = TEX .. "interface\\generalframeinsetborders.tga"
+    local MARBLE_TEX = TEX .. "interface\\ui-background-marble.blp"
+    local UIH_TEX    = TEX .. "panels\\df\\professions\\uiframe_h.blp"
+    local UIV_TEX    = TEX .. "panels\\df\\professions\\uiframe_v.blp"
+    local CORNER_TEX = TEX .. "interface\\generalframeinsetborders.blp"
     -- ★列横向对齐基准 pad：货币凹框 + 物品凹框 + 附魔凹框三者共用同一基准，
     --   marble 横向锚 item1（容器 153=整行宽，左右= item1.left+COL_PAD_L .. item1.right+COL_PAD_R），
     --   因 item1.right=item6.right=item7.right（同列同宽）→ 三个凹框左右边严格对齐成一竖列（对齐根因修复）。

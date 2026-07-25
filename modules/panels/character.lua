@@ -288,9 +288,9 @@ DFUI:NewMod("Character", 5, function()
                     -- DF 真素材皮肤（纯装饰）：pcall 隔离 —— 万一报错也绝不连累 ArenaFrame 显示/子 Tab 点击
                     local ok, err = pcall(function()
                         if team.SetBackdrop then team:SetBackdrop(nil) end
-                        local MARBLE = TEX .. "interface\\ui-background-marble.tga"
-                        local UF_H   = TEX .. "panels\\df\\professions\\uiframe_h.tga"
-                        local UF_V   = TEX .. "panels\\df\\professions\\uiframe_v.tga"
+                        local MARBLE = TEX .. "interface\\ui-background-marble.blp"
+                        local UF_H   = TEX .. "panels\\df\\professions\\uiframe_h.blp"
+                        local UF_V   = TEX .. "panels\\df\\professions\\uiframe_v.blp"
                         local abg = team:CreateTexture(nil, "BACKGROUND")
                         abg:SetTexture(MARBLE); abg:SetAllPoints(team); abg:SetVertexColor(0.72, 0.72, 0.72)
                         local atop = team:CreateTexture(nil, "BORDER")

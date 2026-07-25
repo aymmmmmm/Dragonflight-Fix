@@ -6,9 +6,9 @@ DFUI:NewDefaults("Social", {
 
 -- DF Retail InsetFrame nineslice（复制自 tradeskill.lua:146-211，保持单文件零跨依赖）
 local SOCIAL_PROF_TEX     = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\panels\\df\\professions\\"
-local UIFRAME_CORNER_TEX  = SOCIAL_PROF_TEX .. "uiframe_corner.tga"
-local UIFRAME_V_TEX       = SOCIAL_PROF_TEX .. "uiframe_v.tga"
-local UIFRAME_H_TEX       = SOCIAL_PROF_TEX .. "uiframe_h.tga"
+local UIFRAME_CORNER_TEX  = SOCIAL_PROF_TEX .. "uiframe_corner.blp"
+local UIFRAME_V_TEX       = SOCIAL_PROF_TEX .. "uiframe_v.blp"
+local UIFRAME_H_TEX       = SOCIAL_PROF_TEX .. "uiframe_h.blp"
 local UI_TC_CTL = {97/128, 103/128, 71/128, 77/128}
 local UI_TC_CTR = {105/128, 111/128, 71/128, 77/128}
 local UI_TC_CBL = {81/128, 87/128, 71/128, 77/128}

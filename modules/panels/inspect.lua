@@ -70,9 +70,9 @@ DFUI:NewMod("Inspect", 5, function()
                 team._dfSkinned = true
                 local ok, err = pcall(function()
                     if team.SetBackdrop then team:SetBackdrop(nil) end
-                    local MARBLE = TEX .. "interface\\ui-background-marble.tga"
-                    local UF_H   = TEX .. "panels\\df\\professions\\uiframe_h.tga"
-                    local UF_V   = TEX .. "panels\\df\\professions\\uiframe_v.tga"
+                    local MARBLE = TEX .. "interface\\ui-background-marble.blp"
+                    local UF_H   = TEX .. "panels\\df\\professions\\uiframe_h.blp"
+                    local UF_V   = TEX .. "panels\\df\\professions\\uiframe_v.blp"
                     local abg = team:CreateTexture(nil, "BACKGROUND")
                     abg:SetTexture(MARBLE); abg:SetAllPoints(team); abg:SetVertexColor(0.72, 0.72, 0.72)
                     local atop = team:CreateTexture(nil, "BORDER")

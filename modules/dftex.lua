@@ -277,9 +277,9 @@ end
 -- heal 能否救活 = 二期 TGA→BLP2 ARGB 转换的决策实验
 -- ============================================================
 local TFX_TEX = "Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\"
-local TFX_H   = TFX_TEX .. "panels\\df\\professions\\uiframe_h.tga"
-local TFX_V   = TFX_TEX .. "panels\\df\\professions\\uiframe_v.tga"
-local TFX_C   = TFX_TEX .. "interface\\generalframeinsetborders.tga"
+local TFX_H   = TFX_TEX .. "panels\\df\\professions\\uiframe_h.blp"
+local TFX_V   = TFX_TEX .. "panels\\df\\professions\\uiframe_v.blp"
+local TFX_C   = TFX_TEX .. "interface\\generalframeinsetborders.blp"
 -- UV 与 core/tools.lua CreateRetailInset(486-508 边/547-550 角)一致；那边改这边必须同步
 local TFX_EDGE = {
     {"top",   TFX_H, 0, 1, 0.9063, 0.9297},
