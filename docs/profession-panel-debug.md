@@ -199,6 +199,58 @@ WoW 1.12 Lua 5.0 的 for-in 循环变量在 SetScript 闭包中捕获不可靠�
 
 > 详细根因/演进见项目记忆 `project_tradeskill_scroll_perf`（三轮修复，第三轮已用户实测确认有效）。
 
+### 1.22 两个专业 Tab 同时高亮 (已修复 2026-07-26)
+
+现象：打开面板后底部两个 tab 同时是选中态（如"急救"+"炼金术"），且整局不消失。
+
+**根因（两个 bug 叠加）**：
+1. `paperdoll.lua` 的 `AddTab` 工厂末尾无条件"自动选中第一个 tab"（`numTabs == 0` → `SetSelected(true)` + `frame.selectedTab = tab`）。`CreateProfessionTabs` 首建时 tab 池为空，全部走新建分支 → 第 1 个专业 tab 被工厂选中。
+2. `CreateProfessionTabs` 随后对匹配当前专业的 tab 再 `SetSelected(true)`，但只覆盖 `panel.selectedTab` 引用、**没有反选**第 1 个 tab。而全代码的反选都只针对 `panel.selectedTab` 这一个引用 → 第 1 个 tab 变成"孤儿选中"，再没人关得掉。
+
+**修复**：新增 `SelectTabExclusive(tab)`（遍历 `panel.Tabs` 全量 `SetSelected(t == tab)`，传 nil = 全灭，范式同 `spellbook.lua` 的 `SelectRightTab`），替换全部三处"单引用反选"：`AcquireTab` 的 OnClick、`CreateProfessionTabs` 首建高亮（改为循环结束后统一选中）、`OpenProfession` 的 pendingTab / 名字匹配两个分支（后者补 `break`）。同时 `AcquireTab` 把 OnClick 绑定与 `SetSelected(false)` 复位移出 if/else，两条路径（新建 / 池复用）统一执行 —— 当场抵消工厂的自动选中。
+
+**要点**：`AddTab` 的"自动选中第一个"被 character/inspect/mail/macro/merchant/social 六个面板依赖（都默认停第 1 页），**不能改工厂**，只能在调用方做互斥。选中态没有可查询接口（`tab:SetSelected` 无状态缓存），只靠一个 `selectedTab` 引用记录 → 引用一被覆盖旧 tab 就失联，这类 tab 系统一律用"全量互斥"而非"反选上一个"。
+
+### 1.23 新学专业需 /reload 才出现 (已修复 2026-07-26)
+
+现象：第一次学会"生存"（或任意新专业）后 tab 里没有它，必须 `/reload`。
+
+**根因（两道锁，一个会话只扫描/构建一次）**：
+- 锁 A `profScanned`：`ScanSpellbookForProfessions` 只要扫到 ≥1 个专业就永久置位，此后再不重扫法术书。
+- 锁 B `if table.getn(panel.Tabs) == 0 then CreateProfessionTabs() end`：`panel.Tabs` 只有 `ReleaseAllTabs()` 清空，而它只被 `CreateProfessionTabs` 自己调用 → 首建后该分支恒假，成死代码。
+- 事件层无兜底：只注册了 TRADE_SKILL_*/CRAFT_*，没有 `LEARNED_SPELL_IN_TAB`/`SKILL_LINES_CHANGED`。
+
+**同源连带症状**（一并修好）：
+- 生存的 craft 误报兜底（`GetCraftName()` 乱报时回退查 `knownProfessions` 里的"生存"）依赖该表已有生存条目 → 刚学会时即使从法术书施法打开，`activeProfName` 也会退化成误报的 apiName，背景图与收藏 key 全错。
+- tab 的 `CastSpell(captured.spellIndex, ...)` 闭包捕获的是建 tab 那一刻的法术书索引；学任何新法术都会让后续索引整体位移 → 点旧 tab 施错法术。
+
+**修复**：新增 `RefreshProfessionTabs()` —— 重扫法术书，用 `ProfListKey()`（专业名拼串）对比集合：没变只就地刷新各 tab 的 `spellIndex`（保住 tab 引用），变了才 `CreateProfessionTabs()` 重建。`OpenProfession` 里替换掉 `profScanned` 门控与死代码分支（调用点必须**早于**专业身份判定，craft 误报兜底要读新鲜的 `knownProfessions`）。tab 改为携带 `tab.spellIndex` 字段、OnClick 读字段而非闭包捕获值。额外注册 `LEARNED_SPELL_IN_TAB`/`SKILL_LINES_CHANGED`，面板开着时当场刷新。
+
+**要点**：
+- `ReleaseAllTabs()` 会把 `pendingTab`/`activeTab`/`panel.selectedTab` 三个引用清 nil，而 `OpenProfession` 后面要用 `pendingTab` 定高亮 —— 重建前必须**先存名字（profName）、重建后按名字找回**（`FindTabByProfName`），否则点 tab 打开专业时高亮与"防重复点击关闭"逻辑一起失效。
+- 去掉 `profScanned` 后要补显式守卫：扫描结果为空但之前有值（法术书数据没就绪，`GetSpellTabInfo(1)` 返回 nil）时保留旧表直接返回，否则会把已建好的 tab 全洗掉 —— 这是原门控顺带提供的保护。
+- 顺带补 `CRAFT_CAPABLE` 缺失的珠宝加工/Jewelcrafting：`PROFESSION_SPELLS` 早已含珠宝但信任表没同步，珠宝若走 Craft API 会被判成"误报"→ 兜底强行认成生存。
+
+### 1.24 §1.10 闭包捕获坑复发 —— tab 点击全部串到同一个专业 (已修复 2026-07-26)
+
+现象：修完 §1.22/§1.23 后出现回归 —— 打开面板恒定高亮同一个 tab（用户只有两个主专业时表现为"默认第二个专业选中"），且**点任何 tab 打开的都是同一个专业**（内容也错，不只是高亮）。
+
+**根因**：§1.23 为了让 `spellIndex` 可被 `RefreshProfessionTabs` 就地刷新，把点击回调里的
+`CastSpell(captured.spellIndex, ...)` 改成了 `CastSpell(tab.spellIndex, ...)`。
+`captured` 是 `local captured = prof` —— **闭包创建前已赋值**；
+`tab` 是 `local tab` → `tab = AcquireTab(..., function() ... tab ... end, ...)` —— **闭包在参数位构造时 `tab` 还是 nil，赋值发生在 AcquireTab 返回之后**。这正是 §1.10 记录的"for 循环体内 local 在 SetScript 闭包中捕获不可靠"最容易翻车的形态：捕获一串，所有 tab 的回调都指向同一个 frame → 施同一个专业的法术 + 高亮同一个 tab。
+
+**修复**：按 §1.10 的既有解法，点击路径彻底不依赖闭包捕获：
+- `AcquireTab` 的 OnClick 脚本内一律用 `this`：`SelectTabExclusive(this)`；
+- 业务回调挂到 tab 字段 `tab.dfOnClick = onClick`，脚本里 `this.dfOnClick(this)` 带参调用；
+- `CreateProfessionTabs` 的回调签名改为 `function(self)`，内部 `activeTab == self` / `pendingTab = self` / `CastSpell(self.spellIndex, ...)` 全走参数。
+
+这样既保留了"索引存字段、可运行时刷新"的能力，又不引入任何循环内 local 的捕获。
+
+**要点（第二次踩，写死）**：本文件的 SetScript 回调**一律走 `this`**。判断标准不是"是不是 for 循环变量"，而是"回调里引用的变量是不是外层循环体作用域的 local" —— 尤其是**闭包先构造、变量后赋值**这种写法（`local x; x = f(function() ... x ... end)`），风险最高。需要按 tab/按钮区分身份时，把数据挂成 frame 字段（`tab.profName` / `tab.spellIndex`），回调用 `this.字段` 取。
+
+**顺带修**：tab 池复用时原来只 `tab.Text:SetText(text)`，不重算宽度 —— 旧代码 tab 永不重建碰不到，§1.23 让 tab 会重建后就暴露（学新专业后 tab 宽度停留在上一个标签）。给 `paperdoll.lua` 的 `AddTab` 加了纯增量方法 `tab:SetLabel(newText)`（改文字 + 重算 tab 宽度 + 同步 left/right/leftSel/rightSel/hlLeft/hlRight 六个边缘纹理宽度，否则拼不拢露缝），`AcquireTab` 复用路径改调它。工厂既有行为未变。
+
 ## 三、设计决策总结
 
 ### 原生面板处理: SetAlpha(0) 方案

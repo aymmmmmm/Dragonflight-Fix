@@ -293,6 +293,21 @@ function DFUI.CreatePaperDollFrame(name, parent, width, height, frameStyle)
         hlLeft:SetWidth(edgeWidth)
         hlRight:SetWidth(edgeWidth)
 
+        -- 改文字并重算宽度（tab 池复用场景：只 Text:SetText 会留着上一个标签的宽度）。
+        -- 六个边缘纹理宽度必须同步，否则 left/right 拼不拢露缝。
+        function tab:SetLabel(newText)
+            label:SetText(newText)
+            local w = label:GetStringWidth() + 50
+            tab:SetWidth(w)
+            local ew = w / 2
+            left:SetWidth(ew)
+            right:SetWidth(ew)
+            leftSel:SetWidth(ew)
+            rightSel:SetWidth(ew)
+            hlLeft:SetWidth(ew)
+            hlRight:SetWidth(ew)
+        end
+
         function tab:SetSelected(selected)
             if selected then
                 left:Hide()

@@ -278,6 +278,9 @@ DFUI:NewMod("TradeSkill", 5, function()
         ["附魔"]=true, ["Enchanting"]=true,
         ["训练野兽"]=true, ["宠物训练"]=true, ["Beast Training"]=true, ["Pet Training"]=true,
         ["生存"]=true, ["Survival"]=true,
+        -- 珠宝若走 Craft API，GetCraftName() 报的是真名，必须在白名单里，
+        -- 否则被判成"误报"→ 兜底强行认成生存（背景图/收藏 key 全错）
+        ["珠宝加工"]=true, ["珠宝"]=true, ["Jewelcrafting"]=true,
     }
 
     -- 法术名 → 显示名（Tab / 标题显示用，仅宠物训练需要）
@@ -1735,29 +1738,55 @@ DFUI:NewMod("TradeSkill", 5, function()
         activeTab = nil
     end
 
+    -- 排他选中：遍历全量 tab，只有目标亮（传 nil = 全灭）。
+    -- 绝不能只反选 panel.selectedTab —— AddTab 工厂会自动选中第 1 个 tab
+    -- (paperdoll.lua "自动选中第一个")，那个高亮不在 selectedTab 引用里，
+    -- 单引用反选关不掉 → 两个 tab 同时高亮且整局残留。同 spellbook.lua SelectRightTab 范式。
+    local function SelectTabExclusive(tab)
+        for _, t in ipairs(panel.Tabs) do
+            t:SetSelected(t == tab)
+        end
+        panel.selectedTab = tab
+    end
+
+    local function FindTabByProfName(name)
+        if not name then return nil end
+        for _, t in ipairs(panel.Tabs) do
+            if t.profName == name then return t end
+        end
+        return nil
+    end
+
     local function AcquireTab(text, onClick, tabWidth, spacing)
         tabPoolSize = tabPoolSize + 1
         local tab = tabPool[tabPoolSize]
         if tab then
-            tab.Text:SetText(text)
-            tab:SetScript("OnClick", function()
-                PlaySound("igCharacterInfoTab")
-                if panel.selectedTab then panel.selectedTab:SetSelected(false) end
-                tab:SetSelected(true)
-                panel.selectedTab = tab
-                if onClick then onClick() end
-            end)
+            -- SetLabel 会连带重算 tab 宽度与六个边缘纹理宽度；裸 SetText 会留着上一个标签的宽度
+            if tab.SetLabel then tab:SetLabel(text) else tab.Text:SetText(text) end
             tab:ClearAllPoints()
             local n = table.getn(panel.Tabs)
             if n == 0 then tab:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 8, -30)
             else tab:SetPoint("BOTTOMLEFT", panel.Tabs[n], "BOTTOMRIGHT", spacing or 4, 0) end
-            tab:SetSelected(false)
             tab:Show()
             table.insert(panel.Tabs, tab)
         else
-            tab = panel:AddTab(text, onClick, tabWidth, spacing)
+            -- onClick 传 nil：工厂的 OnClick 随后被本函数统一覆盖，两条路径行为一致
+            tab = panel:AddTab(text, nil, tabWidth, spacing)
             tabPool[tabPoolSize] = tab
         end
+        -- 两条路径统一绑点击 + 复位选中态（后者同时抵消工厂对第 1 个 tab 的自动选中）
+        -- OnClick 内一律走 this（1.12 脚本处理器的当前 frame），绝不捕获调用方 for 循环体内的
+        -- tab 局部变量 —— Lua 5.0 下那种捕获不可靠（见 docs/profession-panel-debug.md §1.10），
+        -- 一旦串了，所有 tab 都会施同一个专业的法术 + 高亮同一个 tab。
+        -- 业务回调挂在 tab 字段上按 this 取，同理避开捕获。
+        tab.dfOnClick = onClick
+        tab:SetScript("OnClick", function()
+            PlaySound("igCharacterInfoTab")
+            SelectTabExclusive(this)
+            if this.dfOnClick then this.dfOnClick(this) end
+        end)
+        tab:SetSelected(false)
+        if panel.selectedTab == tab then panel.selectedTab = nil end
         return tab
     end
 
@@ -1796,37 +1825,81 @@ DFUI:NewMod("TradeSkill", 5, function()
         end
     end
 
-    -- 延迟到法术书数据就绪后扫描（初始化时 GetNumSpellTabs 为 0）
-    local profScanned = false
-
     local function CreateProfessionTabs()
         ReleaseAllTabs()
         local currentName
         if currentMode == "tradeskill" then currentName = GetTradeSkillLine()
         elseif currentMode == "craft" then currentName = GetCraftName and GetCraftName() or nil end
 
+        local matched
         for i, prof in ipairs(knownProfessions) do
             local captured = prof
             local displayName = PROF_DISPLAY_NAME[prof.name] or prof.name
             local tab
-            tab = AcquireTab(displayName, function()
+            -- self = AcquireTab 传进来的 this（被点的那个 tab）。绝不引用外层循环的 tab 局部变量：
+            -- Lua 5.0 闭包捕获循环体 local 不可靠（§1.10），串了会所有 tab 点出同一个专业
+            tab = AcquireTab(displayName, function(self)
                 -- 防重复：点已激活的 tab 不再施法（对已开专业再施法 = toggle 关闭面板）
                 -- 用 tab 引用判断，不靠 GetCraftName 字符串（生存等自定义专业 API 名会乱报成"烹饪"）
-                if activeTab == tab then return end
-                activeTab = tab    -- 立即标记（不等 CRAFT_SHOW 回调），防快速双击在事件回调前再次施法→关闭
-                pendingTab = tab
-                CastSpell(captured.spellIndex, BOOKTYPE_SPELL)
+                if activeTab == self then return end
+                activeTab = self   -- 立即标记（不等 CRAFT_SHOW 回调），防快速双击在事件回调前再次施法→关闭
+                pendingTab = self
+                -- 读 self.spellIndex 字段而非建 tab 时的值：学新法术会让法术书索引整体位移，
+                -- RefreshProfessionTabs 会就地刷新该字段，避免点 tab 施错法术
+                if self.spellIndex then CastSpell(self.spellIndex, BOOKTYPE_SPELL) end
             end, nil, (i == 1 and 2 or 4))
             -- 携带法术书里的真实法术名（tab 池复用，必须每次重设）：
             -- OpenProfession 用它定专业身份，不依赖会乱报的 GetCraftName()
             tab.profName = captured.name
+            tab.spellIndex = captured.spellIndex
             -- 首建时按当前专业名高亮（外部施法打开的回退；点 tab 打开由 OpenProfession 用 pendingTab 处理）
             if currentName and prof.name == currentName then
-                tab:SetSelected(true)
-                panel.selectedTab = tab
+                matched = tab
                 activeTab = tab
             end
         end
+        -- 建完再统一排他选中（matched 可为 nil = 全灭）：
+        -- 循环里逐个 SetSelected(true) 会与工厂自动选中的第 1 个 tab 叠加成双高亮
+        SelectTabExclusive(matched)
+    end
+
+    local function ProfListKey()
+        local parts = {}
+        for _, p in ipairs(knownProfessions) do table.insert(parts, p.name) end
+        return table.concat(parts, "|")
+    end
+
+    -- 重扫法术书。专业集合没变 → 只同步位移的 spellIndex（不重建，保住 tab 引用）；
+    -- 变了（学会新专业/遗忘）→ 重建 tab，并按"名字"还原 pending/active/选中
+    -- （ReleaseAllTabs 会把这三个引用清 nil，必须先存名字再找回）
+    local function RefreshProfessionTabs()
+        local oldKey = ProfListKey()
+        local prev = knownProfessions
+        ScanSpellbookForProfessions()   -- 内部整表重建，prev 仍持有旧表
+        -- 法术书数据没就绪（GetSpellTabInfo(1) 返回 nil）时扫描结果为空，
+        -- 不能拿它去重建 tab —— 会把已建好的专业 tab 全洗掉
+        if table.getn(knownProfessions) == 0 and table.getn(prev) > 0 then
+            knownProfessions = prev
+            return
+        end
+
+        if table.getn(panel.Tabs) > 0 and ProfListKey() == oldKey then
+            for _, t in ipairs(panel.Tabs) do
+                for _, p in ipairs(knownProfessions) do
+                    if p.name == t.profName then t.spellIndex = p.spellIndex end
+                end
+            end
+            return
+        end
+
+        local pendName   = pendingTab        and pendingTab.profName
+        local activeName = activeTab         and activeTab.profName
+        local selName    = panel.selectedTab and panel.selectedTab.profName
+        CreateProfessionTabs()   -- 内含 ReleaseAllTabs
+        pendingTab = FindTabByProfName(pendName)
+        activeTab  = FindTabByProfName(activeName) or activeTab
+        local sel = FindTabByProfName(selName)
+        if sel then SelectTabExclusive(sel) end
     end
 
     -- ============================================================
@@ -1844,11 +1917,9 @@ DFUI:NewMod("TradeSkill", 5, function()
         -- 不 Hide 原生面板! 用 SetAlpha(0) 保持 API 连接
         -- ADDON_LOADED hook 已处理原生面板透明化
 
-        -- 扫描法术书专业（上移到专业身份判定前：craft 误报兜底要查 knownProfessions）
-        if not profScanned then
-            ScanSpellbookForProfessions()
-            if table.getn(knownProfessions) > 0 then profScanned = true end
-        end
+        -- 重扫法术书 + 按需重建 tab（必须早于下面的专业身份判定：craft 误报兜底要查 knownProfessions）
+        -- 每次打开都重扫：新学的专业（如生存）当场出 tab，不必 /reload
+        RefreshProfessionTabs()
 
         -- 记录当前专业名（转换为 Tab 上显示的法术名）
         local apiName
@@ -1879,29 +1950,25 @@ DFUI:NewMod("TradeSkill", 5, function()
         -- 左上角图标保持玩家职业图标（不随专业切换）
 
         UpdateRankBar()
-        if table.getn(panel.Tabs) == 0 then
-            CreateProfessionTabs()
-        end
         -- 高亮：优先用"用户点击的 tab"(pendingTab)——不依赖 GetCraftName 字符串，
         -- 对生存等 API 名乱报的自定义专业也能正确高亮 + 标记激活（防重复点击关闭）
+        -- 一律走 SelectTabExclusive 全量互斥，杜绝孤儿高亮
         if pendingTab then
-            if panel.selectedTab then panel.selectedTab:SetSelected(false) end
-            pendingTab:SetSelected(true)
-            panel.selectedTab = pendingTab
+            SelectTabExclusive(pendingTab)
             activeTab = pendingTab
             pendingTab = nil
         else
             -- 外部施法/首次打开：回退按当前专业名匹配
-            if panel.selectedTab then panel.selectedTab:SetSelected(false) end
-            panel.selectedTab = nil
             local activeDisplay = activeProfName and (PROF_DISPLAY_NAME[activeProfName] or activeProfName)
+            local matched
             for _, tab in ipairs(panel.Tabs) do
                 if tab.Text and activeDisplay and tab.Text:GetText() == activeDisplay then
-                    tab:SetSelected(true)
-                    panel.selectedTab = tab
-                    activeTab = tab
+                    matched = tab
+                    break
                 end
             end
+            SelectTabExclusive(matched)
+            if matched then activeTab = matched end
         end
 
         -- 自动选中第一个非 header
@@ -1993,6 +2060,10 @@ DFUI:NewMod("TradeSkill", 5, function()
     panel:RegisterEvent("CRAFT_CLOSE")
     panel:RegisterEvent("CRAFT_UPDATE")
     panel:RegisterEvent("UNIT_PET_TRAINING_POINTS")
+    -- 学会新专业时刷新 tab（面板没开时不做事，下次 OpenProfession 自然会重扫）
+    -- 只听 LEARNED_SPELL_IN_TAB：学专业必然往法术书加条目，必发此事件。
+    -- 不听 SKILL_LINES_CHANGED —— 那是技能点上升就发，面板开着制造时高频连发，白扫法术书。
+    panel:RegisterEvent("LEARNED_SPELL_IN_TAB")
 
     panel:SetScript("OnEvent", function()
         if event == "TRADE_SKILL_SHOW" then
@@ -2025,6 +2096,8 @@ DFUI:NewMod("TradeSkill", 5, function()
             end
         elseif event == "UNIT_PET_TRAINING_POINTS" then
             if currentMode == "craft" and panel:IsShown() then UpdateDetail() end
+        elseif event == "LEARNED_SPELL_IN_TAB" then
+            if panel:IsShown() then RefreshProfessionTabs() end
         elseif event == "ADDON_LOADED" then
             -- 透明化原生面板 (保持 API 连接，不 Hide)
             if arg1 == "Blizzard_TradeSkillUI" and TradeSkillFrame and not tradeSkillHooked then
