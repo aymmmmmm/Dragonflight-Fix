@@ -91,6 +91,7 @@ DFUI:NewMod("Target", 1, function()
         self.healthBar:SetPoint('TOPRIGHT', TargetFrame, 'TOPRIGHT', -100, -29)
         self.healthBar:SetFrameLevel(TargetFrame:GetFrameLevel())
         self.healthBar:SetTextures(self.texpath .. 'healthDF2.tga')
+        DFUI.predictBars.target = self.healthBar
         if UnitExists('target') then
             local cur, max, status = GetUnitRealHealth('target')
             if status == "none" then

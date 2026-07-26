@@ -888,6 +888,12 @@ function GetUnitRealHealth(unit)
     return rawCur, rawMax, "real"
 end
 
+-- 导出:判定一个 unit 是否具备"绝对血量"token(自己/宠物/小队/团队)
+-- 治疗预读必须用它做守卫 —— 不能用 GetUnitRealHealth 的 status=="real",
+-- 因为上面分支 3 对怪走 libhealth 估算时也会返回 "real",那是估算值,
+-- 与预读的绝对治疗量不同量纲。
+DFUI.ResolveToTrueUnit = ResolveToTrueUnit
+
 
 -- ============================================================
 -- DFUI.SocialRowColors — DF UI 设计规范配色（与 plans/9-10 一致）

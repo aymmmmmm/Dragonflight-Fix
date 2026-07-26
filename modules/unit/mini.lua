@@ -348,6 +348,7 @@ DFUI:NewMod("Mini", 1, function()
                 self.partyHealthBars[i]:SetTextures(self.path .. 'healthDF2.tga')
                 self.partyHealthBars[i]:SetFillColor(0, 1, 0)
                 self.partyHealthBars[i].max = 100
+                DFUI.predictBars['party' .. i] = self.partyHealthBars[i]
 
                 self.partyManaBars[i] = CreateStatusBar(frame, 69, 7)
                 self.partyManaBars[i]:SetPoint('CENTER', frame, 'CENTER', 15, 0.5)

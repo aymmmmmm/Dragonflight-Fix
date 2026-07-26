@@ -5,7 +5,7 @@
 ## Notes-zhCN: 巨龙时代UI - 汉化修复版 (Turtle WoW 1.18.1)
 ## Version: 2.1
 ## Author: Guzruul - Reforged by Stormhand - Fix by Claude
-## SavedVariables: DFUI_PROFILES, DFUI_DB_SETUP, DFUI_BUGS, DFUI_HealthDB, DFUI_TrainerSpells, DFUI_ShieldDB
+## SavedVariables: DFUI_PROFILES, DFUI_DB_SETUP, DFUI_BUGS, DFUI_HealthDB, DFUI_TrainerSpells, DFUI_ShieldDB, DFUI_PredictDB
 ## OptionalDeps: pfQuest, pfQuest-turtle
 ## SavedVariablesPerCharacter: DFUI_CUR_PROFILE, DFUI_FRAMEPOS
 
@@ -31,6 +31,7 @@ libs\libdebuff.lua
 libs\libguid.lua
 libs\libevents.lua
 libs\libhealth.lua
+libs\libpredict.lua
 libs\libabsorb.lua
 
 # MODULES
@@ -88,6 +89,7 @@ modules\unit\target.lua
 modules\unit\mini.lua
 modules\unit\pvp.lua
 modules\unit\auras.lua
+modules\unit\healpredict.lua
 modules\unit\shield.lua
 modules\xprep\xprep.lua
 modules\track\track.lua
