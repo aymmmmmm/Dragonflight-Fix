@@ -107,6 +107,7 @@ DFUI:NewMod("Gui-elem", 3, function()
             ["Mini"]    = {14, 4},
             ["Colors"]  = {14, 5},
             ["Auras"]   = {14, 6},
+            ["Shield"]  = {14, 9},
             ["Xprep"]   = {15, 1},
         },
 
@@ -260,6 +261,7 @@ DFUI:NewMod("Gui-elem", 3, function()
             ["Mini"]    = "小型框架",
             ["Colors"]  = "配色设置",
             ["Auras"]   = "光环设置",
+            ["Shield"]  = "护盾吸收",
             ["Bars"]    = "动作条",
             ["RangeIndicator"] = "距离指示器",
             ["Cooldowns"] = "冷却数字",

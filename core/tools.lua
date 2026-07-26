@@ -203,6 +203,44 @@ function GetPowerColor(powerType)
     return 0, 0, 1
 end
 
+-- 遍历天赋树找到指定天赋, 扫其 tooltip 描述抠出第 percentIndex 个 "N%", 返回 N (未点/找不到 = 0)
+-- 1.12 的 buff/法术 tooltip 数值由本地 Spell.dbc 基础值生成, 天赋加成不反映、服务器也不下发,
+-- 所以任何"含天赋的真实数值"都得靠现场解析天赋描述换算(免硬编码, Turtle 改数值也跟得上)。
+-- 当前等级描述完整排在"下一等级"之前, 按序计数不会串到下一等级段。
+-- 注: modules/unit/auras.lua 内有一份同逻辑的 local 实现(服务于 tooltip 换算), 那边在验证中未动;
+--     新代码一律走这里, 后续可把 auras 那份收敛过来。
+function DFUI.GetTalentBonusPercent(talentName, percentIndex)
+    percentIndex = percentIndex or 1
+    for tab = 1, GetNumTalentTabs() do
+        for i = 1, GetNumTalents(tab) do
+            local tname, _, _, _, rank = GetTalentInfo(tab, i)
+            if tname == talentName then
+                if not rank or rank <= 0 then return 0 end
+                local scanner = DFUI_Libs and DFUI_Libs.libtipscan
+                    and DFUI_Libs.libtipscan:GetScanner("dfui_talent_pct")
+                if not scanner then return 0 end
+                scanner:SetTalent(tab, i)
+                local seen = 0
+                for line = 2, 10 do
+                    local text = scanner:GetLine(line)
+                    if text then
+                        local init = 1
+                        while true do
+                            local _, e, p = string.find(text, "(%d+)%%", init)
+                            if not p then break end
+                            seen = seen + 1
+                            if seen >= percentIndex then return tonumber(p) end
+                            init = e + 1
+                        end
+                    end
+                end
+                return 0
+            end
+        end
+    end
+    return 0
+end
+
 -- Shared class icon TexCoord table
 DFUI_CLASS_ICON_COORDS = {
     WARRIOR = {0, 0.25, 0, 0.25},

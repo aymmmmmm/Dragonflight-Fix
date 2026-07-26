@@ -26,7 +26,7 @@ DFUI:NewMod("Gui-mods", 3, function()
 
     -- 分类定义
     local categories = {
-        {name = "单位框架", desc = "玩家、目标、宠物、队伍的血条与Buff显示", modules = {"Player", "Target", "Mini", "Auras", "PVPIcon"}},
+        {name = "单位框架", desc = "玩家、目标、宠物、队伍的血条与Buff显示", modules = {"Player", "Target", "Mini", "Auras", "PVPIcon", "Shield"}},
         {name = "动作条", desc = "技能栏、球体、距离指示、连击点、冷却数字", modules = {"Bars", "Orbs", "RangeIndicator", "ComboPoints", "Cooldowns"}},
         {name = "常驻UI", desc = "地图、施法条、经验条、菜单、聊天、提示框等", modules = {"Map", "Cast", "Xprep", "Micro", "Chat", "Tooltip", "Bags", "Loot"}},
         {name = "面板皮肤", desc = "为暴雪原版窗口添加巨龙时代风格外观", modules = {"Bank", "Character", "Talents", "Merchant", "Mail", "OpenMail", "Trade", "TradeSkill", "Trainer", "QuestLog", "QuestDialog", "Gossip", "Social", "DressUp", "Help", "Inspect", "Macros", "SpellBook", "KeyBinding", "ItemText"}, hasSelectAll = true},

@@ -18,6 +18,9 @@ DFUI.callbacks = {}
 DFUI.performance = {}
 DFUI.activeScripts = {}
 DFUI.gui = {}
+-- 各单位框体把自己的文字表(healthValue 等)注册到这里, 供护盾模块追加吸收量
+-- (与 DFUI.predictBars 同性质: 这些都存在各模块 NewMod 闭包内的 local Setup 里)
+DFUI.unitTexts = {}
 
 -- db version
 DFUI.DBversion = "2.0"

@@ -117,6 +117,7 @@ DFUI:NewMod("Player", 1, function()
         local pulseColor = DFUI:GetTempDB('Player', 'pulseColor')
         self.healthBar:SetCutoutColor(cutoutColor[1], cutoutColor[2], cutoutColor[3], 1)
         self.healthBar:SetPulseColor(pulseColor[1], pulseColor[2], pulseColor[3], 1)
+        DFUI.predictBars.player = self.healthBar
     end
 
     function Setup:HealthBarText()
@@ -132,6 +133,9 @@ DFUI:NewMod("Player", 1, function()
         self.texts.healthPercent:SetPoint('LEFT', self.healthBar, 'LEFT', 5, 0)
         self.texts.healthValue = self.texts.healthTextFrame:CreateFontString(nil)
         self.texts.healthValue:SetFont(cfg.font, cfg.healthFontSize, "OUTLINE")
+        -- 护盾模块要在生命值文字后追加吸收量; texts 存在本闭包的 local Setup 里,
+        -- 外部拿不到, 所以和 predictBars 一样注册出去
+        DFUI.unitTexts.player = self.texts
     end
 
     function Setup:ManaBar()
