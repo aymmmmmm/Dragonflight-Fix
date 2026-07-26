@@ -65,6 +65,10 @@ DFUI:NewMod("Frames", 2, function()
         local rollAnc = _G["DFUIRollAnchor"]
         if rollAnc then table.insert(framesToMakeMovable, rollAnc) end
 
+        -- 焦点框体（focus.lua 模块体=ADDON_LOADED 建，早于本 handler）
+        local focusF = _G["DFUIFocusFrame"]
+        if focusF then table.insert(framesToMakeMovable, focusF) end
+
 
         local function SaveFramePosition(frame)
             local name = frame:GetName()
@@ -229,6 +233,9 @@ DFUI:NewMod("Frames", 2, function()
                     -- 拾取面板平时隐藏，布局模式下显示示例框以便拖动定位
                     if DFUI.ShowRollPreview then DFUI.ShowRollPreview() end
 
+                    -- 焦点框平时无焦点则隐藏，布局模式下显示预览框以便拖动定位
+                    if DFUI.ShowFocusPreview then DFUI.ShowFocusPreview() end
+
                     FramerateLabel:Show()
 
                     if DFUI.netStatsFrame then
@@ -258,6 +265,9 @@ DFUI:NewMod("Frames", 2, function()
 
                         -- 退出布局模式：收回拾取面板示例框
                         if DFUI.HideRollPreview then DFUI.HideRollPreview() end
+
+                        -- 退出布局模式：收回焦点预览框
+                        if DFUI.HideFocusPreview then DFUI.HideFocusPreview() end
 
                         FramerateLabel:Hide()
 
