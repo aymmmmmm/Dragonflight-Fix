@@ -205,12 +205,13 @@ DFUI:NewMod("Auras", 2, function()
         -- ═══════════════════════════════════════
         -- Paladin
         -- ═══════════════════════════════════════
-        ["Blessing of Might"] = 300,
-        ["Blessing of Wisdom"] = 300,
-        ["Blessing of Kings"] = 300,
-        ["Blessing of Salvation"] = 300,
-        ["Blessing of Light"] = 300,
-        ["Blessing of Sanctuary"] = 300,
+        -- Turtle：单体祝福 10 分钟（vanilla 为 5 分钟）
+        ["Blessing of Might"] = 600,
+        ["Blessing of Wisdom"] = 600,
+        ["Blessing of Kings"] = 600,
+        ["Blessing of Salvation"] = 600,
+        ["Blessing of Light"] = 600,
+        ["Blessing of Sanctuary"] = 600,
         ["Blessing of Protection"] = 10,
         ["Blessing of Freedom"] = 16,
         ["Blessing of Sacrifice"] = 30,
@@ -411,12 +412,13 @@ DFUI:NewMod("Auras", 2, function()
         buffDurations["法力护盾"] = 60
         buffDurations["唤醒"] = 8
         -- 圣骑士
-        buffDurations["力量祝福"] = 300
-        buffDurations["智慧祝福"] = 300
-        buffDurations["王者祝福"] = 300
-        buffDurations["拯救祝福"] = 300
-        buffDurations["光明祝福"] = 300
-        buffDurations["庇护祝福"] = 300
+        -- Turtle：单体祝福 10 分钟（vanilla 为 5 分钟）
+        buffDurations["力量祝福"] = 600
+        buffDurations["智慧祝福"] = 600
+        buffDurations["王者祝福"] = 600
+        buffDurations["拯救祝福"] = 600
+        buffDurations["光明祝福"] = 600
+        buffDurations["庇护祝福"] = 600
         buffDurations["保护祝福"] = 10
         buffDurations["自由祝福"] = 16
         buffDurations["牺牲祝福"] = 30
@@ -634,6 +636,77 @@ DFUI:NewMod("Auras", 2, function()
     -- Event tracking for buff/debuff durations (UNIT_CASTEVENT + Nampower)
     -------------------------------------------------------------------
 
+    -- 自学习：玩家给自己施放 buff 后，用 GetPlayerBuffTimeLeft 读取真实总时长
+    -- （Turtle 改动过持续时间的法术，静态表不可靠；Nampower 未安装无精确事件）
+    -- 2 秒窗口内取最大 timeleft 再提交：重施刷新时客户端 timeleft 可能滞后一拍
+    -- 仍是旧值，首观测即学会把半程值当总时长覆盖正确静态表
+    local pendingLearn = nil
+
+    local function ProcessPendingLearn()
+        local pl = pendingLearn
+        if not pl then return end
+        local now = GetTime()
+        if pl.nextTry and now < pl.nextTry and now <= pl.deadline then return end
+        pl.nextTry = now + 0.1
+
+        local name = pl.name
+        -- 永久/光环类法术不学习
+        if buffDurations[name] ~= nil and buffDurations[name] == 0 then
+            pendingLearn = nil
+            return
+        end
+
+        if now <= pl.deadline then
+            -- 采样阶段：定位玩家身上对应 buff，记录窗口内最大 timeleft
+            local bIdx = nil
+            local tex = CachedGetSpellIcon(pl.spellId)
+            if tex then
+                bIdx = FindPlayerBuffIndex(tex, "HELPFUL")
+            end
+            local scanner = DFUI_Libs and DFUI_Libs.libtipscan and DFUI_Libs.libtipscan:GetScanner("aura_learn")
+            if scanner then
+                -- 名字校验防同图标误配，失败退化为按名字全扫
+                if bIdx and bIdx >= 0 then
+                    scanner:SetPlayerBuff(bIdx)
+                    if scanner:GetLine(1) ~= name then bIdx = nil end
+                end
+                if not bIdx then
+                    for idx = 0, 31 do
+                        local b = GetPlayerBuff(idx, "HELPFUL")
+                        if b < 0 then break end
+                        scanner:SetPlayerBuff(b)
+                        if scanner:GetLine(1) == name then
+                            bIdx = b
+                            break
+                        end
+                    end
+                end
+            end
+            if bIdx and bIdx >= 0 then
+                local tl = GetPlayerBuffTimeLeft(bIdx)
+                if tl and tl > 0 and tl < PERMANENT_THRESHOLD then
+                    if not pl.best or tl > pl.best then pl.best = tl end
+                end
+            end
+            return
+        end
+
+        -- 窗口结束：提交学习值（长 buff 上取整 5s，短 buff 上取整 1s 保住
+        -- 愈合 21s/回春 12s 这类非 5 倍数时长），只增不减收敛
+        if pl.best and pl.best > 1 then
+            local learned
+            if pl.best >= 60 then
+                learned = math.ceil(pl.best / 5) * 5
+            else
+                learned = math.ceil(pl.best - 0.01)
+            end
+            if not learnedDurations[name] or learnedDurations[name] < learned then
+                learnedDurations[name] = learned
+            end
+        end
+        pendingLearn = nil
+    end
+
     local castTracker = CreateFrame("Frame")
     castTracker:RegisterEvent("UNIT_CASTEVENT")
     castTracker:SetScript("OnEvent", function()
@@ -641,6 +714,17 @@ DFUI:NewMod("Auras", 2, function()
         local targetGuid = arg2
         local eventType = arg3
         local spellId = arg4
+
+        -- 自施 buff：排队真值学习（空 targetGuid 视为自身目标）
+        if eventType == "CAST" and spellId and casterGuid then
+            local _, pg = UnitExists("player")
+            if pg and casterGuid == pg and (not targetGuid or targetGuid == "" or targetGuid == pg) then
+                local lname = CachedGetSpellName(spellId)
+                if lname then
+                    pendingLearn = { spellId = spellId, name = lname, deadline = GetTime() + 2.0 }
+                end
+            end
+        end
 
         if eventType == "CAST" and targetGuid and targetGuid ~= "" and spellId then
             local name = CachedGetSpellName(spellId)
@@ -706,6 +790,7 @@ DFUI:NewMod("Auras", 2, function()
     -- Periodic cleanup of expired durations (every 60s)
     local cleanupTick = 0
     castTracker:SetScript("OnUpdate", function()
+        if pendingLearn then ProcessPendingLearn() end
         if cleanupTick > GetTime() then return end
         cleanupTick = GetTime() + 60
         local now = GetTime()
@@ -724,6 +809,130 @@ DFUI:NewMod("Auras", 2, function()
             end
         end
     end)
+
+    -------------------------------------------------------------------
+    -- Tooltip 天赋感知修正
+    -- 1.12 buff tooltip 数值由本地 Spell.dbc 基础值生成，天赋加成
+    -- （强化虔诚光环/强化怒吼等）不反映，服务器也不下发实际值。
+    -- 修正：从天赋自身描述现场解析加成百分比（免硬编码 Turtle 数值），
+    -- 在 tooltip 末尾追加一行换算值。
+    -- 局限：只能按玩家自己的天赋换算（1.12 无 API 查 buff 施放者天赋），
+    -- 故仅在玩家自己身上的 buff tooltip 生效；若同名 buff 来自他人施放
+    -- （如别的战士的战斗怒吼），换算值可能与实际有出入。
+    -------------------------------------------------------------------
+
+    -- buff 名 → { talents = { { name = 天赋名, percentIndex = 描述中第几个%(默认1) }, ... }（多条加法叠加）,
+    --             patterns = 描述行中数值的匹配模式列表（须锚定单位词，彼此不重叠） }
+    -- 数据依据 data\talents_desc.lua（Turtle 客户端 DBC 导出）全职业排查，见 docs 计划
+    local tooltipTalentFixes = {
+        ["Devotion Aura"] = { talents = { { name = "Improved Devotion Aura" } }, patterns = { "(%d+) additional armor" } },
+        ["Battle Shout"]  = { talents = { { name = "Improved Battle Shout" } },  patterns = { "by (%d+)" } },
+    }
+    if GetLocale() == "zhCN" then
+        local function RegisterFix(buffNames, talents, patterns)
+            for _, bn in ipairs(buffNames) do
+                tooltipTalentFixes[bn] = { talents = talents, patterns = patterns }
+            end
+        end
+        -- 圣骑士（强效祝福假设与单体同受"强化祝福"加成，待游戏内验证）
+        RegisterFix({ "力量祝福", "强效力量祝福" }, { { name = "强化祝福" } }, { "提高(%d+)点", "增加(%d+)点" })
+        RegisterFix({ "智慧祝福", "强效智慧祝福" }, { { name = "强化祝福" } }, { "恢复(%d+)点" })
+        RegisterFix({ "虔诚光环" }, { { name = "强化虔诚光环" } }, { "提高(%d+)点", "增加(%d+)点" })
+        RegisterFix({ "惩罚光环" }, { { name = "强化惩罚光环" } }, { "造成(%d+)点" })
+        -- 牧师（真言术：盾两条天赋加法叠加）
+        RegisterFix({ "真言术：韧", "坚韧祷言" }, { { name = "强化真言术：韧" } }, { "提高(%d+)点", "增加(%d+)点" })
+        RegisterFix({ "真言术：盾" }, { { name = "强化真言术：盾" }, { name = "意志之力" } }, { "吸收(%d+)点" })
+        RegisterFix({ "心灵之火" }, { { name = "强化心灵之火" } }, { "提高(%d+)点", "增加(%d+)点" })
+        -- 德鲁伊（野性印记多数值：属性/护甲/抗性全量换算）
+        RegisterFix({ "野性印记", "野性赐福" }, { { name = "强化野性印记" } }, { "提高(%d+)点", "增加(%d+)点" })
+        -- 法师（护甲+抗性换算；减速"降低N%"不带"点"自然排除）
+        RegisterFix({ "冰甲术", "霜甲术" }, { { name = "冰霜障壁" } }, { "提高(%d+)点", "增加(%d+)点" })
+        -- 术士（天赋"恶魔庇护"描述误写"魔甲术"，键用真实 buff 名；血契双名待实测）
+        RegisterFix({ "恶魔护甲", "恶魔皮肤" }, { { name = "恶魔庇护" } }, { "提高(%d+)点", "增加(%d+)点", "恢复(%d+)点" })
+        RegisterFix({ "血之契约", "血之契印" }, { { name = "虚空研究" } }, { "提高(%d+)点", "增加(%d+)点" })
+        -- 萨满（图腾 buff 名可能不带"图腾"后缀，双名登记；
+        -- 强化图腾第2个%才是石肤；恢复图腾第1个%是法力之泉消耗、第2个才是治疗之泉）
+        RegisterFix({ "大地之力", "大地之力图腾" }, { { name = "强化图腾" } }, { "提高(%d+)点", "增加(%d+)点" })
+        RegisterFix({ "风之优雅", "风之优雅图腾" }, { { name = "强化图腾" } }, { "提高(%d+)点", "增加(%d+)点" })
+        RegisterFix({ "石肤", "石肤图腾" }, { { name = "强化图腾", percentIndex = 2 } }, { "降低(%d+)点" })
+        RegisterFix({ "治疗之泉", "治疗之泉图腾" }, { { name = "恢复图腾", percentIndex = 2 } }, { "恢复(%d+)点" })
+        -- 战士（Turtle 天赋名"强化怒吼"，合并战斗/挫志怒吼；第1个%是战斗怒吼）
+        RegisterFix({ "战斗怒吼" }, { { name = "强化怒吼" } }, { "提高(%d+)点", "增加(%d+)点" })
+    end
+
+    local TALENT_FIX_LABEL = GetLocale() == "zhCN" and "强化天赋" or "Talent bonus"
+
+    -- 遍历天赋树找到指定天赋，扫其 tooltip 描述抠出第 percentIndex 个"X%"
+    -- （当前等级描述完整排在"下一等级"之前，按序计数不会串到下一等级段）
+    local function GetTalentBonusPercent(talentName, percentIndex)
+        percentIndex = percentIndex or 1
+        for tab = 1, GetNumTalentTabs() do
+            for i = 1, GetNumTalents(tab) do
+                local tname, _, _, _, rank = GetTalentInfo(tab, i)
+                if tname == talentName then
+                    if not rank or rank <= 0 then return 0 end
+                    local scanner = DFUI_Libs and DFUI_Libs.libtipscan and DFUI_Libs.libtipscan:GetScanner("talent_fix")
+                    if not scanner then return 0 end
+                    scanner:SetTalent(tab, i)
+                    local seen = 0
+                    for line = 2, 10 do
+                        local text = scanner:GetLine(line)
+                        if text then
+                            local init = 1
+                            while true do
+                                local _, e, p = string.find(text, "(%d+)%%", init)
+                                if not p then break end
+                                seen = seen + 1
+                                if seen >= percentIndex then return tonumber(p) end
+                                init = e + 1
+                            end
+                        end
+                    end
+                    return 0
+                end
+            end
+        end
+        return 0
+    end
+
+    -- 在已填充的 GameTooltip 末尾追加天赋换算行（须在 SetPlayerBuff/SetUnitBuff 之后调用）
+    -- 全量换算：遍历所有行 × 所有 pattern × 行内多次命中（野性印记等多数值 buff）
+    local function ApplyTooltipTalentFix()
+        local nameFS = getglobal("GameTooltipTextLeft1")
+        local buffName = nameFS and nameFS:GetText()
+        local fix = buffName and tooltipTalentFixes[buffName]
+        if not fix then return end
+        local percent = 0
+        for _, t in ipairs(fix.talents) do
+            percent = percent + GetTalentBonusPercent(t.name, t.percentIndex)
+        end
+        if percent <= 0 then return end
+        local parts = nil
+        for i = 2, GameTooltip:NumLines() do
+            local fs = getglobal("GameTooltipTextLeft" .. i)
+            local text = fs and fs:GetText()
+            if text then
+                for _, pat in ipairs(fix.patterns) do
+                    local init = 1
+                    while true do
+                        local _, e, num = string.find(text, pat, init)
+                        if not num then break end
+                        local boosted = math.floor(tonumber(num) * (1 + percent / 100) + 0.5)
+                        if parts then
+                            parts = parts .. ", " .. num .. " -> " .. boosted
+                        else
+                            parts = num .. " -> " .. boosted
+                        end
+                        init = e + 1
+                    end
+                end
+            end
+        end
+        if parts then
+            GameTooltip:AddLine(TALENT_FIX_LABEL .. " +" .. percent .. "%: " .. parts, 0.4, 1, 0.4)
+            GameTooltip:Show()
+        end
+    end
 
     -------------------------------------------------------------------
     -- Aura snapshot diffing (detect new auras on non-player units)
@@ -767,6 +976,13 @@ DFUI:NewMod("Auras", 2, function()
     -- Detect newly appeared auras and start timers for them
     local function SnapshotAndDetectNewAuras(guid, unit)
         if not guid then return end
+
+        -- 目标是玩家自己：精确路径（GetPlayerBuffTimeLeft）已覆盖，
+        -- 跳过估算学习防止 start=GetTime() 污染，仅刷新快照供 diff
+        if unit and UnitIsUnit(unit, "player") then
+            SeedSnapshot(guid, unit)
+            return
+        end
 
         -- === SpellId-based detection (GetUnitField available) ===
         if GetUnitField then
@@ -1085,6 +1301,9 @@ DFUI:NewMod("Auras", 2, function()
                 GameTooltip:SetUnitDebuff(this.parentUnit, this.debuffIndex)
             else
                 GameTooltip:SetUnitBuff(this.parentUnit, this.buffIndex)
+                if UnitIsUnit(this.parentUnit, "player") then
+                    ApplyTooltipTalentFix()
+                end
             end
         end)
         btn:SetScript("OnLeave", function()
@@ -1194,7 +1413,7 @@ DFUI:NewMod("Auras", 2, function()
 
                     if not isPermanentBuff then
                     -- 1) Player PRIMARY: GetPlayerBuffTimeLeft via texture-matched index
-                    if data.unit == "player" and GetPlayerBuffTimeLeft then
+                    if GetPlayerBuffTimeLeft and (data.unit == "player" or UnitIsUnit(data.unit, "player")) then
                         local bIdx = playerBIdx or FindPlayerBuffIndex(texture, "HELPFUL")
                         if bIdx and bIdx >= 0 then
                             local tl = GetPlayerBuffTimeLeft(bIdx)
@@ -1333,7 +1552,7 @@ DFUI:NewMod("Auras", 2, function()
                     local duration, timeleft = nil, nil
 
                     -- 1) Player PRIMARY: GetPlayerBuffTimeLeft via texture-matched index
-                    if data.unit == "player" and GetPlayerBuffTimeLeft then
+                    if GetPlayerBuffTimeLeft and (data.unit == "player" or UnitIsUnit(data.unit, "player")) then
                         local bIdx = FindPlayerBuffIndex(texture, "HARMFUL")
                         if bIdx and bIdx >= 0 then
                             local tl = GetPlayerBuffTimeLeft(bIdx)
@@ -1634,7 +1853,7 @@ DFUI:NewMod("Auras", 2, function()
                 end
 
                 -- Fallback for player buffs/debuffs: use GetPlayerBuffTimeLeft via texture-matched index
-                if not btn.timerStart and unit == "player" and GetPlayerBuffTimeLeft then
+                if not btn.timerStart and GetPlayerBuffTimeLeft and (unit == "player" or UnitIsUnit(unit, "player")) then
                     local filter = isDebuff and "HARMFUL" or "HELPFUL"
                     local tex = btn.icon and btn.icon:GetTexture()
                     local bIdx = FindPlayerBuffIndex(tex, filter)
@@ -1652,7 +1871,7 @@ DFUI:NewMod("Auras", 2, function()
                             end
                             btn.timerStart = GetTime() + tl - dur
                             btn.timerDuration = dur
-                            btn.timerStyle = btn.timerStyle or GetTimerStyle("player")
+                            btn.timerStyle = btn.timerStyle or GetTimerStyle(unit)
                         end
                     end
                 end
@@ -2114,6 +2333,7 @@ DFUI:NewMod("Auras", 2, function()
                     GameTooltip:SetOwner(this, "ANCHOR_BOTTOMRIGHT")
                     GameTooltip:SetPlayerBuff(this.buffIndex)
                     GameTooltip:Show()
+                    ApplyTooltipTalentFix()
                 end
             end)
             btn:SetScript("OnLeave", function()
