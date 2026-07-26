@@ -119,8 +119,10 @@ DFUI:NewMod("Inspect", 5, function()
         for i = 1, 4 do
             if bgPieces[i] then bgPieces[i]:SetAlpha(0) end   -- Update 只 SetTexture 不碰 alpha，恒隐
         end
-        local illust = talentInset:CreateTexture(nil, "BACKGROUND")
-        illust:SetDrawLayer("BACKGROUND", 2)   -- 凹陷底(0)之上、描线 ARTWORK 之下
+        -- ⭐ BORDER 层，不用 SetDrawLayer 第二参：1.12 下 subLevel 被静默忽略，写 ("BACKGROUND",2)
+        --    会与 talentInset.bg（铺满的暗岩石）同落 BACKGROUND → 同层顺序不稳、岩石随机盖住插画。
+        --    与本文件 :235 的 inspectCharBg 同一约定（bg=BACKGROUND < BORDER < 描线 ARTWORK < 圆角 OVERLAY）。
+        local illust = talentInset:CreateTexture(nil, "BORDER")
         illust:SetAllPoints(talentInset)
         illust:SetAlpha(0.9)
         local illustName

@@ -214,6 +214,11 @@ DF-Fix 的主面板（技能书/制造/角色/社交）可见 UI 都是新建独
 4. **pulse 只在掉值触发**：回血/回蓝不闪是设计行为，非 bug。
 5. **新增贴图须重启**：`CreateActionButton` 等用现成 `btn_*.tga` 故免重启；若自加新 TGA/BLP，须重启 WoW.exe，`/reload` 不识别。
 6. **TGA 须 POT**：1.12 下 TGA 宽高都须为 2 的幂，非 POT 会被静默丢弃。
+6b. **⭐ `SetDrawLayer` 的第二参（subLevel）在 1.12 被静默忽略**（2026-07-26 定案）——**不报错**，纯视觉错，比 nil method 更难定位。同一 frame 内两个纹理若都落在同一 layer，绘制顺序**不稳定**，会随机互盖。
+   - **案例（天赋插画"时有时无/大块发黑"的真根因）**：`modules/ui/talents.lua` 的插画写 `SetDrawLayer('BACKGROUND', 2)` 想排在 `inset.bg`（`CreateRetailInset` 铺满的暗岩石，BACKGROUND）之上 → subLevel 被忽略、两者同层 → 岩石随机盖住插画。这个 bug 从 `582dd3d`（引入 inset 那一刻）起潜伏至今，期间被误判成"大 TGA 加载失败"、"未压缩纹理显存不足"，换素材/换格式全部无效。**修法：插画改 `CreateTexture(nil,'BORDER')`**，层序 `bg(BACKGROUND) < 插画(BORDER) < edges(ARTWORK) < corners(OVERLAY)`。
+   - **同形先例**：`modules/panels/character.lua:182,188`（岩石 BACKGROUND / 羊皮纸 BORDER，注释已写"1.12 不可靠"）、`modules/panels/inspect.lua:235`（inspectCharBg 用 BORDER）。
+   - **通用规则**：**同 frame 内排序一律用不同 draw layer 分离，绝不赌 subLevel**。`BACKGROUND < BORDER < ARTWORK < OVERLAY < HIGHLIGHT`。
+   - **待审计清单**（本项目还有 38 处两参数 `SetDrawLayer`，目前看着正常、暂不动；哪个面板出现"随机被盖"就按上面套路修）：同 frame 内确有同层竞争者的高危点 = `spellbook.lua:140,147`（`ARTWORK,2` vs inset.edges `ARTWORK/0`）、`trade.lua:115`（`BACKGROUND,-8` vs 金银铜图标）、`bags.lua:116,123 / 171,190`、`mini.lua:315,325,338`、`focus.lua:139,148`、`paperdoll.lua:97`。
 7. **GetHeight 不可靠**：`ApplyInnerFrame` 的 auto preset 依赖 `frame:GetHeight`（`:304`）——若 frame 在 SetSize/双锚冲突或未 reflow 时调用会选错档；算尺寸优先 `GetTop-GetBottom`。
 8. **`CreateRetailScrollbar` 内含调试遗留**：箭头纹理目前被 `SetVertexColor(1,0,0,1)` 染红（`tools.lua:624`，注释标 DEBUG），且 track 3-slice 被注释掉（`:649`）——视为"待清理/待游戏内复核"状态，复用前先确认其当前视觉。
 9. **运行期视觉/尺寸须实测**：`CreatePaperDollFrame` 内部 `SetWidth/SetHeight` 与 `TOPLEFT+BOTTOMRIGHT` 双锚在 1.12 冲突（固定尺寸优先，BOTTOMRIGHT 被忽略）——宽框体须单锚 + 动态算尺寸传入；暴雪原框实际尺寸（`.pub` 加密看不到 XML）一律**待游戏内实证**（`GetWidth/GetHeight`）。

@@ -499,12 +499,12 @@ DFUI:NewMod("Talents", 1, function()
                 bg      = "interface\\UI-Background-Rock.blp",  -- 凹陷内底：同外框材质的岩石（用 .blp，512×512 的 .tga 在 1.12 不加载→露纯黑）
             })
             inset:Show()
-            inset.bg:SetVertexColor(0.35, 0.32, 0.28)           -- 暗岩石凹陷底；插画走 ADD 混合，黑背景透明露出此底，图案加亮显现
+            inset.bg:SetVertexColor(0.35, 0.32, 0.28)           -- 暗岩石凹陷底；插画走默认 BLEND 在 BORDER 层铺满盖住它，此底只在插画未加载时露出
             -- 连线/箭头提到 inset 之上，免被岩石底/插画盖住
             branchFrame:SetFrameLevel(inset:GetFrameLevel() + 2)
             arrowFrame:SetFrameLevel(inset:GetFrameLevel() + 3)
 
-            -- 每棵树消费点数文字：建在 inset 上(OVERLAY)，渲染于插画(BACKGROUND)之上，免被铺满的插画遮住
+            -- 每棵树消费点数文字：建在 inset 上(OVERLAY)，渲染于插画(BORDER)之上，免被铺满的插画遮住
             local pointsText = inset:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
             pointsText:SetTextColor(1, 1, 1)
             pointsText:SetPoint('BOTTOM', inset, 'BOTTOM', 0, 5)   -- 紧贴凹槽下边内侧
@@ -527,13 +527,16 @@ DFUI:NewMod("Talents", 1, function()
             }
 
             -- 凹槽背景插画：每职业天赋一张整图(retail 4块合成,内容320×384→POT512²,无黑底)
-            -- 单张 BLEND 铺满 inset 内部,稳定不闪(取代旧 4 块 ADD 拼接的时有时无)
-            -- 注意：SetTexture 错帧拆分对偶发缺图无效(512²时代实测,解码发生在首次渲染刻)，
-            -- 缺图止血走 /dftexfix heal / auto（重设纹理=重掷解码骰子）
+            -- ⭐ 层级铁律(2026-07-26 定案，"插画时有时无/大块发黑"的根因)：
+            --    1.12 的 SetDrawLayer 第二参(subLevel) **被静默忽略且不报错**。
+            --    原来写 SetDrawLayer('BACKGROUND', 2) 指望排在 inset.bg 之上 → 实际两者同落
+            --    BACKGROUND 层，同层绘制顺序不稳 → 铺满的暗岩石 inset.bg 随机盖住插画，
+            --    看到的"黑"就是被盖时露出的暗岩石。同形踩坑见 character.lua:182(岩石/羊皮纸)。
+            --    修法：**用不同 draw layer 物理分离**，绝不赌 subLevel。
+            --    层序 inset.bg(BACKGROUND) < 插画(BORDER) < inset.edges(ARTWORK) < corners(OVERLAY)。
             local _, _, _, fileName = GetTalentTabInfo(i)
             local illustPath = 'Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\talents\\illust_' .. (fileName or 'warriorarms')
-            local illust = inset:CreateTexture(nil, 'BACKGROUND')
-            illust:SetDrawLayer('BACKGROUND', 2)
+            local illust = inset:CreateTexture(nil, 'BORDER')
             illust:SetTexture(illustPath)
             illust:SetTexCoord(0, 1, 0, 1)  -- 整图已预裁为显示内容区(从512²原图裁x38~282/y0~384铺满256²,_tools/tga_crop_resize.js)，全采=更高有效分辨率不糊；框体高瘦比例由 inset 拉回
             illust:SetAllPoints(inset)   -- 跟随 inset 真实尺寸(实测249×391,硬编码必错);SetTexCoord 仅裁采样不影响铺满
