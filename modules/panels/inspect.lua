@@ -111,7 +111,7 @@ DFUI:NewMod("Inspect", 5, function()
         talentInset.bg:SetVertexColor(0.35, 0.32, 0.28)   -- 暗岩石凹陷底（同玩家天赋页）
 
         -- 树插画：弃用原生 4 拼重锚缩放（只动得了 TopLeft，其余三块锚链/尺寸对不齐 → 铺不满凹陷）
-        -- → 改玩家天赋页(ui\talents.lua)同款：单张预裁 POT 整图 illust_<树名> SetAllPoints 铺满凹陷，
+        -- → 改玩家天赋页(ui\talents.lua)同款：单张预裁 POT 整图 dfbg_<树名> SetAllPoints 铺满凹陷，
         --   素材 media\tex\talents\ 27 张全职业树齐。树名从原生 TopLeft 纹理路径解析
         --   （TWTalentFrame_Update 换树只 SetTexture → 下方 watcher 轮询跟随；名字缓存防反复 SetTexture）
         local bgPieces = {TWTalentFrameBackgroundTopLeft, TWTalentFrameBackgroundTopRight,
@@ -124,14 +124,14 @@ DFUI:NewMod("Inspect", 5, function()
         --    与本文件 :235 的 inspectCharBg 同一约定（bg=BACKGROUND < BORDER < 描线 ARTWORK < 圆角 OVERLAY）。
         local illust = talentInset:CreateTexture(nil, "BORDER")
         illust:SetAllPoints(talentInset)
-        illust:SetAlpha(0.9)
+        illust:SetAlpha(1.0)   -- 同玩家天赋页：0.9 会掺 10% 暗岩石底进画面拉低对比，提亮已烘进素材
         local illustName
         local function UpdateTalentIllust()
             local path = TWTalentFrameBackgroundTopLeft and TWTalentFrameBackgroundTopLeft:GetTexture()
             local _, _, name = string.find(path or "", "([^\\/]+)%-TopLeft$")
             if name == illustName then return end
             illustName = name
-            if name and illust:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\talents\\illust_" .. string.lower(name)) then
+            if name and illust:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\talents\\dfbg_" .. string.lower(name)) then
                 illust:Show()
             else
                 illust:Hide()   -- 解析失败/无对应 illust 的树 → 只留暗岩石凹陷底
