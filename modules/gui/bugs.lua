@@ -63,6 +63,7 @@ DFUI:NewMod("Gui-bugs", 5, function()
             return
         end
         local stamp = entry.date or "??:??:??"
+        if entry.old then stamp = stamp .. "（上次会话遗留）" end
         local body = "[" .. stamp .. "]  ×" .. (entry.n or 1) .. "  来源: " .. (entry.src or "?") .. "\n\n"
             .. (entry.msg or "") .. "\n\n--- Stack ---\n" .. (entry.stack or "(空)")
         self.detailEdit:SetText(body)
@@ -90,7 +91,7 @@ DFUI:NewMod("Gui-bugs", 5, function()
         row.timeFS = row:CreateFontString(nil, "OVERLAY")
         row.timeFS:SetFont(fontPath, SS(11), "OUTLINE")
         row.timeFS:SetPoint("LEFT", row, "LEFT", 4, 0)
-        row.timeFS:SetWidth(70)
+        row.timeFS:SetWidth(100)  -- 时间戳带日期(MM-DD HH:MM:SS)后加宽，防 FontString 超宽 word-wrap
         row.timeFS:SetJustifyH("LEFT")
 
         row.countFS = row:CreateFontString(nil, "OVERLAY")
@@ -139,6 +140,13 @@ DFUI:NewMod("Gui-bugs", 5, function()
                 row.entry = entry
                 row.entryIdx = entryIdx
                 row.timeFS:SetText(entry.date or "")
+                if entry.old then
+                    row.timeFS:SetTextColor(0.5, 0.5, 0.5)   -- 上次会话遗留：置灰
+                    row.countFS:SetTextColor(0.5, 0.5, 0.5)
+                else
+                    row.timeFS:SetTextColor(1, 1, 1)
+                    row.countFS:SetTextColor(1, 1, 1)
+                end
                 row.countFS:SetText("×" .. (entry.n or 1))
                 row.srcFS:SetText(entry.src or "?")
                 if isDFUISrc(entry.src) then
@@ -201,7 +209,7 @@ DFUI:NewMod("Gui-bugs", 5, function()
             local out = {}
             for i = n, 1, -1 do
                 local e = list[i]
-                table.insert(out, "[" .. (e.date or "") .. "] x" .. (e.n or 1) .. " " .. (e.src or "?") .. "\n" .. (e.msg or "") .. "\n" .. (e.stack or ""))
+                table.insert(out, "[" .. (e.date or "") .. (e.old and " 旧" or "") .. "] x" .. (e.n or 1) .. " " .. (e.src or "?") .. "\n" .. (e.msg or "") .. "\n" .. (e.stack or ""))
             end
             if Setup.detailEdit then
                 Setup.detailEdit:SetText(table.concat(out, "\n\n========\n\n"))
@@ -279,7 +287,7 @@ DFUI:NewMod("Gui-bugs", 5, function()
         local colHeader = container:CreateFontString(nil, "OVERLAY")
         colHeader:SetFont(fontPath, SS(11), "OUTLINE")
         colHeader:SetPoint("TOPLEFT", container, "TOPLEFT", 4, -28)
-        colHeader:SetText("|cffffd100时间        计数    来源              消息|r")
+        colHeader:SetText("|cffffd100时间                  计数    来源              消息|r")
 
         self.listInner = CreateFrame("Frame", nil, container)
         self.listInner:SetWidth(420)

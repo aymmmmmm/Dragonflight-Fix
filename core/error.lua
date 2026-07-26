@@ -73,7 +73,8 @@ end
 
 local function timestamp()
     if type(date) == "function" then
-        local ok, s = pcall(date, "%H:%M:%S")
+        -- 带日期：历史条目从 SV 恢复后跨天显示，纯 HH:MM:SS 会被误当"刚刚发生"
+        local ok, s = pcall(date, "%m-%d %H:%M:%S")
         if ok and s then return s end
     end
     return string.format("%.1fs", GetTime())
@@ -125,6 +126,7 @@ local function recordBug(addon, msg)
             b.n = b.n + 1
             b.t = GetTime()
             b.date = timestamp()
+            b.old = nil  -- 本会话复发，摘掉"上次会话遗留"标记
             -- 移到末尾（最新）
             table.remove(list, i)
             table.insert(list, b)
@@ -225,6 +227,7 @@ local function restoreFromSV()
     local session = DFUI.errors.list
     DFUI.errors.list = {}
     for i = 1, table.getn(DFUI_BUGS.entries) do
+        DFUI_BUGS.entries[i].old = true  -- 标记为上次会话遗留，面板置灰区分新旧
         table.insert(DFUI.errors.list, DFUI_BUGS.entries[i])
     end
     for i = 1, table.getn(session) do
