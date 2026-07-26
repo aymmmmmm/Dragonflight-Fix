@@ -225,44 +225,25 @@ DFUI:NewMod("Micro", 1, function()
             end
             charBtn:SetPushedTexture(path)
             if charBtn:GetPushedTexture() then
-                charBtn:GetPushedTexture():SetTexCoord(82/256, 116/256, 216/512, 264/512)
+                -- characterinfo-down（暗金压暗版），与 Highlight 的 -mouseover（金色）区分开
+                charBtn:GetPushedTexture():SetTexCoord(122/256, 157/256, 162/512, 210/512)
             end
             charBtn:SetHighlightTexture(path)
             if charBtn:GetHighlightTexture() then
                 charBtn:GetHighlightTexture():SetTexCoord(82/256, 116/256, 216/512, 264/512)
             end
 
-            -- 在现有 DF 角色图标上叠加真实角色头像（OVERLAY 层覆盖底图标）
-            -- charBtn 是 vanilla frame，跨 /reload 不销毁，守护字段只防重复"创建"；
-            -- 尺寸/位置放守护块外，每次都重设，方便 /reload 即时调参
-            if not charBtn._dfPortrait then
-                charBtn._dfPortrait = charBtn:CreateTexture(nil, "OVERLAY")
+            -- 曾在此叠过自制角色头像（SetPortraitTexture 带不透明黑底，1.12 无遮罩 API 去不掉；
+            -- retail DF 角色按钮本就是纯 CharacterInfo 图标，无头像）→ 已移除。
+            -- charBtn 是 vanilla frame，跨 /reload 不销毁，旧纹理/事件 frame 会残留，显式清掉。
+            if charBtn._dfPortrait then
+                charBtn._dfPortrait:Hide()
+                charBtn._dfPortrait:SetTexture(nil)
             end
-            -- 实测剪影本体(连通域去相邻图标污染,转ascii/PNG核对)：盾牌垂直恰居
-            -- 框体中心、水平偏左0.57px → 头像居中嵌入剪影轮廓内,四边对称
-            charBtn._dfPortrait:SetWidth(10)
-            charBtn._dfPortrait:SetHeight(13)
-            charBtn._dfPortrait:ClearAllPoints()
-            charBtn._dfPortrait:SetPoint("CENTER", charBtn, "CENTER", -0.57, 0)
-
-            local function refreshCharPortrait()
-                if charBtn._dfPortrait then
-                    SetPortraitTexture(charBtn._dfPortrait, "player")
-                end
+            if charBtn._dfPortraitEvents then
+                charBtn._dfPortraitEvents:UnregisterAllEvents()
+                charBtn._dfPortraitEvents:SetScript("OnEvent", nil)
             end
-
-            -- 独立事件 frame 保持头像刷新（登录/重载 + 形态/易容变化）
-            if not charBtn._dfPortraitEvents then
-                local ef = CreateFrame("Frame")
-                ef:RegisterEvent("PLAYER_ENTERING_WORLD")
-                ef:RegisterEvent("UNIT_PORTRAIT_UPDATE")
-                ef:SetScript("OnEvent", function()
-                    refreshCharPortrait()
-                end)
-                charBtn._dfPortraitEvents = ef
-            end
-
-            refreshCharPortrait()
         end
     end
 
@@ -560,7 +541,7 @@ DFUI:NewMod("Micro", 1, function()
                 Setup.buttons[2]:SetNormalTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[2]:GetNormalTexture():SetTexCoord(122/256, 157/256, 54/512, 102/512)
                 Setup.buttons[2]:SetPushedTexture(Setup.texpath .. "uimicromenu2x.tga")
-                Setup.buttons[2]:GetPushedTexture():SetTexCoord(190/256, 225/256, 432/512, 480/512)
+                Setup.buttons[2]:GetPushedTexture():SetTexCoord(82/256, 117/256, 432/512, 480/512)
                 Setup.buttons[2]:SetHighlightTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[2]:GetHighlightTexture():SetTexCoord(190/256, 225/256, 432/512, 480/512)
             end
@@ -569,7 +550,7 @@ DFUI:NewMod("Micro", 1, function()
                 Setup.buttons[3]:SetNormalTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[3]:GetNormalTexture():SetTexCoord(162/256, 197/256, 0/512, 48/512)
                 Setup.buttons[3]:SetPushedTexture(Setup.texpath .. "uimicromenu2x.tga")
-                Setup.buttons[3]:GetPushedTexture():SetTexCoord(82/256, 117/256, 0/512, 48/512)
+                Setup.buttons[3]:GetPushedTexture():SetTexCoord(82/256, 117/256, 270/512, 318/512)
                 Setup.buttons[3]:SetHighlightTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[3]:GetHighlightTexture():SetTexCoord(82/256, 117/256, 0/512, 48/512)
             end
@@ -580,7 +561,7 @@ DFUI:NewMod("Micro", 1, function()
                 Setup.buttons[4]:SetNormalTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[4]:GetNormalTexture():SetTexCoord(202/256, 237/256, 270/512, 318/512)
                 Setup.buttons[4]:SetPushedTexture(Setup.texpath .. "uimicromenu2x.tga")
-                Setup.buttons[4]:GetPushedTexture():SetTexCoord(42/256, 77/256, 432/512, 480/512)
+                Setup.buttons[4]:GetPushedTexture():SetTexCoord(122/256, 157/256, 270/512, 318/512)
                 Setup.buttons[4]:SetHighlightTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[4]:GetHighlightTexture():SetTexCoord(42/256, 77/256, 432/512, 480/512)
             end
@@ -589,7 +570,7 @@ DFUI:NewMod("Micro", 1, function()
                 Setup.buttons[5]:SetNormalTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[5]:GetNormalTexture():SetTexCoord(42/256, 76/256, 54/512, 102/512)
                 Setup.buttons[5]:SetPushedTexture(Setup.texpath .. "uimicromenu2x.tga")
-                Setup.buttons[5]:GetPushedTexture():SetTexCoord(42/256, 77/256, 0/512, 48/512)
+                Setup.buttons[5]:GetPushedTexture():SetTexCoord(2/256, 36/256, 0/512, 48/512)
                 Setup.buttons[5]:SetHighlightTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[5]:GetHighlightTexture():SetTexCoord(42/256, 77/256, 0/512, 48/512)
             end
@@ -598,7 +579,7 @@ DFUI:NewMod("Micro", 1, function()
                 Setup.buttons[6]:SetNormalTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[6]:GetNormalTexture():SetTexCoord(0/256, 37/256, 269/512, 319/512)
                 Setup.buttons[6]:SetPushedTexture(Setup.texpath .. "uimicromenu2x.tga")
-                Setup.buttons[6]:GetPushedTexture():SetTexCoord(161/256, 197/256, 161/512, 211/512)
+                Setup.buttons[6]:GetPushedTexture():SetTexCoord(200/256, 237/256, 161/512, 211/512)
                 Setup.buttons[6]:SetHighlightTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[6]:GetHighlightTexture():SetTexCoord(161/256, 197/256, 161/512, 211/512)
             end
@@ -607,12 +588,14 @@ DFUI:NewMod("Micro", 1, function()
                 Setup.buttons[7]:SetNormalTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[7]:GetNormalTexture():SetTexCoord(0/256, 38/256, 161/512, 211/512)
                 Setup.buttons[7]:SetPushedTexture(Setup.texpath .. "uimicromenu2x.tga")
-                Setup.buttons[7]:GetPushedTexture():SetTexCoord(41/256, 78/256, 107/512, 157/512)
+                Setup.buttons[7]:GetPushedTexture():SetTexCoord(80/256, 118/256, 107/512, 157/512)
                 Setup.buttons[7]:SetHighlightTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[7]:GetHighlightTexture():SetTexCoord(41/256, 78/256, 107/512, 157/512)
             end
 
             if Setup.buttons[8] then
+                -- EBC(唱片)是上游自塞进 atlas 的自定义图，只有亮/暗两态、没有金色 mouseover 版，
+                -- 所以这里 Pushed 与 Highlight 只能共用暗版（其余按钮都已拆成 -down / -mouseover）
                 Setup.buttons[8]:SetNormalTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[8]:GetNormalTexture():SetTexCoord(82/256, 119/256, 325/512, 374/512)
                 Setup.buttons[8]:SetPushedTexture(Setup.texpath .. "uimicromenu2x.tga")
@@ -625,7 +608,7 @@ DFUI:NewMod("Micro", 1, function()
                 Setup.buttons[9]:SetNormalTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[9]:GetNormalTexture():SetTexCoord(162/256, 196/256, 107/512, 157/512)
                 Setup.buttons[9]:SetPushedTexture(Setup.texpath .. "uimicromenu2x.tga")
-                Setup.buttons[9]:GetPushedTexture():SetTexCoord(202/256, 237/256, 54/512, 102/512)
+                Setup.buttons[9]:GetPushedTexture():SetTexCoord(162/256, 196/256, 53/512, 103/512)
                 Setup.buttons[9]:SetHighlightTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[9]:GetHighlightTexture():SetTexCoord(202/256, 237/256, 54/512, 102/512)
             end
@@ -634,7 +617,7 @@ DFUI:NewMod("Micro", 1, function()
                 Setup.buttons[10]:SetNormalTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[10]:GetNormalTexture():SetTexCoord(2/256, 37/256, 107/512, 157/512)
                 Setup.buttons[10]:SetPushedTexture(Setup.texpath .. "uimicromenu2x.tga")
-                Setup.buttons[10]:GetPushedTexture():SetTexCoord(122/256, 157/256, 323/512, 372/512)
+                Setup.buttons[10]:GetPushedTexture():SetTexCoord(162/256, 197/256, 269/512, 319/512)
                 Setup.buttons[10]:SetHighlightTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[10]:GetHighlightTexture():SetTexCoord(122/256, 157/256, 323/512, 372/512)
             end
@@ -643,7 +626,7 @@ DFUI:NewMod("Micro", 1, function()
                 Setup.buttons[11]:SetNormalTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[11]:GetNormalTexture():SetTexCoord(202/256, 237/256, 215/512, 265/512)
                 Setup.buttons[11]:SetPushedTexture(Setup.texpath .. "uimicromenu2x.tga")
-                Setup.buttons[11]:GetPushedTexture():SetTexCoord(162/256, 198/256, 215/512, 265/512)
+                Setup.buttons[11]:GetPushedTexture():SetTexCoord(122/256, 157/256, 215/512, 265/512)
                 Setup.buttons[11]:SetHighlightTexture(Setup.texpath .. "uimicromenu2x.tga")
                 Setup.buttons[11]:GetHighlightTexture():SetTexCoord(162/256, 198/256, 215/512, 265/512)
             end
