@@ -66,6 +66,9 @@ function CreateStatusBar(parent, width, height, animConfig)
     bar.val = 0
     bar.val_ = 0
     bar.max = 1
+    -- 上一次真正重绘时用的 max。max 是裸字段(调用方 bar.max = x 直接赋值, 没有 setter),
+    -- SetValue 只比 val 会丢掉"值没变但 max 变了"的重绘, 见 SetValue 注释。
+    bar.maxPainted = nil
     bar.baseColor = {0, 0.9, 0.2, 1}
     bar.pulseColor = {1, 1, 1, 1}
     bar.cutoutColor = {0, 0.9, 0.2, 1}
@@ -125,8 +128,13 @@ function CreateStatusBar(parent, width, height, animConfig)
     end
 
     function bar:SetValue(val, instant)
-        -- only process if value actually changed
-        if self.val ~= val then
+        -- 值变了要处理; max 变了也必须处理。调用方一律"先 bar.max = x 再 :SetValue(y)",
+        -- 若只比 val, 则 reload 后的这条时序会让条永久空着:
+        --   UnitHealthMax 未就绪返回 0 → max=0 → Update() 走 max<=0 分支 → fill 宽度 0
+        --   → 服务器补真 max(UNIT_MAXHEALTH) → 下一个 UNIT_HEALTH 血量没变 → val 相同
+        --   → 短路 → Update() 永不执行 → 填充停在 0 宽, 直到血量数值本身再变一次。
+        if self.val ~= val or self.maxPainted ~= self.max then
+            self.maxPainted = self.max
             local currentTime = GetTime()
             local oldVal = self.val
             if val < oldVal and not instant and self.enableCutout and currentTime > self.cutoutSuppressed and self.max > 0 then

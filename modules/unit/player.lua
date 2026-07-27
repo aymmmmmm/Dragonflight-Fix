@@ -891,6 +891,42 @@ DFUI:NewMod("Player", 1, function()
         PlayerFrameTexture:SetTexture(tex)
     end
 
+    -- 把血/蓝条的取值刷新独立出来, 供事件处理器和重试帧共用
+    local function RefreshPlayerBars()
+        if Setup.healthBar then
+            Setup.healthBar.max = UnitHealthMax('player')
+            Setup.healthBar:SetValue(UnitHealth('player'))
+        end
+        if Setup.manaBar then
+            Setup.manaBar.max = UnitManaMax('player')
+            local mana = UnitMana('player')
+            Setup.manaBar:SetValue(mana > 0 and mana or 0.001)
+            local r, g, b = GetPowerColor(UnitPowerType('player'))
+            Setup.manaBar:SetFillColor(r, g, b, 1)
+        end
+    end
+
+    -- 进图/reload 后单位上限是延迟可用的。站桩时血蓝数值都不变, 不会有任何
+    -- UNIT_HEALTH/UNIT_MANA 来兜底, 一旦建条那一刻撞上 UnitHealthMax == 0
+    -- 就永久空条 —— 每 0.5s 补刷一次直到上限就绪(最多 8s)。
+    local barRetry = CreateFrame("Frame")
+    barRetry:Hide()
+    barRetry.elapsed = 0
+    barRetry.nextAt = 0.5
+    barRetry:SetScript("OnUpdate", function()
+        this.elapsed = this.elapsed + (arg1 or 0)   -- 1.12: OnUpdate 的 elapsed 在全局 arg1
+        if this.elapsed < this.nextAt then return end
+        this.nextAt = this.elapsed + 0.5
+
+        RefreshPlayerBars()
+
+        if UnitHealthMax('player') > 0 or this.elapsed > 8 then
+            this:Hide()
+            DFUI.activeScripts["PlayerBarRetry"] = false
+        end
+    end)
+    DFUI.activeScripts["PlayerBarRetry"] = false
+
     -- event handler
     local f = CreateFrame("Frame")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -899,6 +935,13 @@ DFUI:NewMod("Player", 1, function()
     f:RegisterEvent("UNIT_ENERGY")
     f:RegisterEvent("UNIT_FOCUS")
     f:RegisterEvent("UNIT_HEALTH")
+    -- 上限事件不能少: reload 后 UnitHealthMax 先返回 0、稍后才补真值, 而补真值时
+    -- 发的是 UNIT_MAXHEALTH 而不是 UNIT_HEALTH。不听就没有重绘时机, 条会停在 0 宽。
+    -- 注意能量/怒气的上限走各自独立的事件, 不会发 UNIT_MAXMANA
+    f:RegisterEvent("UNIT_MAXHEALTH")
+    f:RegisterEvent("UNIT_MAXMANA")
+    f:RegisterEvent("UNIT_MAXRAGE")
+    f:RegisterEvent("UNIT_MAXENERGY")
     f:RegisterEvent("PLAYER_REGEN_ENABLED")
     f:RegisterEvent("PLAYER_REGEN_DISABLED")
     f:SetScript("OnEvent", function()
@@ -906,22 +949,17 @@ DFUI:NewMod("Player", 1, function()
             Setup:Run()
             DFUI:NewCallbacks("Player", callbacks)
             f:UnregisterEvent("PLAYER_ENTERING_WORLD")
+            -- 建条那一刻上限可能还是 0, 挂上重试直到就绪
+            barRetry.elapsed = 0
+            barRetry.nextAt = 0.5
+            barRetry:Show()
+            DFUI.activeScripts["PlayerBarRetry"] = true
         end
 
         if event == "PLAYER_REGEN_ENABLED" or
         event == "PLAYER_REGEN_DISABLED" or
         arg1 == "player" then
-            if Setup.healthBar then
-                Setup.healthBar.max = UnitHealthMax('player')
-                Setup.healthBar:SetValue(UnitHealth('player'))
-            end
-            if Setup.manaBar then
-                Setup.manaBar.max = UnitManaMax('player')
-                local mana = UnitMana('player')
-                Setup.manaBar:SetValue(mana > 0 and mana or 0.001)
-                local r, g, b = GetPowerColor(UnitPowerType('player'))
-                Setup.manaBar:SetFillColor(r, g, b, 1)
-            end
+            RefreshPlayerBars()
             callbacks.textShow(DFUI:GetTempDB("Player", "textShow"))
             callbacks.textColoringHealth(DFUI:GetTempDB("Player", "textColoringHealth"))
             callbacks.textColoringResource(DFUI:GetTempDB("Player", "textColoringResource"))

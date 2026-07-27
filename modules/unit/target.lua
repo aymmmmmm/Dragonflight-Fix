@@ -580,6 +580,14 @@ DFUI:NewMod("Target", 1, function()
     f:RegisterEvent("UNIT_ENERGY")
     f:RegisterEvent("UNIT_RAGE")
     f:RegisterEvent("UNIT_FOCUS")
+    -- 上限事件不能少: 单位上限变化(reload 后补真值、光环加成、升级)只发 UNIT_MAXHEALTH/
+    -- UNIT_MAXMANA。不听就没有重绘时机, 条会按旧 max 画错比例。下面 arg1 == "target"
+    -- 那一支已覆盖它们的判定。
+    -- 注意能量/怒气的上限走各自独立的事件, 不会发 UNIT_MAXMANA
+    f:RegisterEvent("UNIT_MAXHEALTH")
+    f:RegisterEvent("UNIT_MAXMANA")
+    f:RegisterEvent("UNIT_MAXRAGE")
+    f:RegisterEvent("UNIT_MAXENERGY")
     f:SetScript("OnEvent", function()
         if event == "PLAYER_TARGET_CHANGED" then
             if Setup.healthBar then Setup.healthBar:SuppressCutout() end

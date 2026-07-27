@@ -327,11 +327,6 @@ DFUI:NewMod("Mini", 1, function()
                 portrait:SetPoint("CENTER", frame, -40, 8.25)
             end
 
-            local borderTexture = _G["PartyMemberFrame" .. i .. "Texture"]
-            if borderTexture and borderTexture.SetFrameLevel then
-                borderTexture:SetFrameLevel(frame:GetFrameLevel() - 2)
-            end
-
             if name and frame then
                 name:ClearAllPoints()
                 name:SetPoint("CENTER", frame, "CENTER", 6, 23)
@@ -342,9 +337,20 @@ DFUI:NewMod("Mini", 1, function()
                 healthBar:Hide()
                 manaBar:Hide()
 
+                -- PartyMemberFrame 在某些状态下 GetFrameLevel() 为 0, 直接减 1 会触发
+                -- 引擎硬错误 (Passed negative frame level), 而这一步报错会让整个 Mini
+                -- 模块从这里中止(core.lua 用 pcall 包住模块闭包)。先把父框抬到 >=1 再
+                -- 取 level-1: 既保住"条压在框体贴图之下"的原意, 也不会和父框同层
+                -- (同 strata 同 level 跨 frame 绘制顺序随机互盖)。
+                local baseLevel = frame:GetFrameLevel()
+                if baseLevel < 1 then
+                    frame:SetFrameLevel(1)
+                    baseLevel = 1
+                end
+
                 self.partyHealthBars[i] = CreateStatusBar(frame, 69, 18)
                 self.partyHealthBars[i]:SetPoint('CENTER', frame, 'CENTER', 15, 10)
-                self.partyHealthBars[i]:SetFrameLevel(frame:GetFrameLevel() - 1)
+                self.partyHealthBars[i]:SetFrameLevel(baseLevel - 1)
                 self.partyHealthBars[i]:SetTextures(self.path .. 'healthDF2.tga')
                 self.partyHealthBars[i]:SetFillColor(0, 1, 0)
                 self.partyHealthBars[i].max = 100
@@ -352,7 +358,7 @@ DFUI:NewMod("Mini", 1, function()
 
                 self.partyManaBars[i] = CreateStatusBar(frame, 69, 7)
                 self.partyManaBars[i]:SetPoint('CENTER', frame, 'CENTER', 15, 0.5)
-                self.partyManaBars[i]:SetFrameLevel(frame:GetFrameLevel() - 1)
+                self.partyManaBars[i]:SetFrameLevel(baseLevel - 1)
                 self.partyManaBars[i]:SetTextures(self.path .. 'UI-HUD-UnitFrame-Target-PortraitOn-Bar-Mana-Status.blp')
                 self.partyManaBars[i]:SetFillColor(0, 0, 1)
                 self.partyManaBars[i].max = 100
@@ -821,6 +827,130 @@ DFUI:NewMod("Mini", 1, function()
         end
     end
 
+    -- ═══ 小队刷新 ═══
+    -- 抽成独立函数: 事件处理器和延迟重试帧共用。1.12 里 reload/进图后
+    -- UnitExists("partyN") 可能已 true 而 UnitHealth/UnitHealthMax 仍返回 0,
+    -- 只在 PLAYER_ENTERING_WORLD 跑一次且无重试, 会让"满血站桩的队友"血条永久消失。
+    local function RefreshParty()
+        local now = GetTime()
+        if configCache.noPartyPercent == nil or (now - configCache.lastUpdate > 1) then
+            configCache.noPartyPercent = DFUI:GetTempDB("Mini", "noPartyPercent")
+            configCache.lastUpdate = now
+        end
+        local value = configCache.noPartyPercent
+        for i = 1, 4 do
+            local hpBar = Setup.partyHealthBars[i]
+            local mpBar = Setup.partyManaBars[i]
+            local pctText = Setup.partyHealthPercentTexts[i]
+            local offBg = Setup.partyOfflineBgs and Setup.partyOfflineBgs[i]
+            local offText = Setup.partyOfflineTexts and Setup.partyOfflineTexts[i]
+
+            if UnitExists("party" .. i) and hpBar then
+                if not UnitIsConnected("party" .. i) then
+                    hpBar:Hide()
+                    if mpBar then mpBar:Hide() end
+                    if pctText then pctText:SetText("") end
+                    if offBg then offBg:Show() end
+                    if offText then offText:Show() end
+                else
+                    if offBg then offBg:Hide() end
+                    if offText then offText:Hide() end
+
+                    local health = UnitHealth("party" .. i)
+                    local maxHealth = UnitHealthMax("party" .. i)
+                    -- 只看 maxHealth: health == 0 是死亡队友, 该显示空条而不是整条消失
+                    if maxHealth > 0 then
+                        hpBar:Show()
+                        hpBar.max = maxHealth
+                        hpBar:SetValue(health)
+
+                        local mana = UnitMana("party" .. i)
+                        local maxMana = UnitManaMax("party" .. i)
+                        if mpBar then
+                            if maxMana > 0 then
+                                mpBar:Show()
+                                mpBar.max = maxMana
+                                mpBar:SetValue(mana > 0 and mana or 0.001)
+
+                                local r, g, b = GetPowerColor(UnitPowerType("party" .. i))
+                                mpBar:SetFillColor(r, g, b)
+                            else
+                                mpBar:Hide()
+                            end
+                        end
+
+                        if pctText then
+                            if value then
+                                pctText:SetText(health .. (configCache.miniPartyTextMaxShow and "/" .. maxHealth or ""))
+                            else
+                                pctText:SetText(math.floor((health / maxHealth) * 100) .. "%")
+                            end
+                        end
+                    else
+                        -- 数据还没到位: 藏条但不清空, 等重试帧或 UNIT_MAXHEALTH 补
+                        hpBar:Hide()
+                        if mpBar then mpBar:Hide() end
+                        if pctText then pctText:SetText("") end
+                    end
+                end
+            else
+                -- 该槽位没人了: 条也要藏, 否则旧名单的填充会残留
+                if hpBar then hpBar:Hide() end
+                if mpBar then mpBar:Hide() end
+                if pctText then pctText:SetText("") end
+                if offBg then offBg:Hide() end
+                if offText then offText:Hide() end
+            end
+        end
+    end
+
+    -- 名单变更后延后一帧刷职业色 (原实现把 timer 声明在 OnEvent 闭包内,
+    -- 每次 PARTY_MEMBERS_CHANGED 必然新建一个 frame → 泄漏)
+    local partyColorTimer = CreateFrame("Frame")
+    local function DeferredPartyColors()
+        this:SetScript("OnUpdate", nil)
+        if Setup.framesState then Setup.framesState:updatePartyColors() end
+    end
+
+    -- 在场队友的 UnitHealthMax 是否已经就绪(没组队 = 天然就绪)
+    local function PartyDataReady()
+        for i = 1, 4 do
+            if UnitExists("party" .. i) and UnitHealthMax("party" .. i) <= 0 then
+                return false
+            end
+        end
+        return true
+    end
+
+    -- 延迟重试帧: 每 0.5s 补跑一次 RefreshParty, 直到数据就绪或超过 8s 放弃。
+    -- 不能只跑固定几轮: 站桩时队友血量数值不变, 不会有任何 UNIT_HEALTH 来兜底,
+    -- 一旦 PEW 那一次撞上"数据没就绪"就永久空条 —— 这正是"站桩 rl 才出问题、
+    -- 战斗中 rl 没事(数值在变, 会自己冲掉错误状态)"的由来。
+    local partyRetry = CreateFrame("Frame")
+    partyRetry:Hide()
+    partyRetry.elapsed = 0
+    partyRetry.nextAt = 0.5
+    partyRetry:SetScript("OnUpdate", function()
+        this.elapsed = this.elapsed + (arg1 or 0)   -- 1.12: OnUpdate 的 elapsed 在全局 arg1
+        if this.elapsed < this.nextAt then return end
+        this.nextAt = this.elapsed + 0.5
+
+        RefreshParty()
+        if Setup.framesState then Setup.framesState:updatePartyColors() end
+
+        if PartyDataReady() or this.elapsed > 8 then
+            this:Hide()
+            DFUI.activeScripts["MiniPartyRetry"] = false
+        end
+    end)
+    local function ArmPartyRetry()
+        partyRetry.elapsed = 0
+        partyRetry.nextAt = 0.5
+        partyRetry:Show()
+        DFUI.activeScripts["MiniPartyRetry"] = true
+    end
+    DFUI.activeScripts["MiniPartyRetry"] = false
+
     -- event handler
     local f = CreateFrame("Frame")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -829,6 +959,13 @@ DFUI:NewMod("Mini", 1, function()
     f:RegisterEvent("UNIT_ENERGY")
     f:RegisterEvent("UNIT_RAGE")
     f:RegisterEvent("UNIT_FOCUS")
+    -- 上限事件不能少: reload 后 UnitHealthMax 先返回 0、稍后才补真值, 而补真值时
+    -- 发的是 UNIT_MAXHEALTH 而不是 UNIT_HEALTH。不听就没有重绘时机, 条会停在 0 宽。
+    -- 注意能量/怒气的上限走各自独立的事件, 不会发 UNIT_MAXMANA
+    f:RegisterEvent("UNIT_MAXHEALTH")
+    f:RegisterEvent("UNIT_MAXMANA")
+    f:RegisterEvent("UNIT_MAXRAGE")
+    f:RegisterEvent("UNIT_MAXENERGY")
     f:RegisterEvent("UNIT_PET")
     f:RegisterEvent("PARTY_MEMBERS_CHANGED")
     f:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -852,100 +989,35 @@ DFUI:NewMod("Mini", 1, function()
             (event == "UNIT_MANA" and arg1 == "pet") or
             (event == "UNIT_ENERGY" and arg1 == "pet") or
             (event == "UNIT_RAGE" and arg1 == "pet") or
-            (event == "UNIT_FOCUS" and arg1 == "pet") then
+            (event == "UNIT_FOCUS" and arg1 == "pet") or
+            (event == "UNIT_MAXHEALTH" and arg1 == "pet") or
+            (event == "UNIT_MAXMANA" and arg1 == "pet") or
+            (event == "UNIT_MAXRAGE" and arg1 == "pet") or
+            (event == "UNIT_MAXENERGY" and arg1 == "pet") then
             Setup.UpdatePetTexts()
         end
-        local partyUpdateTimer = nil
         if event == "PLAYER_ENTERING_WORLD" or event == "PARTY_MEMBERS_CHANGED" or
             (event == "UNIT_HEALTH" and string.sub(arg1, 1, 5) == "party") or
             (event == "UNIT_MANA" and string.sub(arg1, 1, 5) == "party") or
             (event == "UNIT_ENERGY" and string.sub(arg1, 1, 5) == "party") or
             (event == "UNIT_RAGE" and string.sub(arg1, 1, 5) == "party") or
-            (event == "UNIT_FOCUS" and string.sub(arg1, 1, 5) == "party") then
-            local now = GetTime()
-            if configCache.noPartyPercent == nil or (now - configCache.lastUpdate > 1) then
-                configCache.noPartyPercent = DFUI:GetTempDB("Mini", "noPartyPercent")
-                configCache.lastUpdate = now
-            end
-            local value = configCache.noPartyPercent
-            for i = 1, 4 do
-                if UnitExists("party" .. i) and Setup.partyHealthBars[i] then
-                    if not UnitIsConnected("party" .. i) then
-                        Setup.partyHealthBars[i]:Hide()
-                        Setup.partyManaBars[i]:Hide()
-                        Setup.partyHealthPercentTexts[i]:SetText("")
-                        if Setup.partyOfflineBgs and Setup.partyOfflineBgs[i] then
-                            Setup.partyOfflineBgs[i]:Show()
-                        end
-                        if Setup.partyOfflineTexts and Setup.partyOfflineTexts[i] then
-                            Setup.partyOfflineTexts[i]:Show()
-                        end
-                    else
-                        if Setup.partyOfflineBgs and Setup.partyOfflineBgs[i] then
-                            Setup.partyOfflineBgs[i]:Hide()
-                        end
-                        if Setup.partyOfflineTexts and Setup.partyOfflineTexts[i] then
-                            Setup.partyOfflineTexts[i]:Hide()
-                        end
-                        local health = UnitHealth("party" .. i)
-                        local maxHealth = UnitHealthMax("party" .. i)
-                        if maxHealth > 0 and health > 0 then
-                            Setup.partyHealthBars[i]:Show()
-                            Setup.partyHealthBars[i].max = maxHealth
-                            Setup.partyHealthBars[i]:SetValue(health)
+            (event == "UNIT_FOCUS" and string.sub(arg1, 1, 5) == "party") or
+            (event == "UNIT_MAXHEALTH" and string.sub(arg1, 1, 5) == "party") or
+            (event == "UNIT_MAXMANA" and string.sub(arg1, 1, 5) == "party") or
+            (event == "UNIT_MAXRAGE" and string.sub(arg1, 1, 5) == "party") or
+            (event == "UNIT_MAXENERGY" and string.sub(arg1, 1, 5) == "party") then
+            RefreshParty()
 
-                            local mana = UnitMana("party" .. i)
-                            local maxMana = UnitManaMax("party" .. i)
-                            if Setup.partyManaBars[i] then
-                                if maxMana > 0 then
-                                    Setup.partyManaBars[i]:Show()
-                                    Setup.partyManaBars[i].max = maxMana
-                                    Setup.partyManaBars[i]:SetValue(mana > 0 and mana or 0.001)
-
-                                    local r, g, b = GetPowerColor(UnitPowerType("party" .. i))
-                                    Setup.partyManaBars[i]:SetFillColor(r, g, b)
-                                else
-                                    Setup.partyManaBars[i]:Hide()
-                                end
-                            end
-
-                            if value then
-                                Setup.partyHealthPercentTexts[i]:SetText(health .. (configCache.miniPartyTextMaxShow and "/" .. maxHealth or ""))
-                            else
-                                local healthPercent = maxHealth > 0 and math.floor((health / maxHealth) * 100) or 0
-                                Setup.partyHealthPercentTexts[i]:SetText(healthPercent .. "%")
-                            end
-                        else
-                            Setup.partyHealthBars[i]:Hide()
-                            Setup.partyHealthPercentTexts[i]:SetText("")
-                            if Setup.partyManaBars[i] then
-                                Setup.partyManaBars[i]:Hide()
-                            end
-                        end
-                    end
-                else
-                    Setup.partyHealthPercentTexts[i]:SetText("")
-                    if Setup.partyOfflineBgs and Setup.partyOfflineBgs[i] then
-                        Setup.partyOfflineBgs[i]:Hide()
-                    end
-                    if Setup.partyOfflineTexts and Setup.partyOfflineTexts[i] then
-                        Setup.partyOfflineTexts[i]:Hide()
-                    end
-                end
-            end
             if event == "PARTY_MEMBERS_CHANGED" then
-                if partyUpdateTimer then
-                    partyUpdateTimer:SetScript("OnUpdate", nil)
-                else
-                    partyUpdateTimer = CreateFrame("Frame")
-                end
-
-                partyUpdateTimer:SetScript("OnUpdate", function()
-                    Setup.framesState:updatePartyColors()
-                    partyUpdateTimer:SetScript("OnUpdate", nil)
-                end)
-            else
+                -- 名单刚变, 职业色要等下一帧 vanilla 更新完 unit 再取
+                partyColorTimer:SetScript("OnUpdate", DeferredPartyColors)
+            elseif Setup.framesState then
                 Setup.framesState:updatePartyColors()
+            end
+
+            -- reload / 进图后单位数据是延迟可用的, 补跑两轮兜底
+            if event == "PLAYER_ENTERING_WORLD" or event == "PARTY_MEMBERS_CHANGED" then
+                ArmPartyRetry()
             end
         end
         if event == "PLAYER_ENTERING_WORLD" or
@@ -954,9 +1026,8 @@ DFUI:NewMod("Mini", 1, function()
         (event == "UNIT_HEALTH" and arg1 == "targettarget") then
             Setup.framesState:updateToTColor()
         end
-        if event == "PLAYER_ENTERING_WORLD" then
-            f:UnregisterEvent("PLAYER_ENTERING_WORLD")
-        end
+        -- 不再 UnregisterEvent("PLAYER_ENTERING_WORLD"):
+        -- 每次进图/切实例都要重刷一遍, 单次机会正是 reload 后条丢失的直接原因
     end)
 
     -- execute callbacks
