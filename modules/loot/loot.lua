@@ -3,15 +3,17 @@
 
 DFUI:NewDefaults("Loot", {
     enabled           = {true},
-    mousecursor       = {true,  "checkbox", nil, nil, "基础", 1, "拾取窗口跟随鼠标光标", nil, nil},
-    autoloot          = {false, "checkbox", nil, nil, "基础", 2, "自动拾取所有物品", nil, nil},
-    autopickup_bop    = {true,  "checkbox", nil, nil, "基础", 3, "单人时自动确认拾取绑定物品", nil, nil},
-    scale             = {1.0,   "slider", {0.5, 1.5, 0.05}, nil, "外观", 1, "拾取窗口缩放", nil, nil},
-    quality_border    = {true,  "checkbox", nil, nil, "外观", 2, "物品图标边框显示品质颜色", nil, nil},
-    quality_glow      = {true,  "checkbox", nil, nil, "外观", 3, "品质物品背景高亮", nil, nil},
-    glow_threshold    = {2,     "slider", {0, 5, 1}, "quality_glow", "外观", 4, "高亮最低品质(0灰 1白 2绿 3蓝 4紫 5橙)", nil, nil},
-    show_item_type    = {true,  "checkbox", nil, nil, "外观", 5, "显示物品类型信息", nil, nil},
-    roll_rarity_timer = {true,  "checkbox", nil, nil, "投骰", 1, "投骰计时条颜色匹配物品品质", nil, nil},
+    -- categoryIndex 必须全模块连续递增：elem.lua 取「分类下首个被 pairs 遍历到的元素」的
+    -- categoryIndex 作为该分类的排序值，若各分类都从 1 开始，分类间顺序会随 pairs 随机
+    mousecursor       = {true,  "checkbox", nil, nil, "拾取 - 基础", 1, "拾取窗口跟随鼠标光标", nil, nil},
+    autoloot          = {false, "checkbox", nil, nil, "拾取 - 基础", 2, "自动拾取所有物品", nil, nil},
+    autopickup_bop    = {true,  "checkbox", nil, nil, "拾取 - 基础", 3, "单人时自动确认拾取绑定物品", nil, nil},
+    scale             = {1.0,   "slider", {0.5, 1.5, 0.05}, nil, "拾取 - 外观", 4, "拾取窗口缩放", nil, nil},
+    quality_border    = {true,  "checkbox", nil, nil, "拾取 - 外观", 5, "物品图标边框显示品质颜色", nil, nil},
+    quality_glow      = {true,  "checkbox", nil, nil, "拾取 - 外观", 6, "品质物品背景高亮", nil, nil},
+    glow_threshold    = {2,     "slider", {0, 5, 1}, "quality_glow", "拾取 - 外观", 7, "高亮最低品质(0灰 1白 2绿 3蓝 4紫 5橙)", nil, nil},
+    show_item_type    = {true,  "checkbox", nil, nil, "拾取 - 外观", 8, "显示物品类型信息", nil, nil},
+    roll_rarity_timer = {true,  "checkbox", nil, nil, "拾取 - 投骰", 9, "投骰计时条颜色匹配物品品质", nil, nil},
 })
 
 DFUI:NewMod("Loot", 1, function()

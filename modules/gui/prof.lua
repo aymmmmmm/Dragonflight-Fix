@@ -304,6 +304,52 @@ DFUI:NewMod("Gui-prof", 4, function()
     end
 
     --=================
+    -- ShaguTweaks 快照（配置共享）
+    --=================
+    -- ShaguTweaks 把开关存在自己的 ShaguTweaks_config 里，DFUI 的导出串本来带不走。
+    -- 导出前现抓一份存进档案 Gui-shag.shaguSnapshot（现抓而非勾选时写，这样用户在
+    -- ShaguTweaks 自家面板做的改动也能覆盖到）；导入时在 ReloadUI 之前回写——那时
+    -- ShaguTweaks 已完整加载，一次重载即全部生效，不用提示用户再 /reload。
+    local function CaptureShaguInto(src, snap)
+        if type(src) ~= "table" then return end
+        for key in pairs(src) do
+            if ShaguTweaks_config[key] ~= nil then
+                snap[key] = (ShaguTweaks_config[key] == 1) and 1 or 0
+            end
+        end
+    end
+
+    local function CaptureShaguSnapshot()
+        -- ShaguTweaks 未装：不动档案里已有的快照，留着以后装了再导一次即生效
+        if type(ShaguTweaks_config) ~= "table" then return end
+        local snap = {}
+        CaptureShaguInto(DFUI.gui.shaguCoreData, snap)
+        CaptureShaguInto(DFUI.gui.shaguExtrasData, snap)
+        DFUI:SetTempDBNoCallback("Gui-shag", "shaguSnapshot", snap)
+    end
+
+    local function ApplyShaguSnapshot(snap)
+        if type(snap) ~= "table" then return 0 end
+        if type(ShaguTweaks_config) ~= "table" then return 0 end
+        local count = 0
+        for key, val in pairs(snap) do
+            local on = (val == 1)
+            ShaguTweaks_config[key] = on and 1 or 0
+            local mod = ShaguTweaks and ShaguTweaks.mods and ShaguTweaks.mods[key]
+            if mod then
+                -- compat.lua 把 DFUI 已接管的那几个模块的 enable 换成了空函数，这里调到也是空操作
+                if on then
+                    if mod.enable then pcall(mod.enable, mod) end
+                elseif mod.disable then
+                    pcall(mod.disable, mod)
+                end
+            end
+            count = count + 1
+        end
+        return count
+    end
+
+    --=================
     -- 导入/导出弹窗
     --=================
     local function CreateShareDialog()
@@ -439,6 +485,10 @@ DFUI:NewMod("Gui-prof", 4, function()
                 end
             end
 
+            -- 回写 ShaguTweaks 开关。必须在 ReloadUI 之前：此刻 ShaguTweaks 已完整加载，
+            -- 改完 config 后这一次重载就能让全部模块按新设置起来。
+            ApplyShaguSnapshot(DFUI.tempDB["Gui-shag"] and DFUI.tempDB["Gui-shag"].shaguSnapshot)
+
             ReloadUI()
         end)
         dialog.importBtn = importBtn
@@ -452,6 +502,7 @@ DFUI:NewMod("Gui-prof", 4, function()
         local char = UnitName("player")
         local curProf = DFUI_CUR_PROFILE[char] or "Default"
 
+        CaptureShaguSnapshot()
         DFUI:SaveTempDB()
 
         local exported = DFUI:SerializeProfile(curProf)

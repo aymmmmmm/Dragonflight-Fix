@@ -1,6 +1,11 @@
 DFUI:NewDefaults("Gui-shag", {
     enabled = {true},
 
+    -- ShaguTweaks 各模块开关的快照 {[英文模块名] = 0/1}。
+    -- ShaguTweaks 把设置存在自己的 ShaguTweaks_config 里，DFUI 的导出串本来带不走；
+    -- 这里代管一份，导出时现抓（见 gui/prof.lua:ShowExportDialog）、导入时回写。
+    -- 单元素形式，不进 elem.lua 自动配置页。
+    shaguSnapshot = {{}},
 })
 
 DFUI:NewMod("Gui-shag", 3, function()

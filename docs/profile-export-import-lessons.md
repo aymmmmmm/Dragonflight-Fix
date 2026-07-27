@@ -65,14 +65,16 @@ _G.DFUI_FRAMEPOS = {}
 
 | API | 签名 | 返回 | 位置 |
 |-----|------|------|------|
-| `DFUI:SerializeProfile(profileName)` | profileName 为档案名（字符串） | 成功返回字符串；档案不存在返回 `nil` | `core.lua:549` |
-| `DFUI:DeserializeProfile(str)` | str 为导入字符串 | 成功返回 `profileData` 表；失败返回 `nil, errMsg` | `core.lua:578` |
+| `DFUI:SerializeProfile(profileName)` | profileName 为档案名（字符串） | 成功返回字符串；档案不存在返回 `nil` | `core.lua:554` |
+| `DFUI:DeserializeProfile(str)` | str 为导入字符串 | 成功返回 `profileData` 表；失败返回 `nil, errMsg` | `core.lua:583` |
 
 辅助局部函数（块内，外部不可见）：`SerializeValue` / `DeserializeValue`（值编解码）、`Checksum`（`math.mod(sum, 65536)`）、`SplitTopLevel(str, sep)`（按分隔符切分但跳过引号内与 `{}` 内的分隔符）。
 
 UI 侧调用链（`modules/gui/prof.lua`）：
-- 导出：`ShowExportDialog`（`prof.lua:422`）先 `DFUI:SaveTempDB()` 落盘当前档案，再 `DFUI:SerializeProfile(curProf)`，把结果填进只读弹窗。
-- 导入：弹窗"确认导入"按钮（`prof.lua:374`）→ `DFUI:DeserializeProfile(text)` → 重建 `DFUI.tempDB` + 回填默认值 → `ReloadUI()`。
+- 导出：`ShowExportDialog`（`prof.lua:499`）先抓 ShaguTweaks 快照、`DFUI:SaveTempDB()` 落盘当前档案，再 `DFUI:SerializeProfile(curProf)`，把结果填进只读弹窗。
+- 导入：弹窗"确认导入"按钮（`prof.lua:447`）→ `DFUI:DeserializeProfile(text)` → 重建 `DFUI.tempDB` + 回填默认值 → 回写 `ShaguTweaks_config` → `ReloadUI()`。
+
+> `DeserializeValue` 解析嵌套 table 时**不跟踪引号**（只按 `{}` 深度和 `;` 切分），所以 table 类型的配置值里不能放含 `;` `{` `}` 的字符串。当前所有 table 值都安全：`colour` 是 3 元数字数组，`Gui-shag.shaguSnapshot` 的键是 `compat.lua` 硬编码的英文名（只含字母和空格）、值是 0/1。
 
 ## 导出/导入字符串格式
 
@@ -123,27 +125,30 @@ DFUI_PROFILES[profile]      绝对像素坐标 {x, y}
 
 导入字符串可能来自**旧版本**导出，缺少新版本新增的模块/键。若直接 `DFUI.tempDB = profileData` 就重载，新模块在 tempDB 里是 nil，建控件时（如 slider）会 `SetValue(nil)` 报错——与切换深/浅模式套用 profile 表的失同步问题同源。
 
-因此导入逻辑（`prof.lua:390-413`）分两步：
+因此导入逻辑（`prof.lua:463-486`）分两步：
 
 1. 用 `profileData` 重建 `DFUI.tempDB`（`_FramePos` 走 `_G.DFUI_FRAMEPOS`，其余模块逐键拷进 `tempDB[mod]`）。
 2. 遍历 `DFUI.defaults`，对 `tempDB[mod][key] == nil` 的项用 `def[key][1]`（默认值）补齐。
 
-> 关键：补齐判断必须用 `== nil` 而非 `if not`，否则导入字符串里合法的 `false` 会被默认值覆盖。这与 `core.lua:InitTempDB`（`core.lua:233-241`）登录时补 defaults 是同一套逻辑——两条进 tempDB 的路径都靠 `DFUI.defaults` 兜底，所以加新模块不必手动同步导出字符串。
+> 关键：补齐判断必须用 `== nil` 而非 `if not`，否则导入字符串里合法的 `false` 会被默认值覆盖。这与 `core.lua:InitTempDB`（`core.lua:236-244`）登录时补 defaults 是同一套逻辑——两条进 tempDB 的路径都靠 `DFUI.defaults` 兜底，所以加新模块不必手动同步导出字符串。
 
-导入还会在重建 tempDB 前先 `DFUI.tempDB = {}`（`prof.lua:390`），目的是覆盖而非合并，避免 `PLAYER_LOGOUT` 的 `SaveTempDB` 把旧残留写回档案。
+导入还会在重建 tempDB 前先 `DFUI.tempDB = {}`（`prof.lua:463`），目的是覆盖而非合并，避免 `PLAYER_LOGOUT` 的 `SaveTempDB` 把旧残留写回档案。
 
 ### 导出包含的数据
 
 - 当前档案 `DFUI_PROFILES[profileName]` 里所有模块的设置项（即全部经 `NewDefaults` 注册的模块；模块数随版本增长，不固定）
 - `_FramePos`：仅包含用户手动拖拽过的框架位置（Ctrl+Shift+Alt 模式下拖拽）
-- `Generic` 等动态模块
+- `Errors.bugAutoToast` / `Errors.bugOnlyDFUI`：诊断页（tab16）两个复选框，原存 `DFUI_BUGS.prefs`，已迁进档案
+- `Gui-shag.shaguSnapshot`：ShaguTweaks 各模块开关的代管快照，导出时现抓、导入时在 `ReloadUI` 前回写 `ShaguTweaks_config`
+- `Generic` 等动态模块（但这类未注册 defaults 的伪模块会被 `SyncProfiles` 在下次登录清掉，见 config-system.md 已知坑 6）
 
-注：导出只序列化 `DFUI_PROFILES[profileName]` 中存在的内容。`SerializeProfile`（`core.lua:549`）按模块名排序遍历该档案，对每个 table 类型字段输出 `模块名:键=值,...`。
+注：导出只序列化 `DFUI_PROFILES[profileName]` 中存在的内容。`SerializeProfile`（`core.lua:554`）按模块名排序遍历该档案，对每个 table 类型字段输出 `模块名:键=值,...`。**没有白名单**——判断一个选项能不能共享，只需看它有没有写进 `tempDB`。
 
 ### 导出不包含的数据
 
-- `DFUI_CUR_PROFILE`（角色-档案绑定，角色特定）
+- `DFUI_CUR_PROFILE`（角色-档案绑定，角色特定），及寄生在它命名空间里的 `TalentPlans` / `TalentFrameSmall` / `TradeSkillFavorites` / `TexFixAutoHeal` / `[角色名.."_firstRun"]`
 - `DFUI_DB_SETUP`（仅存 `lastVersionCheck` 等运行期状态，由 track.lua 写；不是档案数据，导入流程完全不碰它）
+- `DFUI_BUGS.entries`（错误日志）、`DFUI_HealthDB` / `DFUI_TrainerSpells` / `DFUI_ShieldDB` / `DFUI_PredictDB`（运行期采集的数据缓存）
 - 从未拖拽过的框架位置（使用模块默认位置的框架不在 `_FramePos` 中）
 
 > 注：`DFUI.DBversion`（`core.lua:23`，当前 `"2.0"`）是代码常量，与 `DFUI_DB_SETUP` 无关，也不随导入/导出变化。

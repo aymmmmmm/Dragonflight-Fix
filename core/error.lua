@@ -43,12 +43,34 @@ local MAX_ENTRIES = 50
 local MAX_TEXT = 2048
 local subscribers = {}
 local toastFrame
-local prefsDefaults = { autoToast = false, onlyDFUI = false }
-
 DFUI = DFUI or {}
 DFUI.errors = DFUI.errors or {}
 DFUI.errors.list = {}
-DFUI.errors.prefs = prefsDefaults
+-- 内存镜像，真值存在档案 Errors.bugAutoToast / Errors.bugOnlyDFUI（见 syncPrefsFromDB）。
+-- 这里的初值只是 tempDB 就绪前的兜底，本文件比 InitTempDB 先解析。
+DFUI.errors.prefs = { autoToast = false, onlyDFUI = false }
+
+-- 诊断页两个偏好改存进档案，从而能随配置导出串共享。
+-- prefs 仍保留为内存表，showToast（本文件）与 gui/bugs.lua 的读取点因此一行不用改。
+local function syncPrefsFromDB()
+    if not (DFUI.tempDB and DFUI.tempDB.Errors) then return false end
+
+    -- 一次性迁移：旧版把偏好存在账号级 DFUI_BUGS.prefs，搬进档案后清掉
+    if type(DFUI_BUGS) == "table" and type(DFUI_BUGS.prefs) == "table" then
+        if DFUI_BUGS.prefs.autoToast ~= nil then
+            DFUI.tempDB.Errors.bugAutoToast = DFUI_BUGS.prefs.autoToast and true or false
+        end
+        if DFUI_BUGS.prefs.onlyDFUI ~= nil then
+            DFUI.tempDB.Errors.bugOnlyDFUI = DFUI_BUGS.prefs.onlyDFUI and true or false
+        end
+        DFUI_BUGS.prefs = nil
+    end
+
+    DFUI.errors.prefs.autoToast = DFUI.tempDB.Errors.bugAutoToast and true or false
+    DFUI.errors.prefs.onlyDFUI  = DFUI.tempDB.Errors.bugOnlyDFUI and true or false
+    return true
+end
+DFUI.errors.SyncPrefs = syncPrefsFromDB
 
 local function notifySubs()
     for i = 1, table.getn(subscribers) do
@@ -218,11 +240,7 @@ local function restoreFromSV()
     if restored then return end
     if type(DFUI_BUGS) ~= "table" then DFUI_BUGS = {} end
     if type(DFUI_BUGS.entries) ~= "table" then DFUI_BUGS.entries = {} end
-    if type(DFUI_BUGS.prefs) ~= "table" then DFUI_BUGS.prefs = {} end
-    for k, v in pairs(prefsDefaults) do
-        if DFUI_BUGS.prefs[k] == nil then DFUI_BUGS.prefs[k] = v end
-    end
-    DFUI.errors.prefs = DFUI_BUGS.prefs
+    syncPrefsFromDB()
     -- 恢复历史条目（放在最前），再附加本会话已收到的
     local session = DFUI.errors.list
     DFUI.errors.list = {}
@@ -260,10 +278,12 @@ f:SetScript('OnEvent', function()
     elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
         -- 在所有插件加载完成后再次抢回错误处理器
         seterrorhandler(ErrorHandler)
+        -- 兜底：restoreFromSV 若跑在 InitTempDB 之前（事件注册顺序变动），此处补同步一次
+        syncPrefsFromDB()
     elseif event == "PLAYER_LOGOUT" then
         if type(DFUI_BUGS) ~= "table" then DFUI_BUGS = {} end
         DFUI_BUGS.entries = DFUI.errors.list
-        DFUI_BUGS.prefs = DFUI.errors.prefs
+        -- prefs 不再写这里：已改存档案 Errors.bugAutoToast / bugOnlyDFUI，由 SaveTempDB 落盘
     end
 end)
 

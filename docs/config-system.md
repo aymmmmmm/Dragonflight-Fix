@@ -31,11 +31,11 @@ DFUI 的配置分三层：
 `.toc` 声明（`Dragonflight-Fix.toc:8,10`）：
 
 ```
-## SavedVariables: DFUI_PROFILES, DFUI_DB_SETUP, DFUI_BUGS, DFUI_HealthDB
+## SavedVariables: DFUI_PROFILES, DFUI_DB_SETUP, DFUI_BUGS, DFUI_HealthDB, DFUI_TrainerSpells, DFUI_ShieldDB, DFUI_PredictDB
 ## SavedVariablesPerCharacter: DFUI_CUR_PROFILE, DFUI_FRAMEPOS
 ```
 
-四张表在 `core.lua:5-8` 初始化为空表：
+其中四张属于档案系统，在 `core.lua:5-8` 初始化为空表：
 
 | 变量 | 作用域 | 结构 | 写入处 |
 |------|--------|------|--------|
@@ -44,7 +44,17 @@ DFUI 的配置分三层：
 | `DFUI_CUR_PROFILE` | 角色特定 | `[角色名] = 档案名`；另有 `[角色名.."_firstRun"] = true` 标记首登已过 | `InitTempDB` / `SwitchProfile` / `first.lua` |
 | `DFUI_FRAMEPOS` | 角色特定 | `[帧名] = {x, y}`（绝对像素坐标） | `frames.lua` 拖拽保存 / `SaveTempDB` 同步 |
 
-另两个声明在 .toc 但不属于档案系统：`DFUI_BUGS`（错误日志，`core/error.lua`）、`DFUI_HealthDB`（血量估算库，`libs/libhealth.lua`，schema v2）。
+其余五个声明在 .toc 但不属于档案系统，都是运行期采集的数据缓存或日志，**不进导出串**（这是设计边界，非缺陷）：
+
+| 变量 | 来源 | 内容 |
+|------|------|------|
+| `DFUI_BUGS` | `core/error.lua` | `entries` = 最多 50 条错误记录。注：原本还存 `prefs`，已迁进档案（见下节 tab16） |
+| `DFUI_HealthDB` | `libs/libhealth.lua` | 怪物血量估算，schema v2 |
+| `DFUI_TrainerSpells` | `modules/panels/trainerdata.lua` | 训练师扫描到的法术，按职业分组，供法术书「未学技能」页用 |
+| `DFUI_ShieldDB` | `libs/libabsorb.lua` | 护盾吸收量实测校准，按 realm/角色 |
+| `DFUI_PredictDB` | `libs/libpredict.lua` | 治疗量预读校准，按 realm/角色 |
+
+另有几个**寄生在 `DFUI_CUR_PROFILE`** 命名空间里的角色级数据（与「角色名→档案名」映射共用一张表），同样不进导出串：`[角色名.."_firstRun"]`（`first.lua:119,133`）、`TalentPlans` / `TalentFrameSmall`（`ui/talents.lua:74,451`）、`TexFixAutoHeal`（`dftex.lua:409`）、`TradeSkillFavorites`（`panels/tradeskill.lua:292`）。
 
 `_FramePos` 在档案内是**嵌入子表**：`SaveTempDB`（`core.lua:280-285`）把运行期 `DFUI_FRAMEPOS` 拷进 `DFUI_PROFILES[cur]["_FramePos"]`；各档案恢复路径（`InitTempDB`/`LoadProfile`/`CopyProfile`）再拆回 `DFUI_FRAMEPOS`。当前实现存的是绝对坐标（相对坐标方案见 frame-position-export-design.md，标注为未实现）。
 
@@ -118,17 +128,51 @@ GUI 入口 `modules/gui/prof.lua`（`Gui-prof` 面板）：
 
 ### 序列化 / 导入导出
 
-序列化逻辑在 `core.lua:402-636` 的一个 `do...end` 块内（局部辅助函数 + 两个公开方法）：
+序列化逻辑在 `core.lua:405-641` 的一个 `do...end` 块内（局部辅助函数 + 两个公开方法）：
 
-- `DFUI:SerializeProfile(profileName)` —— `core.lua:549`。把档案编码为 `DFUI1#<校验和>~模块:键=值,...` 字符串；档案不存在返回 `nil`。
-- `DFUI:DeserializeProfile(str)` —— `core.lua:578`。校验 `DFUI1` 头与校验和（body 字节和 `math.mod(sum,65536)`），失败返回 `nil, errMsg`；兼容旧 `|` 分隔格式。
+- `DFUI:SerializeProfile(profileName)` —— `core.lua:554`。把档案编码为 `DFUI1#<校验和>~模块:键=值,...` 字符串；档案不存在返回 `nil`。
+- `DFUI:DeserializeProfile(str)` —— `core.lua:583`。校验 `DFUI1` 头与校验和（body 字节和 `math.mod(sum,65536)`），失败返回 `nil, errMsg`；兼容旧 `|` 分隔格式。
 
 UI 侧 `prof.lua` 右区「配置共享」：
 
-- 导出 `ShowExportDialog`（`prof.lua:422`）—— 先 `SaveTempDB` 落盘当前档案，再 `SerializeProfile`，结果填进只读弹窗供 Ctrl+C 复制。
-- 导入弹窗「确认导入」（`prof.lua:374`）—— `DeserializeProfile` → 清空并重建 `tempDB`（`_FramePos` 经 `_G.DFUI_FRAMEPOS`）→ **回填默认值** → `ReloadUI`。
+- 导出 `ShowExportDialog`（`prof.lua:499`）—— 先抓 ShaguTweaks 快照、`SaveTempDB` 落盘当前档案，再 `SerializeProfile`，结果填进只读弹窗供 Ctrl+C 复制。
+- 导入弹窗「确认导入」（`prof.lua:447`）—— `DeserializeProfile` → 清空并重建 `tempDB`（`_FramePos` 经 `_G.DFUI_FRAMEPOS`）→ **回填默认值** → 回写 ShaguTweaks 开关 → `ReloadUI`。
 
 字段编码与 setfenv 影子变量陷阱见 [profile-export-import-lessons.md](profile-export-import-lessons.md)。
+
+## 配置界面（ESC 面板）与导出的对应关系
+
+`SerializeProfile` 全量遍历档案、无白名单，所以**判断一个选项能不能共享，只需看它写到哪**：写进 `tempDB` 就一定进串。GUI 主框架 17 个 tab（`gui/base.lua:72-91`）的写入目标：
+
+| tab | 页面 | 控件写入目标 | 可导出 |
+|-----|------|--------------|--------|
+| 1 首页 / 2 信息 | `gui/home.lua` `homeb.lua` `info.lua` | 无配置控件（`GUI-Dragonflight` 的 6 项渲染在 tab11） | — |
+| 3 档案 | `gui/prof.lua` | 导入导出页本体 | — |
+| 4 模块 | `gui/mods.lua:160` | `SetTempDBNoCallback(模块名, "enabled")` | ✅ |
+| 5 ShaguTweaks | `gui/shag.lua` → `gui/tools.lua:467,473` | `ShaguTweaks_config[key]`（外部插件 SV） | ⚠️ 见下 |
+| 6 SuperWoW | `gui/superwow.lua`（11 处） | `SetTempDB("SuperWoW", …)`，CVar 由回调重放 | ✅ |
+| 7–15 动作条/背包/施法条/聊天/界面/微型菜单/小地图/单位框架/经验声望 | `gui/elem.lua` + `gui/tools.lua` 四个工厂（`CreateCheckbox:439` `CreateSlider:534` `CreateColour:672` `CreateDropDown:745`） | `SetTempDB(模块, key)` | ✅ |
+| 16 诊断 | `gui/bugs.lua` | `SetTempDB("Errors", "bugOnlyDFUI"/"bugAutoToast")` | ✅ |
+| 17 辅助功能 | `gui/assist.lua:50` | `SetTempDB("Assist", key)` | ✅ |
+
+**tab16 诊断页**：两个复选框原本存在账号级 `DFUI_BUGS.prefs`，带不走。现改存档案 `Errors.bugAutoToast` / `Errors.bugOnlyDFUI`（`ui/errorHandler.lua`），`DFUI.errors.prefs` 降级为内存镜像，`error.lua` 的 `showToast` 与 `bugs.lua:41` 的过滤读取点不变。迁移与镜像刷新由 `DFUI.errors.SyncPrefs()`（`core/error.lua`）完成，**在 `Errors` 模块（prio 1）的 NewMod 里调用** —— 必须早于 `Gui-bugs`（prio 5）建复选框，否则面板读到的是迁移前的值；`restoreFromSV` 与 `PLAYER_ENTERING_WORLD` 各留一次幂等兜底。
+
+**tab5 ShaguTweaks**：设置真值归 ShaguTweaks 自己的 `ShaguTweaks_config`，DFUI 代管一份快照 `Gui-shag.shaguSnapshot`（`{[英文模块名] = 0/1}`）：
+- 导出时**现抓**（`prof.lua:CaptureShaguSnapshot`，在 `SaveTempDB` 之前）—— 现抓而非勾选时写，才能覆盖用户在 ShaguTweaks 自家面板做的改动
+- 导入时在 `ReloadUI()` **之前**回写（`prof.lua:ApplyShaguSnapshot`）—— 那时 ShaguTweaks 已完整加载，一次重载即全部生效
+- ShaguTweaks 未装：导出跳过（不动档案里已有快照）、导入跳过回写但快照留档，以后装了再导一次即生效
+- 快照 key 是 `core/compat.lua:88-130` 硬编码的英文名，只含字母和空格，不触发 `SerializeValue` 的转义字符集
+
+### ⭐ 加新模块的检查清单
+
+配置项的权威定义只有 `NewDefaults` 一处，但**光注册 defaults 不等于用户能看到**。新增带控件元数据的模块，必须同步做：
+
+1. `DFUI:NewDefaults(模块名, {...})` —— 每项 9 元组 `{默认值, 控件类型, 控件参数, 依赖key, 分类名, 排序, 描述, 副描述, status}`
+2. **`gui/elem.lua` 的 `moduleMapping` 加一行 `[模块名] = {tab号, 同tab内排序}`** —— `elem.lua:177` 的门槛是 `if self.moduleMapping[moduleName]`，漏了则该模块**所有**选项在配置页不可见（值仍能正常导出生效，接收方却改不了）
+3. 若落在 **tab7 或 tab14**，还要在 `elem.lua` 的 `moduleDisplayNames` 加显示名 —— 这两个 tab 会拼「模块名 - 分类名」标题（`elem.lua:420-426`），不加则退化为纯分类名，与同 tab 其他模块的同名分类（如"外观"）混淆
+4. **`categoryIndex`（第 6 位）必须全模块连续递增，不能每个分类各自从 1 开始** —— `elem.lua:216-221` 取「该分类下首个被 `pairs` 遍历到的元素」的 `categoryIndex` 作为分类排序值，各分类都从 1 开始会让分类间顺序随 `pairs` 随机
+
+> 2026-07-27 修复的 `Focus` / `Loot` / `ComboPoints` 共 15 个选项不可见，根因就是第 2 条；`Loot` 同时踩了第 4 条。
 
 ## 已知坑与限制
 
@@ -143,7 +187,19 @@ UI 侧 `prof.lua` 右区「配置共享」：
 
 5. **serialize.lua 未装载**：仓库有 `core/serialize.lua` 但不在 .toc，改它无效；生效代码在 core.lua 内联块。
 
-6. **运行期实测项（待游戏内实证）**：
+6. **⚠️ 写进 tempDB 却没注册 defaults 的键，每次登录被清空（未修，2026-07-27 排查发现）**：`SyncProfiles` 第 2 步删掉不在 `DFUI.defaults` 里的整个模块段、第 3 步删掉模块内不在 defaults 的键。以下写入因此**只在当前会话有效，登出落盘、下次登录即被抹掉**；期间还会混进导出串：
+
+   | 位置 | 键 | 后果 |
+   |------|-----|------|
+   | `panels/spellbook.lua:245,1215` | `SpellBook.knownSpells` / `newSpells` | 「新学法术高亮」基线每次登录重建，功能实际失效；且会把该角色几百条法术名塞进导出串，导入后污染接收方基线 |
+   | `map/collect.lua:235` | `Collector.buttonOrder` | 小地图收集按钮排序每次登录丢失 |
+   | `map/map.lua:478,483` | `pwb.visible` | 伪模块 `pwb` 整段被删，PizzaWorldBuffs 面板显隐不跨会话 |
+   | `core/first.lua:190`、`gui/prof.lua:186` | `Generic.patchWarnVersion` / `Generic.firstRun` | 伪模块 `Generic` 整段被删 |
+   | `frames/frames.lua:184` | `SetTempDBNoCallback("actionbars", "movable")` | **模块名笔误**，应为 `"Bars"`（`Bars.movable` 才是真键），该写入当前完全无效 |
+
+   修法二选一：在对应模块的 `NewDefaults` 里补声明（哪怕 `{{}}`），或改存独立 SavedVariable。`knownSpells`/`newSpells` 属角色私有数据、体积大，宜走后者。
+
+7. **运行期实测项（待游戏内实证）**：
    - `SyncProfiles` 对多档案、含废弃模块的实际增删/修正计数与聊天提示文案。
    - 深/浅模式切换后各模块取值是否符合预期（tables.lua 快照内容是否与当前 defaults 语义一致）。
    - 导入跨账号/跨分辨率字符串后 `_FramePos` 框架落位（当前存绝对坐标，跨分辨率可能偏移）。

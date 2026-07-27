@@ -529,6 +529,8 @@ do
             if current ~= "" then
                 table.insert(parts, current)
             end
+            -- parts 可能为空（畸形串如 "{;}"），无保护会 index nil；导入路径没有 pcall 包裹
+            if not parts[1] then return result end
             local isDict = string.find(parts[1], "=")
             if isDict then
                 for _, part in ipairs(parts) do

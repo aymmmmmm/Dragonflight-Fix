@@ -220,17 +220,29 @@ DFUI:NewMod("Gui-bugs", 5, function()
 
         self.cbOnlyDFUI = DFUI.tools.CreateIndiCheckbox(self.toolbarFrame, "DFUIBugCbOnlyDFUI", "只看 DFUI")
         self.cbOnlyDFUI:SetPoint("TOPLEFT", self.toolbarFrame, "TOPLEFT", 210, ROW1_Y)
-        self.cbOnlyDFUI:SetChecked(DFUI.errors.prefs.onlyDFUI and true or false)
+        -- 直接读档案而非 DFUI.errors.prefs 镜像：本模块（prio 5）在 RunMods 里建面板，
+        -- 早于 error.lua 的 ADDON_LOADED handler 跑 syncPrefsFromDB，那时镜像还是初值。
+        -- 顺手把镜像同步上，RefreshList 的过滤才不会用错值。
+        local initOnlyDFUI = DFUI:GetTempDB("Errors", "bugOnlyDFUI") and true or false
+        DFUI.errors.prefs.onlyDFUI = initOnlyDFUI
+        self.cbOnlyDFUI:SetChecked(initOnlyDFUI)
         self.cbOnlyDFUI:SetScript("OnClick", function()
-            DFUI.errors.prefs.onlyDFUI = this:GetChecked() and true or false
+            local v = this:GetChecked() and true or false
+            -- 真值写档案（随导出串共享），同步内存镜像供 RefreshList / showToast 读
+            DFUI:SetTempDB("Errors", "bugOnlyDFUI", v)
+            DFUI.errors.prefs.onlyDFUI = v
             Setup:RefreshList()
         end)
 
         self.cbAutoToast = DFUI.tools.CreateIndiCheckbox(self.toolbarFrame, "DFUIBugCbAutoToast", "新错误屏幕弹通知")
         self.cbAutoToast:SetPoint("TOPLEFT", self.toolbarFrame, "TOPLEFT", 330, ROW1_Y)
-        self.cbAutoToast:SetChecked(DFUI.errors.prefs.autoToast and true or false)
+        local initAutoToast = DFUI:GetTempDB("Errors", "bugAutoToast") and true or false
+        DFUI.errors.prefs.autoToast = initAutoToast
+        self.cbAutoToast:SetChecked(initAutoToast)
         self.cbAutoToast:SetScript("OnClick", function()
-            DFUI.errors.prefs.autoToast = this:GetChecked() and true or false
+            local v = this:GetChecked() and true or false
+            DFUI:SetTempDB("Errors", "bugAutoToast", v)
+            DFUI.errors.prefs.autoToast = v
         end)
 
         self.countText = DFUI.tools.CreateFont(self.toolbarFrame, 12, "", {0.7, 0.7, 0.7}, "LEFT")
