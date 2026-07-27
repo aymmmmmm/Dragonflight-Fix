@@ -305,16 +305,24 @@ end
 -- 四、实测校准存储 (_G.DFUI_ShieldDB)
 -- ═══════════════════════════════════════════════════════════════
 
-local db = nil                -- 当前角色的 { learned = {}, }
+local db = nil                -- 当前角色的 { learned = {}, keyver = N }
 local gearString = nil
 
-local function DBKey(name, rankStr)
-    return name .. "#" .. (rankStr or "?")
+-- key 用【这个盾自己的基准吸收值】, 不用施法者等级, 更不用"我自己法术书的最高等级"。
+--
+-- ⚠ 曾经用 rankStr(= 我自己会的最高等级) 当 key, 那是个严重缺陷:
+--   别人给你上的 Rank 10 盾破了, 校准值会存到【你自己 Rank 4】的条目下,
+--   之后你自己放的盾永远读出那个高值, 而且跟着 SavedVariable 跨会话生效。
+--   基准值(未含天赋, 直接来自 tooltip)唯一标识"这个盾是哪一级", 天然隔离。
+local KEYVER = 2
+
+local function DBKey(name, base)
+    return name .. "#" .. tostring(base)
 end
 
-function libabsorb:GetLearned(name, rankStr)
-    if not db then return nil end
-    local e = db.learned[DBKey(name, rankStr)]
+function libabsorb:GetLearned(key)
+    if not db or not key then return nil end
+    local e = db.learned[key]
     if not e then return nil end
     -- e = {value, dirty}
     if e[2] then return nil end
@@ -324,9 +332,10 @@ end
 -- 护盾被打破时调用: 真实初始值 == 累计扣减量。
 -- 这一招把法强、套装、Turtle 改数值全部吃进去 —— 1.12 拿不到法强接口,
 -- 这是唯一能把数值做准的路径。
-function libabsorb:Learn(name, rankStr, value)
-    if not db or not value or value <= 0 then return end
-    db.learned[DBKey(name, rankStr)] = {value, nil}
+-- ⚠ 调用方(shield.lua:Retire)负责把关: 记账脏了 / 涨幅离谱的一律不许学进来。
+function libabsorb:Learn(key, value)
+    if not db or not key or not value or value <= 0 then return end
+    db.learned[key] = {value, nil}
 end
 
 function libabsorb:ForgetAll()
@@ -338,62 +347,76 @@ function libabsorb:DumpLearned()
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- 五、初始吸收量四层级联
+-- 五、初始吸收量级联
 -- ═══════════════════════════════════════════════════════════════
 --
---   1 实测校准值   已含法强/天赋/套装 → 直接用, 不再叠加修正
---   2 buff tooltip 当前身上这个盾的真实等级基础值(不含天赋, 见 auras.lua:815 注释)
---   3 法术书       buff tooltip 刮不到时, 用自己会的最高等级
---   4 静态兜底表   自己没学过该法术时的最后手段
---   5 放弃         宁可不追踪, 也不编一个数
+--   先求【基准值】(不含天赋, 唯一标识这个盾是哪一级):
+--     1 buff tooltip  当前身上这个盾按【施法者等级】的基础值 —— 首选,
+--                     它自带等级信息, 不需要反查 rank(见 core/tools.lua:207 注释:
+--                     1.12 tooltip 数值来自本地 Spell.dbc, 天赋/法强都不反映)
+--     2 法术书        buff tooltip 刮不到时, 退而用自己会的最高等级
+--     3 静态兜底表    自己没学过该法术时的最后手段, 且【必须能确定等级】
+--     4 放弃          宁可不追踪, 也不编一个数
 --
--- 返回 amount(number|nil), source(string)
+--   再用基准值当 key 查校准库:
+--     命中 → 实测真值(已含法强/天赋/套装), 直接用, 不再叠加任何修正
+--     未命中 → 基准值套天赋修正
+--
+-- 返回 amount(number|nil), source(string), key(string|nil), estimate(number|nil)
+--   key      交给调用方存在护盾对象上, 破盾校准时原样传回 Learn, 保证存取同一条目
+--   estimate 【不含校准】的纯估算值(基准值套天赋)。调用方拿它当校准护栏的锚点 ——
+--            锚在 amount 上会出事: cal 命中时 amount 就是上次学到的值, 护栏基准
+--            会跟着水涨船高, 一轮学高一点, 逐轮爬升
 function libabsorb:GetInitial(name, uiIdx, tipAbsorb)
     if not name then return nil, "none" end
 
     local lib = DFUI_Libs and DFUI_Libs.libspell
-    local rankStr = lib and lib:GetSpellMaxRank(name) or nil
-
-    -- 1) 校准值: 已经是实测真值, 不套任何修正
-    local learned = self:GetLearned(name, rankStr)
-    if learned then return learned, "cal" end
-
     local base, source = nil, nil
 
-    -- 2) buff tooltip (调用方通常已经刮过, 直接复用, 免得再开一次 tooltip)
+    -- 1) buff tooltip (调用方通常已经刮过, 直接复用, 免得再开一次 tooltip)
     if tipAbsorb and tipAbsorb > 0 then
         base, source = tipAbsorb, "tip"
     end
 
-    -- 3) 自己法术书
+    -- 2) 自己法术书
     if not base then
+        local rankStr = lib and lib:GetSpellMaxRank(name) or nil
         local v = self:ScanSpellbook(name, rankStr)
         if v and v > 0 then base, source = v, "book" end
     end
 
-    -- 4) 静态兜底表
+    -- 3) 静态兜底表。
+    -- ⚠ 等级拿不到就【放弃】, 绝不退回表尾(那是满级值: 942/920/950),
+    --   低等级角色会被喂一个高出真值几倍的数, 与本文件开头的原则直接冲突。
     if not base then
         local def = _G.DFUI_ShieldSpells and _G.DFUI_ShieldSpells[name]
         if def and def.ranks then
-            local n = table.getn(def.ranks)
             local _, rankNum = nil, nil
             if lib then _, rankNum = lib:GetSpellMaxRank(name) end
-            local idx = rankNum
-            if not idx or idx <= 0 or idx > n then idx = n end
-            if def.ranks[idx] then base, source = def.ranks[idx], "tbl" end
+            if rankNum and rankNum > 0 and def.ranks[rankNum] then
+                base, source = def.ranks[rankNum], "tbl"
+            end
         end
     end
 
-    -- 5) 认不出就不追踪
+    -- 4) 认不出就不追踪
     if not base then return nil, "none" end
+
+    -- key 取【未含天赋的基准值】: 它唯一标识 spell rank, 且不随加点变化
+    local key = DBKey(name, base)
 
     -- 天赋修正: tooltip/表值都不含天赋, 只有能确定是自己施放时才敢套
     if self:IsLikelySelfCast(name) then
         local pct = self:TalentPercent(name)
         if pct > 0 then base = math.floor(base * (1 + pct / 100)) end
     end
+    -- 至此 base = 不含校准的纯估算值, 无论下面走不走校准都原样交出去当护栏锚点
 
-    return base, source
+    -- 校准值: 已经是实测真值(含法强/天赋/套装), 直接用, 不再叠加任何修正
+    local learned = self:GetLearned(key)
+    if learned then return learned, "cal", key, base end
+
+    return base, source, key, base
 end
 
 -- ═══════════════════════════════════════════════════════════════
@@ -415,6 +438,12 @@ f:SetScript("OnEvent", function()
         _G.DFUI_ShieldDB[realm][player] = _G.DFUI_ShieldDB[realm][player] or {}
         db = _G.DFUI_ShieldDB[realm][player]
         db.learned = db.learned or {}
+        -- key 格式换代(等级串 → 基准吸收值)。旧条目既匹配不上, 又可能是老缺陷
+        -- 留下的虚高脏值(别人的高等级盾记到了自己等级名下), 一次性清干净。
+        if db.keyver ~= KEYVER then
+            db.learned = {}
+            db.keyver = KEYVER
+        end
         libabsorb:BuildPatterns()
     end
 

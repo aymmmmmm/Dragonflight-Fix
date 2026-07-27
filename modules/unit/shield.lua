@@ -80,6 +80,7 @@ DFUI:NewMod("Shield", 2, function()
     local REFRESH_TOL = 0.5      -- 剩余时间"变大"多少才算刷新
     local TIMEOUT_EDGE = 1.5     -- 消失前剩余时间小于此值 → 判超时, 不校准
     local CALIBRATE_WINDOW = 1.0 -- 最后一次扣减距消失多久内才认"是被打破的"
+    local CALIBRATE_MAX_RATIO = 1.5  -- 校准值相对当前估算的涨幅上限, 超出即判脏账
 
     local function Dbg(msg)
         if S.debug and DEFAULT_CHAT_FRAME then
@@ -238,13 +239,26 @@ DFUI:NewMod("Shield", 2, function()
         --   学下来会把估算越带越低。判据: 【最后一次扣减必须紧挨着消失那一刻】。
         --   真的被打破时, 打破它的那一下就在眼前; 取消/换区则早就没伤害了。
         if reason == "broken" and S.calibrate and s.deducted > 0 and not s.tainted
-            and s.lastHit and (GetTime() - s.lastHit) <= CALIBRATE_WINDOW then
+            and s.key and s.lastHit and (GetTime() - s.lastHit) <= CALIBRATE_WINDOW then
             -- 估低时超出的量记在 overflow 里(见 Deduct), 真值要把它加回来
             local trueValue = s.deducted + (s.overflow or 0)
             local drift = math.abs(trueValue - s.initial) / s.initial
             if drift > 0.05 then
-                lib:Learn(s.name, s.rank, trueValue)
-                Dbg("校准 " .. s.name .. " " .. s.initial .. " -> " .. trueValue)
+                -- ⚠ 涨幅护栏。overflow 是无上限累加的: 只要记账与服务端脱节
+                --   (没追踪到的吸收源、日志漏投、盾早破了队列还没清), 它就能把
+                --   "真值"撑到离谱 —— 曾把 234 的 Rank 4 盾学成 900 并写进
+                --   SavedVariable 跨会话生效。
+                --   而校准本来只为补 tooltip 缺失的法术强度: PW:S 系数只有 0.1,
+                --   满级堆满法强也就 +5% 上下。涨到 1.5 倍必然是脏账, 宁可不学。
+                -- ⚠ 锚点必须是 est(不含校准的纯估算), 不能是 initial ——
+                --   cal 命中时 initial 就是上次学到的值, 拿它当基准会逐轮爬升。
+                if trueValue > (s.est or s.initial) * CALIBRATE_MAX_RATIO then
+                    Dbg("弃用校准 " .. s.name .. " " .. s.initial .. " -> "
+                        .. trueValue .. " (涨幅超上限, 记账已脱节)")
+                else
+                    lib:Learn(s.key, trueValue)
+                    Dbg("校准 " .. s.name .. " " .. s.initial .. " -> " .. trueValue)
+                end
             end
         end
         Dbg("移除 " .. s.name .. " (" .. reason .. ")")
@@ -279,18 +293,19 @@ DFUI:NewMod("Shield", 2, function()
                 if not s then
                     -- 新护盾: 只有能拿到可信初始值才进队列。
                     -- 认不出就【不追踪】, 绝不编一个数糊弄。
-                    local amount, source = lib:GetInitial(name, uiIdx, tipAbsorb)
+                    local amount, source, key, est = lib:GetInitial(name, uiIdx, tipAbsorb)
                     if amount and amount > 0 then
                         local schools = lib:SchoolsOf(name)
                         if schools and not S.trackWards then
                             amount = nil            -- 用户选择不追单属性结界
                         end
                         if amount then
-                            local rankStr = DFUI_Libs.libspell
-                                and DFUI_Libs.libspell:GetSpellMaxRank(name) or nil
+                            -- key 由 libabsorb 按【这个盾的基准吸收值】生成, 原样带在
+                            -- 护盾对象上, 破盾校准时回传 —— 存取必定是同一条目,
+                            -- 别人的高等级盾再也污染不到自己的低等级盾
                             s = {
                                 name = name, tex = tex, uiIdx = uiIdx,
-                                rank = rankStr, schools = schools,
+                                key = key, est = est, schools = schools,
                                 initial = amount, remaining = amount, deducted = 0,
                                 source = source, manaPerPoint = lib:ManaPerPoint(name),
                                 -- 天赋修正被用户关掉时, 校准值会偏离"含天赋的真值",
@@ -314,12 +329,16 @@ DFUI:NewMod("Shield", 2, function()
                         if s.lastTL and tl > s.lastTL + REFRESH_TOL then
                             -- 重新刮一次 buff tooltip: 重施时装备/天赋可能已经变了
                             local _, tip = lib:ScanBuff(uiIdx)
-                            local amount, source = lib:GetInitial(s.name, uiIdx, tip)
+                            local amount, source, key, est = lib:GetInitial(s.name, uiIdx, tip)
                             s.initial = amount or s.initial
                             s.remaining = s.initial
                             s.deducted = 0
                             s.overflow = nil
+                            s.key = key or s.key
+                            s.est = est or s.est
                             s.source = source or s.source
+                            -- 重施 = 全新一轮记账, 上一轮因归因失败打的脏标记不该顺延
+                            s.tainted = (not S.talentFix) or nil
                             Dbg("刷新 " .. s.name .. " -> " .. s.initial)
                         end
                         s.lastTL = tl
@@ -382,19 +401,27 @@ DFUI:NewMod("Shield", 2, function()
         end
         -- ── 溢出归属 ──
         -- 所有盾都被我们记成 0 了, 伤害却还在被吸收 → buff 还在, 说明【我们估低了】,
-        -- 真实的盾还在扛。把超出的量记到第一个还挂着、且吃这个学派的盾头上:
+        -- 真实的盾还在扛。把超出的量记到那个盾头上:
         --   真实初始值 = deducted + overflow
         -- 少了这一步, 估低的情况下 deducted 永远被钳在 initial, drift 恒为 0,
         -- 校准就永远学不到东西 —— 而估低恰恰是常态(1.12 读不到法术强度)。
+        --
+        -- ⚠ 但归因必须成立才敢记。原来是"给第一个吃这个学派的盾", 那是错的:
+        --   多盾并存时服务端按槽位吃, 我们这边已经全部记成 0, 归给谁纯属猜测,
+        --   排在前面的盾会替别人背下全部虚账 —— 那正是 234 被学成 900 的来路。
+        -- 只有【队列里就一个盾, 且学派对得上】时, "还在吸收"才唯一地指向
+        -- "我们低估了它"。其余情况一律打脏, 本轮不参与校准。
         if amount > 0 then
             Q.spill = Q.spill + amount
-            for i = 1, table.getn(Q.list) do
-                local s = Q.list[i]
-                if SchoolMatches(s, school) then
-                    s.overflow = (s.overflow or 0) + amount
-                    s.lastHit = GetTime()
-                    break
-                end
+            local n = table.getn(Q.list)
+            local owner = nil
+            if n == 1 and SchoolMatches(Q.list[1], school) then owner = Q.list[1] end
+            if owner then
+                owner.overflow = (owner.overflow or 0) + amount
+                owner.lastHit = GetTime()
+            else
+                -- 多盾并存(归因不了) 或 学派对不上(存在没追踪到的吸收源)
+                for i = 1, n do Q.list[i].tainted = true end
             end
         end
 
@@ -748,8 +775,12 @@ DFUI:NewMod("Shield", 2, function()
                 sc = ""
                 for w in pairs(s.schools) do sc = (sc == "" and w) or (sc .. "/" .. w) end
             end
-            out:AddMessage(string.format("  %d. %s [%s] %d/%d  来源=%s  剩余时间=%s",
-                i, s.name, sc, s.remaining, s.initial, s.source,
+            -- 显示值与纯估算值不一致时把估算一并打出来: "900/900(估算234)" 一眼
+            -- 就能看出是校准层给的高值, 不用再逐层猜是 tip/book/tbl 哪一环出的数
+            local est = ""
+            if s.est and s.est ~= s.initial then est = "(估算" .. s.est .. ")" end
+            out:AddMessage(string.format("  %d. %s [%s] %d/%d%s  来源=%s  剩余时间=%s",
+                i, s.name, sc, s.remaining, s.initial, est, s.source,
                 s.lastTL and string.format("%.0fs", s.lastTL) or "?"))
         end
         if not UI.bar then
