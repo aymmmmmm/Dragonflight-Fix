@@ -73,7 +73,8 @@ DFUI:NewMod("Shield", 2, function()
     -- skipped/nskip: 认得出是护盾、却算不出吸收量而被放弃的 buff(诊断用, 见 Rescan)
     -- cast:  SuperWoW 捕获到的【他人】对我施放的护盾 → { [法术名] = {t=} }
     -- slots: 贴图 → GetPlayerBuff 槽位, 每轮 Rescan 重建一次(见 BuildSlots)
-    local Q = {list = {}, total = 0, uncertain = false, spill = 0,
+    -- settle: 光环刚变动后的"沉淀窗口"截止时间, 见 SETTLE_WINDOW
+    local Q = {list = {}, total = 0, uncertain = false, spill = 0, settle = 0,
                skipped = {}, nskip = 0, skipLog = {}, cast = {}, slots = {}}
     local UI = {}           -- 控件引用
     local F = {t = -1, seen = {}, flagged = false, gotNum = false}   -- 帧批次
@@ -86,6 +87,18 @@ DFUI:NewMod("Shield", 2, function()
     local CALIBRATE_WINDOW = 1.0 -- 最后一次扣减距消失多久内才认"是被打破的"
     local CALIBRATE_MAX_RATIO = 1.5  -- 校准值相对当前估算的涨幅上限, 超出即判脏账
     local CAST_WINDOW = 3.0      -- 施法事件与 UNIT_AURA 之间允许的最大间隔
+    -- ⚠ 自举漏洞的补丁。UNIT_AURA 到达时客户端的光环表/GetPlayerBuff 槽位不保证
+    --   已经就绪, 那一次 Rescan 会拿不到法术 ID 而放弃; 而队列是空的 → 轮询器
+    --   睡着 → 没有任何东西会再扫一次, 只能干等下一个来源不明的 UNIT_AURA。
+    --   实测表现: 牧师套盾后十多秒才显示 —— 那正是虚弱灵魂(15s)掉落时补发的
+    --   UNIT_AURA 顺手救回来的。
+    --   修法: 光环一有变动就让轮询器多醒一小会儿, 期间 10Hz 重扫, 早扫失败能自愈。
+    --   不是常驻 OnUpdate: 窗口一过、队列又空就照常睡回去。
+    -- ⚠ 窗口长度是拿【自愈机会】换【扫描开销】: Rescan 对每个未追踪 buff 要开一次
+    --   tooltip, 团本里光环多、UNIT_AURA 又密, 窗口开太长等于常驻高频扫描。
+    --   1.5s = 15 次重试, 对"光环表晚一两帧才齐"绰绰有余; 不做续期, 免得遇上
+    --   永远算不出数的盾(没装 SuperWoW 且 tooltip 也刮不到)时退化成常驻 OnUpdate。
+    local SETTLE_WINDOW = 1.5
 
     local function Dbg(msg)
         if S.debug and DEFAULT_CHAT_FRAME then
@@ -226,8 +239,11 @@ DFUI:NewMod("Shield", 2, function()
         end
         RefreshText()
 
-        -- 队列非空就唤醒轮询器(超时/刷新检测要靠它)
-        if poller and table.getn(Q.list) > 0 and not poller:IsShown() then
+        -- 队列非空就唤醒轮询器(超时/刷新检测要靠它);
+        -- 沉淀窗口内即使队列是空的也要醒着 —— 那正是"早扫失败、队列空、
+        -- 轮询器睡死"这个自举漏洞的出口
+        if poller and not poller:IsShown()
+            and (table.getn(Q.list) > 0 or GetTime() < Q.settle) then
             DFUI.activeScripts["ShieldPoller"] = true
             poller:Show()
         end
@@ -365,7 +381,16 @@ DFUI:NewMod("Shield", 2, function()
                     local amount, source, key, est =
                         lib:GetInitial(name, uiIdx, tipAbsorb, spellId, foreign)
                     if not amount and shieldish then
-                        NoteSkip(name, "拿不到吸收值")
+                        -- 原因要分得开: "槽位/法术ID 还没就绪"是可以等的(轮询器
+                        -- 补扫一次就好), "有 ID 也算不出数"才是真的没辙。
+                        local why = "拿不到吸收值"
+                        if not bIdx then
+                            why = "GetPlayerBuff 槽位未就绪"
+                        elseif not spellId then
+                            why = (type(GetPlayerBuffID) == "function")
+                                and "GetPlayerBuffID 无返回" or "无法术ID(未装 SuperWoW)"
+                        end
+                        NoteSkip(name, why)
                     end
                     if amount and amount > 0 then
                         local schools = lib:SchoolsOf(name)
@@ -613,6 +638,9 @@ DFUI:NewMod("Shield", 2, function()
             ReadSettings()
             Attach()
             Wipe()
+            -- 进世界/reload 后光环表要过一会儿才齐, 这里最需要沉淀窗口:
+            -- 身上本来就有的盾全靠这一次扫, 扫空了没有第二次机会
+            Q.settle = GetTime() + SETTLE_WINDOW
             Rescan()
             return
         end
@@ -627,6 +655,7 @@ DFUI:NewMod("Shield", 2, function()
         end
 
         if event == "UNIT_AURA" and arg1 == "player" then
+            Q.settle = GetTime() + SETTLE_WINDOW
             Rescan()
             return
         end
@@ -729,8 +758,10 @@ DFUI:NewMod("Shield", 2, function()
             end
             c.t = GetTime()
             Dbg("他人施放 " .. name)
-            -- UNIT_CASTEVENT 与 UNIT_AURA 谁先到没有保证。补扫一次, 让 foreign
-            -- 标记能落到刚上身的那个盾上(队列为空时轮询器是睡着的, 等不到下一轮)。
+            -- UNIT_CASTEVENT 一定不晚于 buff 上身, 所以这里必然要等 —— 开沉淀
+            -- 窗口让轮询器盯着, 光环表一就绪就立刻扫到。
+            -- (光靠这里 Rescan 一次是不够的: 那一刻 buff 多半还没上身。)
+            Q.settle = GetTime() + SETTLE_WINDOW
             Rescan()
         end)
     end
@@ -746,7 +777,8 @@ DFUI:NewMod("Shield", 2, function()
         acc = 0
         NewFrame()
         Rescan()
-        if table.getn(Q.list) == 0 then
+        -- 队列空【且】沉淀窗口也过了才睡回去
+        if table.getn(Q.list) == 0 and GetTime() >= Q.settle then
             if Q.uncertain then
                 Q.uncertain = false
                 RefreshText()
