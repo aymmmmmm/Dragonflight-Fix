@@ -70,7 +70,11 @@ DFUI:NewMod("Shield", 2, function()
     -- Lua 5.0 每函数 upvalue <= 32, 超出整文件不加载。
     -- 状态一律收进这几张表, 别散成一堆 local。
     local S = {}            -- 设置快照
-    local Q = {list = {}, total = 0, uncertain = false, spill = 0}
+    -- skipped/nskip: 认得出是护盾、却算不出吸收量而被放弃的 buff(诊断用, 见 Rescan)
+    -- cast:  SuperWoW 捕获到的【他人】对我施放的护盾 → { [法术名] = {t=} }
+    -- slots: 贴图 → GetPlayerBuff 槽位, 每轮 Rescan 重建一次(见 BuildSlots)
+    local Q = {list = {}, total = 0, uncertain = false, spill = 0,
+               skipped = {}, nskip = 0, skipLog = {}, cast = {}, slots = {}}
     local UI = {}           -- 控件引用
     local F = {t = -1, seen = {}, flagged = false, gotNum = false}   -- 帧批次
     local poller            -- 前置声明: Recalc 要唤醒它, 它在下面才建
@@ -81,6 +85,7 @@ DFUI:NewMod("Shield", 2, function()
     local TIMEOUT_EDGE = 1.5     -- 消失前剩余时间小于此值 → 判超时, 不校准
     local CALIBRATE_WINDOW = 1.0 -- 最后一次扣减距消失多久内才认"是被打破的"
     local CALIBRATE_MAX_RATIO = 1.5  -- 校准值相对当前估算的涨幅上限, 超出即判脏账
+    local CAST_WINDOW = 3.0      -- 施法事件与 UNIT_AURA 之间允许的最大间隔
 
     local function Dbg(msg)
         if S.debug and DEFAULT_CHAT_FRAME then
@@ -167,6 +172,13 @@ DFUI:NewMod("Shield", 2, function()
                 self._dfAbsorbBase = txt or ""
                 orig(self, self._dfAbsorbBase .. Suffix())
             end
+            -- ⚠ 必须在挂钩当下就把 base 播种进去(且只在真正挂钩这一次做,
+            --   重复播种会把上一次的后缀吃成 base, 变成 "+942 +942")。
+            --   player.lua 的生命值文字只在 UNIT_HEALTH/UNIT_MANA 等
+            --   `arg1 == "player"` 的事件里刷(player.lua:959-963), 【没有 UNIT_AURA】。
+            --   不播种的话 _dfAbsorbBase 一直是 nil, RefreshText 整个空转 ——
+            --   满血站桩被套盾时血量/资源都不变, 数字就永远出不来。
+            hv._dfAbsorbBase = hv:GetText() or ""
         end
         UI.healthValue = hv
         return true
@@ -264,14 +276,63 @@ DFUI:NewMod("Shield", 2, function()
         Dbg("移除 " .. s.name .. " (" .. reason .. ")")
     end
 
+    -- 认得出是护盾(在富化表里)、却一个数都算不出来 → 记一笔给 /dfshield 看。
+    -- 不记未知法术: 身上绝大多数 buff 本来就不是护盾, 全记等于刷屏。
+    -- 条目对象复用, 不每轮重新分配(Rescan 在轮询里 0.1s 跑一次)。
+    local function NoteSkip(name, why)
+        Q.nskip = Q.nskip + 1
+        local e = Q.skipped[Q.nskip]
+        if not e then
+            e = {}
+            Q.skipped[Q.nskip] = e
+        end
+        e.name, e.why = name, why
+        -- Rescan 在轮询期是 10Hz, 同一条原因不许重复刷屏。
+        -- 整表在"这一轮一个都没跳过"时清掉(见 Rescan 收尾), 所以盾再出现还会记一次。
+        if Q.skipLog[name] ~= why then
+            Q.skipLog[name] = why
+            Dbg("跳过 " .. name .. " (" .. why .. ")")
+        end
+    end
+
+    -- "确证是别人放的吗" —— 只在捕获到对方施法事件时为真, 取走即消费。
+    -- 它不参与取值(取值走法术 ID), 只影响两件事: 不套自己的天赋、不进校准库。
+    local function TakeForeign(name)
+        local c = Q.cast[name]
+        if not c then return nil end
+        Q.cast[name] = nil
+        if (GetTime() - c.t) > CAST_WINDOW then return nil end
+        return true
+    end
+
+    -- 贴图 → GetPlayerBuff 槽位。UnitBuff 与 GetPlayerBuff 在 Turtle 上枚举顺序
+    -- 可能不一致, 只能按贴图换算(与 auras.lua:479 FindPlayerBuffIndex 同款问题)。
+    -- 每轮建一次表: 原来是每个 buff 各自扫一遍 GetPlayerBuff(0..31), 轮询 10Hz 下
+    -- 是 O(32×32); 建表后整轮只扫一次, 而且新护盾候选也能免费拿到槽位去查法术 ID。
+    local function BuildSlots()
+        local map = Q.slots
+        for k in pairs(map) do map[k] = nil end
+        if not GetPlayerBuff or not GetPlayerBuffTexture then return end
+        for idx = 0, 31 do
+            local bIdx = GetPlayerBuff(idx, "HELPFUL")
+            if not bIdx or bIdx < 0 then break end
+            local t = GetPlayerBuffTexture(bIdx)
+            -- 同贴图取首个(两个法术共用图标时的既有行为, 不改)
+            if t and not map[t] then map[t] = bIdx end
+        end
+    end
+
     -- 全量重扫玩家 buff, 与队列对账
     local function Rescan()
         local seen = {}
         local order = {}
+        Q.nskip = 0
+        BuildSlots()
 
         for uiIdx = 1, 32 do
             local tex = UnitBuff("player", uiIdx)
             if not tex then break end
+            local bIdx = Q.slots[tex]
 
             local existing = nil
             for i = 1, table.getn(Q.list) do
@@ -281,11 +342,11 @@ DFUI:NewMod("Shield", 2, function()
                 end
             end
 
-            local name, tipAbsorb
+            local name, tipAbsorb, sawKw
             if existing then
                 name = existing.name
             else
-                name, tipAbsorb = lib:ScanBuff(uiIdx)
+                name, tipAbsorb, sawKw = lib:ScanBuff(uiIdx)
             end
 
             if name then
@@ -293,11 +354,24 @@ DFUI:NewMod("Shield", 2, function()
                 if not s then
                     -- 新护盾: 只有能拿到可信初始值才进队列。
                     -- 认不出就【不追踪】, 绝不编一个数糊弄。
-                    local amount, source, key, est = lib:GetInitial(name, uiIdx, tipAbsorb)
+                    --
+                    -- 法术 ID 路径要开一次 tooltip, 而这段代码对【每个未追踪的 buff】
+                    -- 都会跑(轮询期 10Hz), 所以先用"看起来像不像盾"把关:
+                    -- tooltip 说了"吸收" 或 在富化表里 —— 两条都不靠猜。
+                    local shieldish = tipAbsorb or sawKw
+                        or (_G.DFUI_ShieldSpells and _G.DFUI_ShieldSpells[name])
+                    local foreign = TakeForeign(name)
+                    local spellId = shieldish and lib:AuraSpellID(bIdx) or nil
+                    local amount, source, key, est =
+                        lib:GetInitial(name, uiIdx, tipAbsorb, spellId, foreign)
+                    if not amount and shieldish then
+                        NoteSkip(name, "拿不到吸收值")
+                    end
                     if amount and amount > 0 then
                         local schools = lib:SchoolsOf(name)
                         if schools and not S.trackWards then
                             amount = nil            -- 用户选择不追单属性结界
+                            NoteSkip(name, "已关闭单属性结界追踪")
                         end
                         if amount then
                             -- key 由 libabsorb 按【这个盾的基准吸收值】生成, 原样带在
@@ -308,9 +382,13 @@ DFUI:NewMod("Shield", 2, function()
                                 key = key, est = est, schools = schools,
                                 initial = amount, remaining = amount, deducted = 0,
                                 source = source, manaPerPoint = lib:ManaPerPoint(name),
-                                -- 天赋修正被用户关掉时, 校准值会偏离"含天赋的真值",
-                                -- 打个标记不让它污染学习库
-                                tainted = (not S.talentFix) or nil,
+                                foreign = foreign,
+                                -- 打脏 = 不许进校准学习库。两种情况:
+                                --  1) 天赋修正被用户关掉 → 校准值会偏离"含天赋的真值"
+                                --  2) 【确证他人施放】→ 学到的是对方的法强/天赋/套装, 而 key
+                                --     只按基准值(等级)生成, 你自己放同一等级的盾会读到
+                                --     对方的高值。别人的盾破得再多也不该记进你的账本。
+                                tainted = ((foreign or not S.talentFix) and true) or nil,
                                 lastTL = nil, firstSeen = GetTime(),
                             }
                             Dbg("新增 " .. name .. " = " .. amount .. " (" .. source .. ")")
@@ -323,13 +401,16 @@ DFUI:NewMod("Shield", 2, function()
                     -- 刷新检测: 剩余时间"变大"就是重新上了盾。
                     -- 这条通用规则替代 Nanami 的"虚弱灵魂刚出现"特判,
                     -- 对寒冰护体/法力护盾/各种结界一并生效。
-                    local bIdx = UI.FindBuffIdx(tex)
                     local tl = bIdx and GetPlayerBuffTimeLeft and GetPlayerBuffTimeLeft(bIdx) or nil
                     if tl then
                         if s.lastTL and tl > s.lastTL + REFRESH_TOL then
                             -- 重新刮一次 buff tooltip: 重施时装备/天赋可能已经变了
                             local _, tip = lib:ScanBuff(uiIdx)
-                            local amount, source, key, est = lib:GetInitial(s.name, uiIdx, tip)
+                            -- 重施也可能换人施放(自己放的盾被牧师覆盖, 反之亦然),
+                            -- 所以等级与施法者归属都要跟着这一轮重判, 不能沿用旧的
+                            local foreign = TakeForeign(s.name)
+                            local amount, source, key, est = lib:GetInitial(
+                                s.name, uiIdx, tip, lib:AuraSpellID(bIdx), foreign)
                             s.initial = amount or s.initial
                             s.remaining = s.initial
                             s.deducted = 0
@@ -337,8 +418,9 @@ DFUI:NewMod("Shield", 2, function()
                             s.key = key or s.key
                             s.est = est or s.est
                             s.source = source or s.source
+                            s.foreign = foreign
                             -- 重施 = 全新一轮记账, 上一轮因归因失败打的脏标记不该顺延
-                            s.tainted = (not S.talentFix) or nil
+                            s.tainted = ((foreign or not S.talentFix) and true) or nil
                             Dbg("刷新 " .. s.name .. " -> " .. s.initial)
                         end
                         s.lastTL = tl
@@ -371,6 +453,11 @@ DFUI:NewMod("Shield", 2, function()
         end)
         for i = 1, table.getn(order) do keep[i] = order[i].s end
         Q.list = keep
+
+        -- 这一轮一个都没跳过 → 清掉去重记忆, 让同一个盾下次出现时还能记一次
+        if Q.nskip == 0 then
+            for k in pairs(Q.skipLog) do Q.skipLog[k] = nil end
+        end
 
         Recalc()
     end
@@ -461,6 +548,9 @@ DFUI:NewMod("Shield", 2, function()
         Q.list = {}
         Q.uncertain = false
         Q.spill = 0
+        Q.nskip = 0
+        for k in pairs(Q.cast) do Q.cast[k] = nil end
+        for k in pairs(Q.skipLog) do Q.skipLog[k] = nil end
         Recalc()
     end
 
@@ -468,29 +558,27 @@ DFUI:NewMod("Shield", 2, function()
     -- 接线
     -- ═══════════════════════════════════════════════════════
 
-    UI.FindBuffIdx = function(texture)
-        -- UnitBuff 与 GetPlayerBuff 在 Turtle 上枚举顺序可能不一致,
-        -- 必须按贴图换算 (与 auras.lua:479 FindPlayerBuffIndex 同款)
-        if not texture or not GetPlayerBuff then return nil end
-        for idx = 0, 31 do
-            local bIdx = GetPlayerBuff(idx, "HELPFUL")
-            if not bIdx or bIdx < 0 then return nil end
-            if GetPlayerBuffTexture(bIdx) == texture then return bIdx end
-        end
-        return nil
-    end
+    -- (贴图 → GetPlayerBuff 槽位的换算已收进 Rescan 的 BuildSlots: 整轮建一次表,
+    --  取代原来每个 buff 各扫一遍 GetPlayerBuff 的 O(32×32) 写法)
 
+    -- 血条与文字两个接入点【分别】判定, 各自惰性重试。
+    -- 原来是一进来就 `if UI.bar then return true end`, HookText 只有唯一一次机会:
+    -- 玩家框的 texts 若比血条晚就绪(DFUI.unitTexts.player 在 player.lua:138 才注册),
+    -- 盾值数字就永久缺失且不会自愈。
     local function Attach()
-        if UI.bar then return true end
-        local bar = DFUI.predictBars and DFUI.predictBars.player
-        if not bar then return false end
-        UI.bar = bar
-        HookText()
-        if S.showBar then
-            bar:EnableAbsorb()
-            ApplyStyle()
+        if UI.bar and UI.healthValue then return true end
+        if not UI.bar then
+            local bar = DFUI.predictBars and DFUI.predictBars.player
+            if bar then
+                UI.bar = bar
+                if S.showBar then
+                    bar:EnableAbsorb()
+                    ApplyStyle()
+                end
+            end
         end
-        return true
+        if not UI.healthValue then HookText() end
+        return UI.bar and true or false
     end
 
     local ABSORB_EVENTS = {
@@ -529,7 +617,9 @@ DFUI:NewMod("Shield", 2, function()
             return
         end
 
-        if not UI.bar and not Attach() then return end
+        -- Attach 现在负责血条与文字两处的惰性补挂, 所以每次都要走一遍;
+        -- 两处都就绪后它首行即返回, 开销可忽略
+        if not Attach() then return end
 
         if event == "PLAYER_DEAD" then
             Wipe()
@@ -595,6 +685,55 @@ DFUI:NewMod("Shield", 2, function()
             end
         end
     end)
+
+    -- ═══════════════════════════════════════════════════════
+    -- SuperWoW: 判定护盾是不是【别人】给我上的
+    -- ═══════════════════════════════════════════════════════
+    --
+    -- ⚠ 这条路径【不负责取值】。取值走 Rescan 里的法术 ID(GetPlayerBuffID),
+    --   那个更可靠: 光环自带 ID, 不怕漏事件、不怕 /reload、不怕上盾时你不在场。
+    --   这里只回答一个问题: 这盾是不是别人放的? 它只影响两件事 ——
+    --     1) 不套自己的天赋(自己也会同一法术时, IsLikelySelfCast 会误判成自施)
+    --     2) 不许进校准学习库(学到的是对方的法强/套装, 会污染你自己的值)
+    --   捕获不到时两条都退回原有的启发式, 属于良性降级。
+    --
+    --   arg1=施法者GUID  arg2=目标GUID  arg3=事件  arg4=spellID  arg5=计时
+    --   (语义见 ShaguPlates/modules/superwow.lua:230-249、ShaguTweaks/mods/superwow.lua:25)
+    --   玩家自身 GUID: UnitExists("player") 的第二个返回值。
+    --
+    -- ⚠ 探测必须实时读 _G.SUPERWOW_VERSION(不缓存), 且 RegisterEvent 要在探测
+    --   通过之后才做 —— 没有 SuperWoW 时 UNIT_CASTEVENT 是个不存在的事件。
+    -- 这个要缓存: 它记录的是"事件到底注册了没有", 而注册只发生一次。
+    -- (取值路径的能力判定不缓存, 由 libabsorb:AuraSpellID 每次调用现场判, 诊断
+    --  那边也现场判 —— 缓存一个与实际调用路径不同步的值只会让诊断说谎。)
+    UI.castOK = (SUPERWOW_VERSION and type(SpellInfo) == "function") and true or false
+    if UI.castOK then
+        local castTracker = CreateFrame("Frame")
+        castTracker:RegisterEvent("UNIT_CASTEVENT")
+        castTracker:SetScript("OnEvent", function()
+            if arg3 ~= "CAST" or not arg4 then return end
+            local _, pg = UnitExists("player")
+            if not pg or arg2 ~= pg then return end   -- 目标不是我
+            if arg1 == pg then return end             -- 自施, 无需标记
+            -- 自己的宠物不算"外人": 术士的"牺牲"由虚空行者施放, 但数值随主人的属性走,
+            -- 跨会话稳定 —— 按外人处理会白白关掉它的校准, 反而更不准。
+            local _, petg = UnitExists("pet")
+            if petg and arg1 == petg then return end
+            local name = SpellInfo(arg4)
+            if not name then return end
+            if not (_G.DFUI_ShieldSpells and _G.DFUI_ShieldSpells[name]) then return end
+            local c = Q.cast[name]
+            if not c then
+                c = {}
+                Q.cast[name] = c
+            end
+            c.t = GetTime()
+            Dbg("他人施放 " .. name)
+            -- UNIT_CASTEVENT 与 UNIT_AURA 谁先到没有保证。补扫一次, 让 foreign
+            -- 标记能落到刚上身的那个盾上(队列为空时轮询器是睡着的, 等不到下一轮)。
+            Rescan()
+        end)
+    end
 
     -- ═══ 轮询 ═══
     -- UNIT_AURA 在 1.12 有丢事件的情况, 而且超时/刷新检测本来就得靠读剩余时间。
@@ -675,13 +814,43 @@ DFUI:NewMod("Shield", 2, function()
         end
 
         if cmd == "scan" then
-            out:AddMessage("|cff00ff00[护盾] buff 扫描|r")
+            -- full: 连 tooltip 原文一起打。刮取失败时这是唯一能看清"客户端到底
+            -- 给了什么"的手段 —— 别人给你上的盾全靠 tooltip, 必须能验它。
+            local full = (string.lower(rest or "") == "full")
+            out:AddMessage("|cff00ff00[护盾] buff 扫描|r" ..
+                (full and "" or "  |cff888888(加 full 参数可打印 tooltip 原文)|r"))
+            BuildSlots()
             for uiIdx = 1, 32 do
                 local tex = UnitBuff("player", uiIdx)
                 if not tex then break end
-                local name, absorb = lib:ScanBuff(uiIdx)
-                out:AddMessage(string.format("  %d. %s  吸收=%s", uiIdx,
-                    tostring(name), absorb and tostring(absorb) or "|cff888888否|r"))
+                local name, absorb, kw = lib:ScanBuff(uiIdx)
+                out:AddMessage(string.format("  %d. %s  buff吸收=%s%s", uiIdx,
+                    tostring(name), absorb and tostring(absorb) or "|cff888888否|r",
+                    (kw and not absorb) and " |cffffff00(说了吸收但没数字)|r" or ""))
+                -- 逐层展开取值级联, 一眼看出断在哪一环。
+                -- 只对"看起来像盾"的 buff 打, 否则一屏都是无关法术。
+                local known = _G.DFUI_ShieldSpells and _G.DFUI_ShieldSpells[name]
+                if full or absorb or kw or known then
+                    -- ID 反查出来的法术名一并打出来供人眼核对, 但【不据此拦截取值】
+                    -- (拦过一次, 把整条路掐死了, 见 libabsorb:AuraSpellID 的注释)
+                    local sid = lib:AuraSpellID(Q.slots[tex])
+                    local sidName = sid and SpellInfo and SpellInfo(sid) or nil
+                    local amount, source = lib:GetInitial(name, uiIdx, absorb, sid)
+                    out:AddMessage(string.format(
+                        "       法术ID=%s(%s)%s 等级=%s  ID取值=%s  →|cff00ff00 采用 %s|r (来源 %s)",
+                        tostring(sid), tostring(sidName),
+                        (sidName and sidName ~= name) and " |cffffff00名字与buff不同|r" or "",
+                        tostring(sid and lib:SpellRankNum(sid)),
+                        tostring(sid and lib:ScanSpellID(sid)),
+                        amount and tostring(amount) or "|cffff5555无|r",
+                        tostring(source)))
+                end
+                if full then
+                    local lines, n = lib:DumpBuff(uiIdx)
+                    for i = 1, n do
+                        out:AddMessage("       |cff888888" .. i .. "|r " .. lines[i])
+                    end
+                end
             end
             return
         end
@@ -750,9 +919,9 @@ DFUI:NewMod("Shield", 2, function()
 
         if cmd == "help" then
             out:AddMessage("|cff00ff00[护盾] /dfshield|r")
-            out:AddMessage("  (无参数)      当前护盾队列")
+            out:AddMessage("  (无参数)      当前护盾队列 + 已跳过 + 环境自检")
             out:AddMessage("  gs            吸收日志模式与来源全局串")
-            out:AddMessage("  scan          逐个 buff 的吸收值刮取结果")
+            out:AddMessage("  scan [full]   逐个 buff 的吸收值刮取结果; full 附 tooltip 原文")
             out:AddMessage("  ranks         数值表 vs 法术书 tooltip 对照")
             out:AddMessage("  learned       自动校准学到的值")
             out:AddMessage("  forget        清空校准值")
@@ -779,9 +948,44 @@ DFUI:NewMod("Shield", 2, function()
             -- 就能看出是校准层给的高值, 不用再逐层猜是 tip/book/tbl 哪一环出的数
             local est = ""
             if s.est and s.est ~= s.initial then est = "(估算" .. s.est .. ")" end
-            out:AddMessage(string.format("  %d. %s [%s] %d/%d%s  来源=%s  剩余时间=%s",
+            out:AddMessage(string.format("  %d. %s [%s] %d/%d%s  来源=%s%s  剩余时间=%s",
                 i, s.name, sc, s.remaining, s.initial, est, s.source,
+                s.foreign and " |cff88ccff(他人施放)|r" or "",
                 s.lastTL and string.format("%.0fs", s.lastTL) or "?"))
+        end
+
+        -- 认得出是护盾却算不出数值的, 在这里现形。
+        -- 少了这一节, Rescan 是静默丢弃的, 用户侧只能看到"什么都没有"。
+        if Q.nskip > 0 then
+            out:AddMessage("|cffffff00[护盾] 已跳过|r (认得出是护盾, 但算不出吸收量)")
+            for i = 1, Q.nskip do
+                out:AddMessage("  " .. Q.skipped[i].name .. "  |cff888888"
+                    .. Q.skipped[i].why .. "|r")
+            end
+        end
+
+        -- 环境自检: "什么都看不到"最常见的几个非 bug 原因, 一次性摆出来
+        local hp, hpmax = UnitHealth("player"), UnitHealthMax("player")
+        out:AddMessage("|cff00ff00[护盾] 环境|r  护盾段="
+            .. (S.showBar and "开" or "|cffff5555关|r")
+            .. "  盾值文字=" .. (S.showText and "开" or "|cffff5555关|r")
+            .. "  玩家框文字=" .. (DFUI:GetTempDB("Player", "textShow")
+                and "开" or "|cffff5555关(盾值数字会一并隐藏)|r")
+            .. "  文字挂钩=" .. (UI.healthValue and "已挂" or "|cffff5555未挂|r"))
+        out:AddMessage("  法术ID取值(GetPlayerBuffID)="
+            .. ((type(GetPlayerBuffID) == "function") and "|cff00ff00可用|r"
+                or "|cffffff00不可用 —— 别人给你上的盾只能靠 buff tooltip 取值|r")
+            .. "   施法者归属(UNIT_CASTEVENT)=" .. (UI.castOK and "可用" or "不可用"))
+        -- 玩家框架「满血且非战斗时隐藏框架」开着时, 恰好在"开怪前套盾"这个场景下
+        -- 把整个框架连同护盾一起藏起来 —— 表现与"护盾没生效"完全一样, 必须点名
+        if DFUI:GetTempDB("Player", "frameHide") then
+            out:AddMessage("  |cffffff00玩家框架「满血且非战斗时隐藏框架」已开启|r —— "
+                .. "当前框架" .. (PlayerFrame and PlayerFrame:IsShown() and "显示中"
+                    or "|cffff5555已隐藏, 护盾也跟着看不见|r"))
+        end
+        if hpmax > 0 and hp >= hpmax then
+            out:AddMessage("  |cffffff00当前满血: 护盾段宽度按原版规则恒为 0, "
+                .. "只有血条右端一根光柱, 属正常|r")
         end
         if not UI.bar then
             out:AddMessage("  |cffff5555未接入玩家血条|r (玩家框架模块是否已关闭?)")

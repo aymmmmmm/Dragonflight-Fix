@@ -218,11 +218,16 @@ end
 
 -- 在已填充的 scanner 里找含吸收关键词的行, 取该行最大的数
 -- ("吸收438点伤害, 并使冰霜伤害提高10%" → 438)
+-- → best(number|nil), sawKeyword(bool)
+-- ⚠ 第二个返回值不是装饰: "命中了吸收关键词但行内没数字" 与 "根本不是护盾"
+--   都返回 best=nil, 不区分开就无法判断该不该为这个 buff 付更贵的取值代价
+--   (开法术 ID tooltip), 也无法告诉用户"这确实是个盾, 只是读不出数"。
 local function ScrapeLoaded()
-    local best = nil
+    local best, saw = nil, false
     for line = 1, 12 do
         local text = scanner:GetLine(line)
         if text and HasKeyword(text) then
+            saw = true
             local init = 1
             while true do
                 local _, e, num = string.find(text, "(%d+)", init)
@@ -233,17 +238,88 @@ local function ScrapeLoaded()
             end
         end
     end
-    return best
+    return best, saw
 end
 
--- 玩家身上第 uiIdx 个 buff 的 tooltip → name, absorb
--- absorb 为 nil 表示"这不是吸收盾"
+-- 玩家身上第 uiIdx 个 buff 的 tooltip → name, absorb, sawKeyword
+--   absorb=nil 且 sawKeyword=false → 不是吸收盾
+--   absorb=nil 且 sawKeyword=true  → 是吸收盾, 但 tooltip 里没有可用数字
+--                                     (调用方据此决定是否走更贵的法术 ID 路径)
 function libabsorb:ScanBuff(uiIdx)
     scanner:SetUnitBuff("player", uiIdx)
     local name = scanner:GetLine(1)
     if not name then return nil end
-    if _G.DFUI_ShieldExclude and _G.DFUI_ShieldExclude[name] then return name, nil end
+    if _G.DFUI_ShieldExclude and _G.DFUI_ShieldExclude[name] then
+        return name, nil, false
+    end
     return name, ScrapeLoaded()
+end
+
+-- 诊断用: 逐行取出某个 buff 的 tooltip 原文。
+-- 刮取失败时, 这是唯一能看清"客户端到底给了什么"的手段 ——
+-- 没有 SuperWoW 时别人给你上的盾只剩 buff tooltip 一条路(见 GetInitial 的注释),
+-- 所以必须能把这条路的原始输入摊开来验。
+-- → lines(table), n(number)
+function libabsorb:DumpBuff(uiIdx)
+    scanner:SetUnitBuff("player", uiIdx)
+    local out, n = {}, 0
+    for line = 1, 12 do
+        local l, r = scanner:GetLine(line)
+        if l or r then
+            n = n + 1
+            out[n] = (l or "") .. (r and ("  |cff888888<右> " .. r .. "|r") or "")
+        end
+    end
+    return out, n
+end
+
+-- ── SuperWoW: 从光环本身反查法术 ID ──
+-- 这是打通"别人给你上的盾"的关键: 光环自带法术 ID, 法术 ID 唯一确定等级,
+-- 与施法者是谁、与你自己会不会这个法术都无关。
+-- 没有 SuperWoW 时返回 nil, 整条路径静默失效, 级联退回原样。
+-- ⚠ GetPlayerBuffID 只服务【玩家自己】; 本机 SuperWoW 1.5 没有 GetUnitField
+--   (已核 SuperWoWhook.dll 符号表), 所以别人身上的光环拿不到法术 ID。
+-- ⚠ 入参按 GetPlayerBuffTexture/GetPlayerBuffTimeLeft 同款语义传 GetPlayerBuff
+--   的返回值。SuperWoW 文档只写了 "buffindex", 这一条没有逐字确认。
+--
+-- ⚠⚠ 这里【曾经】加过一道"用 SpellInfo 反查法术名, 与 buff 名不符就返回 nil"的
+--    校验, 结果把整条路掐死了 —— 那个相等假设本身同样没被验证过, 而它一旦不成立,
+--    第 2、3 两级取值会【同时】失效, 级联直接掉回"放弃追踪"。
+--    该校验也没有实际收益: spellId 就是从【这个光环自己】身上取的, 而 libtipscan
+--    的 SetHyperlink 包装层会先 ClearLines(libtipscan.lua:137-141), 读到别的法术
+--    数据的路径根本不存在。别再加回来。
+--    真要看 ID 反查出来的名字对不对, /dfshield scan 会把它打出来。
+function libabsorb:AuraSpellID(bIdx)
+    if not bIdx or bIdx < 0 then return nil end
+    if type(_G.GetPlayerBuffID) ~= "function" then return nil end
+    local id = _G.GetPlayerBuffID(bIdx)
+    if type(id) ~= "number" or id <= 0 then return nil end
+    return id
+end
+
+-- 法术 ID → 等级序号(10 表示 Rank 10 / 等级 10)。非 SuperWoW 环境返回 nil
+function libabsorb:SpellRankNum(spellId)
+    if not spellId or type(_G.SpellInfo) ~= "function" then return nil end
+    local _, rankStr = _G.SpellInfo(spellId)
+    if not rankStr then return nil end
+    -- 与 libs/libspell.lua:25 同款: 等级序号在串尾("等级 10" / "Rank 10")
+    local _, _, num = string.find(rankStr, "(%d+)%s*$")
+    return tonumber(num)
+end
+
+-- 法术 ID → 该法术自身 tooltip 的吸收量。
+-- enchant: 是 1.12 原生就认的超链接类型(AtlasLoot/Core/AtlasLoot.lua:1149 同款用法),
+-- 拿到的是客户端 Spell.dbc 里【这一级】的原值, 对任何施法者都成立。
+-- ⚠ 同 AuraSpellID: 【不要】拿 buff 名去比对这里第一行的法术名。
+--   spellId 就是从这个光环身上取的, 而 SetHyperlink 的包装层会先 ClearLines
+--   (libtipscan.lua:137-141) —— 链接不被识别时 tooltip 是空的(下面 first 为 nil
+--   就退出了), 不存在"读到别的法术"这种情况。加名字相等校验只会在本地化/格式
+--   有一丁点差异时把这一级白白掐掉, 已经踩过一次。
+function libabsorb:ScanSpellID(spellId)
+    if not spellId then return nil end
+    scanner:SetHyperlink("enchant:" .. spellId)
+    if not scanner:GetLine(1) then return nil end   -- 链接没渲染出来
+    return ScrapeLoaded()
 end
 
 -- 自己法术书里该法术(指定等级, 默认最高)的基础吸收量
@@ -351,12 +427,26 @@ end
 -- ═══════════════════════════════════════════════════════════════
 --
 --   先求【基准值】(不含天赋, 唯一标识这个盾是哪一级):
---     1 buff tooltip  当前身上这个盾按【施法者等级】的基础值 —— 首选,
---                     它自带等级信息, 不需要反查 rank(见 core/tools.lua:207 注释:
---                     1.12 tooltip 数值来自本地 Spell.dbc, 天赋/法强都不反映)
---     2 法术书        buff tooltip 刮不到时, 退而用自己会的最高等级
---     3 静态兜底表    自己没学过该法术时的最后手段, 且【必须能确定等级】
---     4 放弃          宁可不追踪, 也不编一个数
+--     1 buff tooltip   当前身上这个盾按【施法者等级】的基础值 —— 首选且免费,
+--                      调用方通常已经刮过(见 core/tools.lua:207 注释:
+--                      1.12 tooltip 数值来自本地 Spell.dbc, 天赋/法强都不反映)
+--     2 法术ID tooltip 用光环自带的法术 ID 开 enchant: 链接, 直接读 Spell.dbc 原值
+--     3 法术ID → 等级  第 2 级打不开时, 用 ID 换出精确等级去查静态表
+--     4 自己法术书     以上都没有时, 退而用自己会的最高等级
+--     5 静态兜底表     自己没学过该法术时的最后手段, 且【必须能确定等级】
+--     6 放弃           宁可不追踪, 也不编一个数
+--
+--   ⚠ 为什么必须有 2/3 两级: 4/5 两级【都只查自己的法术书】。"别人给你上的盾、
+--     而你自己没学过这个法术"(非牧师吃真言术：盾)时它们全是空的, 整条级联只剩
+--     ① 一根独木桥 —— 一旦 buff tooltip 刮不到数字就直接放弃, 而调用方那边是
+--     静默跳过。这正是"小队/团队里被牧师套盾却什么都看不到"的结构性来路。
+--     spellId 由调用方经 AuraSpellID(GetPlayerBuffID) 取得, 与施法者是谁无关,
+--     所以 2/3 两级对任何人施放的盾都成立。没有 SuperWoW 时 spellId 为 nil,
+--     这两级自动跳过, 行为与从前完全一致。
+--
+--   foreign: 调用方确证"这盾是别人放的"(UNIT_CASTEVENT 捕获到)。只影响两件事 ——
+--     不套自己的天赋、不许进校准学习库(后者由调用方处理)。取不到时为 nil,
+--     退回原来的 IsLikelySelfCast 启发式。
 --
 --   再用基准值当 key 查校准库:
 --     命中 → 实测真值(已含法强/天赋/套装), 直接用, 不再叠加任何修正
@@ -367,7 +457,7 @@ end
 --   estimate 【不含校准】的纯估算值(基准值套天赋)。调用方拿它当校准护栏的锚点 ——
 --            锚在 amount 上会出事: cal 命中时 amount 就是上次学到的值, 护栏基准
 --            会跟着水涨船高, 一轮学高一点, 逐轮爬升
-function libabsorb:GetInitial(name, uiIdx, tipAbsorb)
+function libabsorb:GetInitial(name, uiIdx, tipAbsorb, spellId, foreign)
     if not name then return nil, "none" end
 
     local lib = DFUI_Libs and DFUI_Libs.libspell
@@ -378,16 +468,35 @@ function libabsorb:GetInitial(name, uiIdx, tipAbsorb)
         base, source = tipAbsorb, "tip"
     end
 
-    -- 2) 自己法术书
+    -- 2) 法术 ID 自己的 tooltip —— 对任何施法者都成立, 不看自己的法术书
+    if not base and spellId then
+        local v = self:ScanSpellID(spellId)
+        if v and v > 0 then base, source = v, "sid" end
+    end
+
+    -- 3) 法术 ID → 精确等级 → 静态表
+    if not base and spellId then
+        local def = _G.DFUI_ShieldSpells and _G.DFUI_ShieldSpells[name]
+        if def and def.ranks then
+            local rankNum = self:SpellRankNum(spellId)
+            if rankNum and rankNum > 0 and def.ranks[rankNum] then
+                base, source = def.ranks[rankNum], "sid#"
+            end
+        end
+    end
+
+    -- 4) 自己法术书
     if not base then
         local rankStr = lib and lib:GetSpellMaxRank(name) or nil
         local v = self:ScanSpellbook(name, rankStr)
         if v and v > 0 then base, source = v, "book" end
     end
 
-    -- 3) 静态兜底表。
+    -- 5) 静态兜底表 + 自己会的最高等级。
     -- ⚠ 等级拿不到就【放弃】, 绝不退回表尾(那是满级值: 942/920/950),
     --   低等级角色会被喂一个高出真值几倍的数, 与本文件开头的原则直接冲突。
+    -- ⚠ 这一级的等级来自【自己的】法术书, 只在自施场景下正确 —— 所以 source
+    --   必须与 sid# 区分开, /dfshield 的"来源"列一眼就能看出这个数可不可信。
     if not base then
         local def = _G.DFUI_ShieldSpells and _G.DFUI_ShieldSpells[name]
         if def and def.ranks then
@@ -399,22 +508,32 @@ function libabsorb:GetInitial(name, uiIdx, tipAbsorb)
         end
     end
 
-    -- 4) 认不出就不追踪
+    -- 6) 认不出就不追踪
     if not base then return nil, "none" end
 
     -- key 取【未含天赋的基准值】: 它唯一标识 spell rank, 且不随加点变化
     local key = DBKey(name, base)
 
-    -- 天赋修正: tooltip/表值都不含天赋, 只有能确定是自己施放时才敢套
-    if self:IsLikelySelfCast(name) then
+    -- 天赋修正: tooltip/表值都不含天赋, 只有能确定是自己施放时才敢套。
+    -- ⚠ foreign 是【确证他人施放】的硬信号(捕获到了对方的施法事件), 一旦成立就
+    --   绝不套自己的天赋 —— 哪怕自己也会这个法术(牧师吃另一个牧师的盾)。
+    --   IsLikelySelfCast 那条"法术书里有 = 自己放的"启发式在这种场合正好会误判。
+    if not foreign and self:IsLikelySelfCast(name) then
         local pct = self:TalentPercent(name)
         if pct > 0 then base = math.floor(base * (1 + pct / 100)) end
     end
     -- 至此 base = 不含校准的纯估算值, 无论下面走不走校准都原样交出去当护栏锚点
 
-    -- 校准值: 已经是实测真值(含法强/天赋/套装), 直接用, 不再叠加任何修正
-    local learned = self:GetLearned(key)
-    if learned then return learned, "cal", key, base end
+    -- 校准值: 已经是实测真值(含法强/天赋/套装), 直接用, 不再叠加任何修正。
+    -- ⚠ 但【他人施放的盾不许读校准库】。校准库里存的是"我自己"打破这个等级的盾时
+    --   量出来的真值, 里面含的是我的法强/天赋/套装; key 只按基准值(等级)生成,
+    --   所以牧师甲的 R10 盾会命中我自己 R10 的学习值。那是拿我的装备去替别人报数,
+    --   与本文件"绝不编一个数"的原则同性质。
+    --   调用方那边 tainted 挡的是【写】, 这里挡的是【读】—— 两边都要挡住。
+    if not foreign then
+        local learned = self:GetLearned(key)
+        if learned then return learned, "cal", key, base end
+    end
 
     return base, source, key, base
 end
