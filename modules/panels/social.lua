@@ -594,100 +594,38 @@ DFUI:NewMod("Social", 5, function()
             nukeScrollBar(children[i])
         end
     end
-    -- 公会/好友/屏蔽/查找 tab：保留 vanilla 原生上下箭头（亮金本色 24×24），隐藏轨道/thumb
-    -- （与角色面板技能/声望页一致；鼠标滚轮仍可滚动）
-    local function keepGoldArrows(sbName)
+    -- 社交面板 4 条 vanilla 滚动条（好友/屏蔽/查找/公会）统一隐藏，视觉+交互全部交给
+    -- DF minimal 滚动条（friendScrollbar / ignoreScrollbar / whoScrollbar / guildScrollbar）。
+    -- 隐藏手法：alpha0 + EnableMouse(false) 保活，**不 Hide frame** ——
+    --   屏蔽 tab 列表仍是 vanilla button + FauxScrollFrame 驱动，minimal 箭头要转发
+    --   vanilla 箭头 :Click()、拖动要走 sb:SetValue()，Hide 会破坏 vanilla 状态机。
+    -- hook OnShow 维持隐藏（vanilla FauxScrollFrame_Update 会反复 Show 回来）
+    local function hideVanillaSB(sbName)
         local sb = getglobal(sbName)
         if not sb then return end
         sb._dfScrollSkinned = true   -- 抢先占位，挡 scrollbar.lua 的 SkinScrollbar
-        sb:Show(); sb:SetAlpha(1)
-        local top = getglobal(sbName.."Top")
-        local mid = getglobal(sbName.."Middle")
-        local bot = getglobal(sbName.."Bottom")
-        if top and top.SetTexture then top:SetTexture(nil); top:Hide() end
-        if mid and mid.SetTexture then mid:SetTexture(nil); mid:Hide() end
-        if bot and bot.SetTexture then bot:SetTexture(nil); bot:Hide() end
-        local thumb = sb.GetThumbTexture and sb:GetThumbTexture()
-        if thumb then thumb:SetTexture(nil) end
-        local function goldArrow(btn, isUp)
-            if not btn then return end
-            btn._dfScrollSkinned = true
-            btn:SetWidth(24); btn:SetHeight(24)
-            btn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
-            btn:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Down")
-            btn:SetDisabledTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Disabled")
-            btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
-            local L, R, T, B = 0, 1, 0, 1
-            if isUp then T, B = 1, 0 end   -- 上箭头垂直翻转
-            local function setc(t) if t then t:SetTexCoord(L, R, T, B) end end
-            setc(btn:GetNormalTexture());   setc(btn:GetPushedTexture())
-            setc(btn:GetDisabledTexture()); setc(btn:GetHighlightTexture())
-        end
-        goldArrow(getglobal(sbName.."ScrollUpButton"),   true)
-        goldArrow(getglobal(sbName.."ScrollDownButton"), false)
+        sb:SetAlpha(0); sb:EnableMouse(false)
+        local up   = getglobal(sbName.."ScrollUpButton")
+        local down = getglobal(sbName.."ScrollDownButton")
+        if up   then up._dfScrollSkinned   = true; up:EnableMouse(false)   end
+        if down then down._dfScrollSkinned = true; down:EnableMouse(false) end
     end
-    local scrollBarNames = {
+    local vanillaSBNames = {
         "FriendsFrameFriendsScrollFrameScrollBar",
         "FriendsFrameIgnoreScrollFrameScrollBar",
-        -- Guild/Who 滚动条改用 DFUI.CreateMinimalScrollbar 接管，箭头不染金、改隐藏(见下方)
+        "WhoListScrollFrameScrollBar",
+        "GuildListScrollFrameScrollBar",
     }
-    for i = 1, table.getn(scrollBarNames) do
-        local nm = scrollBarNames[i]
+    for i = 1, table.getn(vanillaSBNames) do
+        local nm = vanillaSBNames[i]
         local sb = getglobal(nm)
         if sb and sb.GetScript then
-            keepGoldArrows(nm)
-            HookScript(sb, "OnShow", function()
-                keepGoldArrows(nm)
-            end)
+            hideVanillaSB(nm)
+            HookScript(sb, "OnShow", function() hideVanillaSB(nm) end)
         end
     end
 
-    -- who 全自制：列表挂 whoInset，滚动条改用 DFUI.CreateMinimalScrollbar(下方)。
-    -- vanilla 箭头 alpha0+EnableMouse(false) 保活隐藏(不 Hide frame，避免连带 Hide 自制列表)，hook OnShow 维持隐藏
-    if whoInset then
-        local function hideWhoArrows()
-            local sb = getglobal("WhoListScrollFrameScrollBar")
-            if sb then sb:SetAlpha(0); sb:EnableMouse(false) end  -- 整条 vanilla scrollbar(箭头+轨道+thumb)隐藏，去除残留滑块
-            local up   = getglobal("WhoListScrollFrameScrollBarScrollUpButton")
-            local down = getglobal("WhoListScrollFrameScrollBarScrollDownButton")
-            if up   then up:EnableMouse(false)   end
-            if down then down:EnableMouse(false) end
-        end
-        hideWhoArrows()
-        local whoSB = getglobal("WhoListScrollFrameScrollBar")
-        if whoSB then HookScript(whoSB, "OnShow", hideWhoArrows) end
-    end
-
-    -- 好友/屏蔽列表滚动箭头同样重锚到 friendsInset 右内侧（与查找 who 完全相同的偏移）
-    if friendsInset then
-        local function reanchorFriendArrows(sbName)
-            local up   = getglobal(sbName.."ScrollUpButton")
-            local down = getglobal(sbName.."ScrollDownButton")
-            if up   then up:ClearAllPoints();   up:SetPoint("TOPRIGHT",     friendsInset, "TOPRIGHT",     1, -1) end
-            if down then down:ClearAllPoints(); down:SetPoint("BOTTOMRIGHT", friendsInset, "BOTTOMRIGHT", 1,  1) end
-        end
-        local fSBs = { "FriendsFrameFriendsScrollFrameScrollBar", "FriendsFrameIgnoreScrollFrameScrollBar" }
-        for fi = 1, table.getn(fSBs) do
-            local nm = fSBs[fi]
-            reanchorFriendArrows(nm)
-            local sb = getglobal(nm)
-            if sb then HookScript(sb, "OnShow", function() reanchorFriendArrows(nm) end) end
-        end
-    end
-
-    -- 公会列表滚动条改用 DFUI.CreateMinimalScrollbar(下方)；vanilla 箭头 alpha0+EnableMouse(false) 保活隐藏
     if guildInset then
-        local function hideGuildArrows()
-            local sb = getglobal("GuildListScrollFrameScrollBar")
-            if sb then sb:SetAlpha(0); sb:EnableMouse(false) end  -- 整条 vanilla scrollbar(箭头+轨道+thumb)隐藏，去除残留滑块
-            local up   = getglobal("GuildListScrollFrameScrollBarScrollUpButton")
-            local down = getglobal("GuildListScrollFrameScrollBarScrollDownButton")
-            if up   then up:EnableMouse(false)   end
-            if down then down:EnableMouse(false) end
-        end
-        hideGuildArrows()
-        local guildSB = getglobal("GuildListScrollFrameScrollBar")
-        if guildSB then HookScript(guildSB, "OnShow", hideGuildArrows) end
         -- vanilla 多入口(成员点击 GuildMemberDetailFrame:Show / 箭头滚动 / 拖动滚动条 …)都会反复把
         -- 区域列头 H2 宽度改回 vanilla(~105) → 右锚下左缘左移。逐个 hook 堵不完，改用 guildInset
         -- OnUpdate 每帧轻检测：H2 一旦被改宽(>80)就把 width+位置+文字对齐三件套设回。偏移最多 1 帧、肉眼无感。
@@ -838,6 +776,18 @@ DFUI:NewMod("Social", 5, function()
     -- 设计：单行 layout，复用 vanilla FriendsDropDown / FauxScrollFrame / FriendsList_Update
     -- ============================================================
     local refreshFriendRows  -- forward decl，deferFit 内调
+    -- 好友/屏蔽两 tab 共用 friendsInset，各自一条 DF minimal 滚动条 → 按 toggle tab 互斥显隐
+    local friendScrollbar, ignoreScrollbar
+    local function updateFriendSbVisibility()
+        -- 信号取 FriendsListFrame:IsShown()（vanilla toggle tab 切换的就是这个子 Frame）
+        local onIgnore = FriendsListFrame and not FriendsListFrame:IsShown()
+        if friendScrollbar then
+            if onIgnore then friendScrollbar:Hide() else friendScrollbar:Show() end
+        end
+        if ignoreScrollbar then
+            if onIgnore then ignoreScrollbar:Show() else ignoreScrollbar:Hide() end
+        end
+    end
     do
         local sf = FriendsFrameFriendsScrollFrame
         if sf then
@@ -1027,6 +977,7 @@ DFUI:NewMod("Social", 5, function()
                 if _t == lastFriRefreshT then return end
                 lastFriRefreshT = _t
                 for i = 1, MAX_ROWS do hideVanillaButton(i) end
+                updateFriendSbVisibility()   -- 好友/屏蔽两条 minimal 滚动条互斥显隐
                 -- 屏蔽 tab（FriendsListFrame 隐藏）→ 一次 Hide 整个行容器，让 vanilla 屏蔽列表显示
                 if FriendsListFrame and not FriendsListFrame:IsShown() then
                     friendRowHost:Hide()
@@ -1103,7 +1054,34 @@ DFUI:NewMod("Social", 5, function()
                     local maxV = math.max(0, (numTotal - visibleRows) * FIXED_ROW_H)
                     sb:SetMinMaxValues(0, maxV)
                 end
+                if friendScrollbar then friendScrollbar.UpdateThumb(friendOffset, maxOff, visibleRows, numTotal) end
             end
+
+            -- DF minimal 滚动条（参数与 who/公会一致）：好友列表全自制，直接驱动自管 friendOffset
+            -- （旧实现保留 vanilla 金箭头 → 点箭头只改 FauxScrollFrame offset，refreshFriendRows
+            --   读的是 friendOffset，列表纹丝不动，只有滚轮能滚；这里彻底换掉）
+            friendScrollbar = DFUI.CreateMinimalScrollbar(friendsInset, friendsInset, {
+                xOffset = -3,
+                scale   = 0.8,
+                arrowTopPad = 0, arrowBotPad = 0,
+                topInset = 8, botInset = 8,
+                gap = 7,
+                onScrollDelta = function(d)
+                    local numTotal = (GetNumFriends and GetNumFriends()) or 0
+                    local maxOff = math.max(0, numTotal - visibleRows)
+                    friendOffset = friendOffset + d
+                    if friendOffset < 0 then friendOffset = 0 elseif friendOffset > maxOff then friendOffset = maxOff end
+                    lastFriRefreshT = -1   -- 绕同帧节流：连点箭头每次都要重渲染
+                    refreshFriendRows()
+                end,
+                onScrollAbs = function(r)
+                    local numTotal = (GetNumFriends and GetNumFriends()) or 0
+                    local maxOff = math.max(0, numTotal - visibleRows)
+                    friendOffset = math.floor(r * maxOff + 0.5)
+                    lastFriRefreshT = -1
+                    refreshFriendRows()
+                end,
+            })
 
             -- hook vanilla FriendsList_Update：FauxScrollFrame 滚动 / 数据变化都会触发
             -- 与 ShaguTweaks 共存（它 hook 同函数改 vanilla button 文字，对已 hide 的 button 无视觉影响）
@@ -1170,6 +1148,67 @@ DFUI:NewMod("Social", 5, function()
                 HookScript(FriendsListFrame, "OnShow", function() fBtnHolder:Show() end)
                 HookScript(FriendsListFrame, "OnHide", function() fBtnHolder:Hide() end)
                 if not FriendsListFrame:IsShown() then fBtnHolder:Hide() end
+            end
+        end
+    end
+
+    -- ============================================================
+    -- 屏蔽 tab DF minimal 滚动条
+    -- 屏蔽列表未自制（仍是 vanilla FriendsFrameIgnoreButton + FauxScrollFrame），
+    -- 所以滚动全部转发 vanilla 原生路径、不猜任何常量：
+    --   箭头 → vanilla 上下箭头 :Click()（vanilla 自带步进/到顶到底 Disable，EnableMouse(false) 不挡脚本调用）
+    --   拖动 → vanilla ScrollBar:SetValue(r*maxV) → UIPanelScrollBar_OnValueChanged
+    --          → sf:SetVerticalScroll → FauxScrollFrame_OnVerticalScroll → IgnoreList_Update
+    -- ============================================================
+    do
+        local sbIgnore = getglobal("FriendsFrameIgnoreScrollFrameScrollBar")
+        if sbIgnore and friendsInset then
+            -- thumb 同步：scrollOff/maxOff 用 vanilla 的像素值（比例等价，免推算 item 数）；
+            -- visRows/totalRows 只决定 thumb 高度，用 valueStep 折算（FauxScrollFrame_Update 会 SetValueStep(itemHeight)）
+            local function ignoreThumb()
+                if not ignoreScrollbar then return end
+                local step = (sbIgnore.GetValueStep and sbIgnore:GetValueStep()) or 0
+                if not step or step <= 0 then step = 16 end
+                local _, maxV = sbIgnore:GetMinMaxValues()
+                maxV = maxV or 0
+                local total  = (GetNumIgnores and GetNumIgnores()) or 0
+                local maxOff = math.floor(maxV / step + 0.5)
+                local vis    = total - maxOff
+                if vis < 1 then vis = 1 end
+                ignoreScrollbar.UpdateThumb((sbIgnore:GetValue() or 0), maxV, vis, total)
+            end
+            ignoreScrollbar = DFUI.CreateMinimalScrollbar(friendsInset, friendsInset, {
+                xOffset = -3,
+                scale   = 0.8,
+                arrowTopPad = 0, arrowBotPad = 0,
+                topInset = 8, botInset = 8,
+                gap = 7,
+                onScrollDelta = function(d)
+                    local nm = "FriendsFrameIgnoreScrollFrameScrollBarScroll"
+                    local btn = getglobal(nm..((d < 0) and "Up" or "Down").."Button")
+                    if btn and btn.Click then btn:Click() end
+                    ignoreThumb()
+                end,
+                onScrollAbs = function(r)
+                    local _, maxV = sbIgnore:GetMinMaxValues()
+                    sbIgnore:SetValue(r * (maxV or 0))
+                    ignoreThumb()
+                end,
+            })
+            ignoreScrollbar:Hide()   -- 初始在好友 tab；之后由 updateFriendSbVisibility 接管
+            -- vanilla 侧任何路径改值（滚轮 / IgnoreList_Update 复位）都同步自制 thumb
+            HookScript(sbIgnore, "OnValueChanged", ignoreThumb)
+            local ignoreSbEvent = CreateFrame("Frame")
+            ignoreSbEvent:RegisterEvent("IGNORELIST_UPDATE")
+            ignoreSbEvent:SetScript("OnEvent", function() ignoreThumb() end)
+            if FriendsFrameToggleTab2 then
+                HookScript(FriendsFrameToggleTab2, "OnClick", function()
+                    updateFriendSbVisibility()
+                    deferOneFrame(ignoreThumb)
+                end)
+            end
+            if FriendsFrameToggleTab1 then
+                HookScript(FriendsFrameToggleTab1, "OnClick", updateFriendSbVisibility)
             end
         end
     end

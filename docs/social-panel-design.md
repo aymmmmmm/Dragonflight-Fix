@@ -35,7 +35,8 @@
 | who 搜索框 | 177-217 `DFUI_WhoSearchBox` | 替代 vanilla `WhoFrameEditBox` |
 | 子 Tab skin | `skinSubTab` 269-367 + 锚定 370-396 | 好友/屏蔽 ToggleTab |
 | ScrollFrame 重锚 | `reanchorScrollFrames` 424-456 | 四个 sf 双锚跟随 inset |
-| 滚动条金箭头 | `keepGoldArrows` 557-602、`reanchorWhoArrows` 604-616 等 | 留箭头、清轨道/thumb |
+| vanilla 滚动条隐藏 | `hideVanillaSB` 603-626 | 好友/屏蔽/查找/公会 4 条统一 alpha0+EnableMouse(false) |
+| DF minimal 滚动条 ×4 | 好友 1063、屏蔽 1180、查找 1421、公会 2005 | `DFUI.CreateMinimalScrollbar`，参数统一 |
 | 主 Tab 系统 | `customBg:AddTab` 691/701/710/2042 | 好友/查找/公会/团队 |
 | 自建好友 row | do-block 793-1127、`refreshFriendRows` 976 | |
 | 自建 who row | do-block 1134-1473、`refreshWhoRows` 1285 | |
@@ -100,7 +101,12 @@ DFUI 只做视觉 skin（`skinSubTab` 269-367）+ 重锚到对应 inset 顶（37
 5. **渲染**：`refresh*Rows` 循环 `idx = off + i` 读引擎 API 填行；
    职业色经本地 `*CLASS_TOKEN` 反查表（localized class → token → `RAID_CLASS_COLORS`，含 zhCN/enUS 硬编码兜底，`LOCALIZED_CLASS_NAMES_MALE/FEMALE` 存在时合并）；
    等级色用 `GetDifficultyColor`；离线行职业色 + alpha 0.5。
-6. **vanilla scrollbar 协同**：留金箭头（`keepGoldArrows`/`reanchor*Arrows`，纹理 `Interface\ChatFrame\UI-ChatIcon-ScrollDown-*`），清轨道/thumb；好友页额外覆盖 vanilla scrollbar `maxV`（1051-1057，因 vanilla 用 `FRIENDS_TO_DISPLAY×16` 算，与实际行高不符）。
+6. **滚动条**：4 条 vanilla scrollbar 一律 `hideVanillaSB`（alpha0 + `EnableMouse(false)` 保活，**不 Hide frame**——屏蔽 tab 还要靠它驱动），全部换 `DFUI.CreateMinimalScrollbar`，参数统一 `xOffset=-3 / scale=0.8 / arrowTopPad=arrowBotPad=0 / topInset=botInset=8 / gap=7`。
+   - **好友/查找/公会**（自制 row）：`onScrollDelta/onScrollAbs` 直接改自管 `*Offset` + `refresh*Rows()`；每次 refresh 末尾 `sb.UpdateThumb(off, maxOff, visRows, totalRows)`。
+     - 好友 `onScrollDelta` 里必须 `lastFriRefreshT = -1` 绕过同帧节流，否则连点箭头会被吞。
+   - **屏蔽**（列表仍是 vanilla `FriendsFrameIgnoreButton` + FauxScrollFrame）：不猜常量，全部转发 vanilla 原生路径——箭头转发 vanilla 箭头 `:Click()`（`EnableMouse(false)` 不挡脚本调用，vanilla 自带步进与到顶/底 `Disable`），拖动走 `sbIgnore:SetValue(r*maxV)`；`UpdateThumb` 直接喂 vanilla 的**像素值** `(GetValue(), maxV, …)`（比例等价，省去 item 数推算），`HookScript(sbIgnore,"OnValueChanged")` + `IGNORELIST_UPDATE` 同步 thumb。
+   - **好友/屏蔽共用 `friendsInset`** → 两条 sb 由 `updateFriendSbVisibility()`（781）按 `FriendsListFrame:IsShown()` 互斥显隐，在 `refreshFriendRows` 开头与两个 ToggleTab 的 OnClick 里调用。
+   - 好友页仍覆盖 vanilla scrollbar `maxV`（因 vanilla 用 `FRIENDS_TO_DISPLAY×16` 算，与实际行高不符），保持 vanilla 内部状态一致。
 
 ### 3.5 查找（Who）专项
 
