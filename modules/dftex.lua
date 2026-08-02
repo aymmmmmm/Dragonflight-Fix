@@ -366,7 +366,10 @@ local function tfx_heal()
     for i = 1, 3 do
         local ins = getglobal("DFUI_TalentInset" .. i)
         if ins and ins.illust and ins.illustPath then
-            tfx_msg("illust" .. i .. ": " .. tfx_reset(ins.illust, ins.illustPath, 0, 1, 0, 1))
+            -- 不传 texcoord：dfbg_* 是 0.917 取景，写死 (0,1,0,1) 会打掉比例修正让插画纵向拉长。
+            -- 重设纹理后由工厂按 inset 真实比例重算采样窗口（见 core\tools.lua DFUI.FitIllustCrop）。
+            tfx_msg("illust" .. i .. ": " .. tfx_reset(ins.illust, ins.illustPath))
+            DFUI.FitIllustCrop(ins.illust, ins, DFUI.DFBG_SRC_W, DFUI.DFBG_SRC_H)
         end
     end
     for i = 1, 4 do

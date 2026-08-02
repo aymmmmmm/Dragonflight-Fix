@@ -536,27 +536,32 @@ DFUI:NewMod("Talents", 1, function()
             --    层序 inset.bg(BACKGROUND) < 插画(BORDER) < inset.edges(ARTWORK) < corners(OVERLAY)。
             -- 素材：DF 10.1 职业专精背景 talents-background-<class>-<spec>
             --   (interface\talentframe\talentsclassbackground<class>1/2.blp，每张 2048² 内含 1~2 块 1612×774)
-            --   原图极宽(比例 2.08)、人物固定在最右端 → 按 inset 真实比例只取右侧人物区：
-            --   inset = TREE_W(280) × (TREE_FRAME_H 500 - 顶留 28) = 280×472 → 比例 0.5932，取景窗口必须同比例，
-            --   否则人物被横向压缩。⚠ 改 TREE_W / TREE_FRAME_H / inset anchors 都要按新比例重裁。
-            --   窗口 x=1245 起 368×620（不取满 774 高：源图下 30% 是 retail 刻意压暗给天赋节点让路的死黑区，
+            --   原图极宽(比例 2.08)、人物固定在最右端 → 只取右侧人物区。
+            --   ⭐ 2026-08-02 改：取景窗口从 368×620(=0.593，只配本页) 放宽到 **568×620(=0.917)**，
+            --      因为观察面板(panels\inspect.lua)的天赋凹陷是 331×361(=0.917)，共用这套素材时
+            --      整张铺满会横向拉胖 55%。现在按更宽的 0.917 取景、由 DFUI.FitIllustCrop 按各自框的
+            --      真实比例裁采样窗口：观察面板全采不裁；本页横向裁回 u∈[0.3525,1]，
+            --      反算回源图正好是 x=1244，与旧取景 x=1245 几乎重合 → 本页视觉不变，裁掉的只是左侧背景。
+            --      替换而非新增，27 张文件数与单张字节数都不变。
+            --   窗口 x=1044 起 568×620（不取满 774 高：源图下 30% 是 retail 刻意压暗给天赋节点让路的死黑区，
             --   实测峰值亮度仅 18~31，提亮只会变灰雾没有细节 → 直接不取，人物同时被拉近、更清晰）。
             --   双线性缩到 POT 512×512 存 BLP2 **DXT5**(0.593 内容压进 1.0 画布，SetAllPoints 到 inset 时拉回，不变形)。
             --   ⭐ 铁律：**单张贴图 mip0 数据量 > 256KB 必崩客户端**（ERROR #132 ACCESS VIOLATION，一进游戏就崩）。
             --      本机稳定件全部踩线不过线：bagslots2x 512×128 ARGB=256KB、illust_* 256×256 ARGB=256KB、
             --      UI-Background-Rock 512×512 DXT5=256KB、questlog_left_bg 256×512 DXT5=128KB。
             --      256×512 未压缩 ARGB = 512KB → 加不加 mip 都崩（两次实测）。大图一律走 DXT5(1 byte/px)。
-            --   重裁命令：blp_to_tga.exe <源blp> src.tga → node _tools/tga_crop_resize.js src.tga out.tga 1245 <1|777> 368 620 512 512
-            --            → node tone.js out.tga out.tga 1.0 0.85 0.6   (色调曲线，脚本见本会话 scratchpad/tbg)
-            --            → node _tools/tga_to_blp2_dxt5.js --verify out.tga  (T=1 取上块，T=777 取下块)
+            --   重裁命令与块→树映射见 core\tools.lua 的 DFUI.DFBG_SRC_W 定义处（单一事实源）。
             --   前缀切换(inspect.lua:134 同步改)：dfbg_ = 512×512 DXT5 mip0=256KB(默认) /
             --      dfbg256_ = 同取景 256×512 DXT5 mip0=128KB(踩线更保守的保底版) / illust_ = vanilla 老插画。
             local _, _, _, fileName = GetTalentTabInfo(i)
             local illustPath = 'Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\talents\\dfbg_' .. (fileName or 'warriorarms')
             local illust = inset:CreateTexture(nil, 'BORDER')
             illust:SetTexture(illustPath)
-            illust:SetTexCoord(0, 1, 0, 1)  -- 整图已预裁为显示内容区，全采=更高有效分辨率不糊；框体高瘦比例由 inset 拉回
             illust:SetAllPoints(inset)   -- 跟随 inset 真实尺寸(硬编码必错);SetTexCoord 仅裁采样不影响铺满
+            -- 采样窗口由工厂按 inset 真实比例算（本页 0.593 → 横向裁回、靠右保人物）。
+            -- 此刻 frame 还是 Hide、双锚 inset 的 GetTop 可能为 nil → 工厂内部 no-op，
+            -- 真正生效在下面 ToggleFrame 每次 Show 时的那次调用。
+            DFUI.FitIllustCrop(illust, inset, DFUI.DFBG_SRC_W, DFUI.DFBG_SRC_H)
             -- alpha 必须 1.0：0.9 等于掺 10% 暗岩石底进画面，暗部发灰、对比度被拉低。
             -- 提亮/增对比已烘进素材(gamma 0.85 拉暗部 + S 曲线 0.6 找回对比)，运行时不要再靠 alpha 调，
             -- 也不能靠 SetVertexColor（1.12 只能压暗不能提亮）。
@@ -1074,13 +1079,17 @@ DFUI:NewMod("Talents", 1, function()
             -- 受控自愈：默认关闭；/dftexfix heal 实验证实"重设可救活缺图"后由 /dftexfix auto 1|2 启用
             -- 每次开面板至多 3 次 SetTexture（非每帧）；auto 1=仅 GetTexture 为 nil 时，auto 2=强制
             local healMode = DFUI_CUR_PROFILE and DFUI_CUR_PROFILE['TexFixAutoHeal']
-            if healMode then
-                for i = 1, 3 do
-                    local t = treeFrames[i] and treeFrames[i].illust
-                    local p = treeFrames[i] and treeFrames[i].inset and treeFrames[i].inset.illustPath
-                    if t and p and (healMode == 2 or not t:GetTexture()) then
-                        t:SetTexture(nil); t:SetTexture(p); t:SetTexCoord(0, 1, 0, 1)
-                    end
+            for i = 1, 3 do
+                local tf = treeFrames[i]
+                local t = tf and tf.illust
+                local p = tf and tf.inset and tf.inset.illustPath
+                if healMode and t and p and (healMode == 2 or not t:GetTexture()) then
+                    t:SetTexture(nil); t:SetTexture(p)
+                end
+                -- 比例修正必须在 Show 之后算（此时 inset 才有真实尺寸），且必须在自愈 SetTexture 之后，
+                -- 否则重设纹理会把采样窗口打回全采 → 插画纵向拉长。原来这里写死 SetTexCoord(0,1,0,1)。
+                if t and tf.inset then
+                    DFUI.FitIllustCrop(t, tf.inset, DFUI.DFBG_SRC_W, DFUI.DFBG_SRC_H)
                 end
             end
             Update()

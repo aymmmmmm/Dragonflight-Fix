@@ -125,6 +125,14 @@ DFUI:NewMod("Inspect", 5, function()
         local illust = talentInset:CreateTexture(nil, "BORDER")
         illust:SetAllPoints(talentInset)
         illust:SetAlpha(1.0)   -- 同玩家天赋页：0.9 会掺 10% 暗岩石底进画面拉低对比，提亮已烘进素材
+
+        -- 比例修正：dfbg_* 内容 568×620(=0.917) 非等比压进 512² 画布，本面板 inset 331×361(=0.917)
+        -- → 恰好全采不裁。仍走工厂而不是写死 (0,1,0,1)：inset anchors 将来一改就自动跟上，
+        --   不用回头重裁素材（玩家天赋页 0.593 就是靠同一个工厂横向裁回去的）。
+        local function FitIllust()
+            DFUI.FitIllustCrop(illust, talentInset, DFUI.DFBG_SRC_W, DFUI.DFBG_SRC_H)
+        end
+
         local illustName
         local function UpdateTalentIllust()
             local path = TWTalentFrameBackgroundTopLeft and TWTalentFrameBackgroundTopLeft:GetTexture()
@@ -132,12 +140,17 @@ DFUI:NewMod("Inspect", 5, function()
             if name == illustName then return end
             illustName = name
             if name and illust:SetTexture("Interface\\AddOns\\Dragonflight-Fix\\media\\tex\\talents\\dfbg_" .. string.lower(name)) then
+                FitIllust()     -- 换树后重设采样窗口（SetTexture 后一律重设，别赌 texcoord 是否被保留）
                 illust:Show()
             else
                 illust:Hide()   -- 解析失败/无对应 illust 的树 → 只留暗岩石凹陷底
             end
         end
         UpdateTalentIllust()
+        -- inset 建出来时是 Hide 状态，双锚 frame 此时 GetTop 可能为 nil（上面已守卫 → no-op）
+        -- → 显示时再算一次兜底。用 HookScript 不用 SetScript：工厂当前没给 inset 设 OnShow，
+        --   但 followFrames 逻辑将来若改成挂 inset 自身，SetScript 会把它顶掉。
+        HookScript(talentInset, "OnShow", FitIllust)
 
         -- 树 Tab 贴皮：灭 TabButtonTemplate 原生纹理后套 DF 子 tab 皮。
         -- PanelTemplates 切换会反复 Show 这些纹理，SetTexture(nil) 才恒隐。

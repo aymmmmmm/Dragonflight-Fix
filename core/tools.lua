@@ -473,6 +473,57 @@ function DFUI.ApplyInnerFrame(frame, opts)
 end
 
 -- ============================================================
+-- DFUI.FitIllustCrop — 按目标框真实比例裁纹理采样窗口（不变形、不留边、不硬编码）
+--
+-- 解决的问题：一张固定取景的插画要喂给【多个不同宽高比】的框。
+--   天赋插画素材约定：内容原始 srcW×srcH 像素被【非等比】压进 POT 方形画布，
+--   必须贴到 srcW/srcH 比例的框上才还原原样；框比例一旦不同就变形。
+--   dfbg_* 现按 568×620(=0.917) 取景 → 观察面板(331×361=0.917)全采不裁；
+--   玩家天赋页(280×472=0.593)由本函数横向裁回，裁掉的是左侧背景，人物固定在源图最右端。
+--
+-- 参数：tex 纹理；frame 取尺寸的参照框（须已完成布局——Hide 状态下 GetTop 可能为 nil，此时本函数 no-op）
+--       srcW, srcH 素材内容的原始像素（非画布尺寸）
+--       opts.uAlign  横向裁切对齐：'right'(默认，人物在右) | 'center'
+--       opts.vTopBias 纵向裁切时从顶部砍掉的比例（默认 0.72，优先砍天空保人物）
+-- 用法：DFUI.FitIllustCrop(illust, inset, 568, 620)
+-- ⚠ 任何会重设该纹理 TexCoord 的地方（如 /dftexfix 自愈）都要改调本函数，
+--   别写死 SetTexCoord(0,1,0,1)，否则比例修正被打掉。
+-- ============================================================
+function DFUI.FitIllustCrop(tex, frame, srcW, srcH, opts)
+    if not tex or not frame or not srcW or not srcH then return end
+    opts = opts or {}
+    local w = frame:GetWidth()
+    local top, bot = frame:GetTop(), frame:GetBottom()
+    if not w or not top or not bot then return end
+    local h = top - bot                          -- GetHeight 在 1.12 易给错值，用 GetTop-GetBottom
+    if w <= 0 or h <= 0 then return end
+    local needV = (srcW * h / w) / srcH          -- 不变形所需的 v 跨度（占全图比例）
+    if needV < 1 then
+        local t = (1 - needV) * (opts.vTopBias or 0.72)
+        tex:SetTexCoord(0, 1, t, t + needV)
+    else
+        local needU = (srcH * w / h) / srcW
+        if needU > 1 then needU = 1 end
+        if opts.uAlign == 'center' then
+            local m = (1 - needU) / 2
+            tex:SetTexCoord(m, 1 - m, 0, 1)
+        else
+            tex:SetTexCoord(1 - needU, 1, 0, 1)  -- 靠右
+        end
+    end
+end
+
+-- dfbg_* 天赋插画素材的内容原始像素——单一事实源，两个消费点（ui\talents.lua、panels\inspect.lua）都读它。
+-- 重裁素材时只改这里。重建命令（27 张，源在 _references\dragonflight_ui\_wtl_extract\interface\talentframe\）：
+--   blp_to_tga.exe talentsclassbackground<class><1|2>.blp src.tga
+--   node _tools/tga_crop_resize.js src.tga out.tga 1044 <1|777> 568 620 512 512   (1=上块 777=下块)
+--   node _tools/tga_tone_curve.js out.tga out.tga 1.0 0.85 0.6
+--   node _tools/tga_to_blp2_dxt5.js --verify out.tga                              (512² DXT5 mip0=256KB 踩线不过线)
+-- 块→树映射：8 个职业均为 <class>1 上块/下块 = 树1/树2，<class>2 上块 = 树3；
+--   ⚠ 德鲁伊例外（retail 4 专精）：druid1 上=balance、druid1 下=feralcombat、**druid2 下**=restoration。
+DFUI.DFBG_SRC_W, DFUI.DFBG_SRC_H = 568, 620
+
+-- ============================================================
 -- DFUI.CreateRetailInset — retail-style 9-slice 内嵌凹陷容器
 -- 视觉：marble 大理石底 + 4 边凹陷描线（uiframe_h/v）+ 4 角圆角（generalframeinsetborders）
 -- 用于在 customBg (CreatePaperDollFrame) 内部某个子页面加凹陷感
