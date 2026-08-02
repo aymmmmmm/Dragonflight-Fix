@@ -197,9 +197,7 @@ DFUI:NewMod("Scrollbar", 6, function()
         "ChannelListScrollFrameScrollBar",
         "ChannelRosterScrollFrameScrollBar",
         -- 训练师两条（列表+详情）改由 trainer.lua 接管 DF minimal 滚动条，这里不染青铜
-        -- 邮件
-        "SendMailScrollFrameScrollBar",
-        "OpenMailScrollFrameScrollBar",
+        -- 邮件两条（发信 SendMail + 读信 OpenMail）改由 mail.lua / openmail.lua 接管 DF minimal 滚动条，这里不染青铜
         -- 帮助
         "HelpFrameOpenTicketScrollFrameScrollBar",
         -- 团队
