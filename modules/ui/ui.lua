@@ -44,11 +44,8 @@ DFUI:NewMod("Ui", 5, function()
         _G.UIParent_ManageFramePositions = function()
             originalManageFramePositions()
 
-            if DFUI_FRAMEPOS and DFUI_FRAMEPOS['QuestTimerFrame'] then
-                local pos = DFUI_FRAMEPOS['QuestTimerFrame']
-                QuestTimerFrame:ClearAllPoints()
-                QuestTimerFrame:SetPoint('TOPLEFT', UIParent, 'BOTTOMLEFT', pos.x, pos.y)
-            else
+            local timerPos = DFUI_FRAMEPOS and DFUI_FRAMEPOS['QuestTimerFrame']
+            if not (timerPos and DFUI:ApplyFramePos(QuestTimerFrame, timerPos)) then
                 QuestTimerFrame:ClearAllPoints()
                 QuestTimerFrame:SetPoint('TOPRIGHT', Minimap, 'BOTTOMLEFT', -20, 40)
             end

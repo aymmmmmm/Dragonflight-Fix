@@ -28,6 +28,39 @@ DFUI.DBversion = "2.0"
 -- boot flag
 local boot = false
 
+-- ============================================================
+-- 框架位置条目（DFUI_FRAMEPOS / 档案里的 _FramePos）
+--
+-- 新格式 {point = "TOPRIGHT", ox, oy}：锚到离 frame 最近的那个屏幕角，
+--   存相对该角的偏移。换 uiScale/分辨率时贴边元素恒贴同一条边，不会跑出屏幕。
+-- 旧格式 {x, y}：绝对像素（左边缘 / 上边缘，相对屏幕左下角）。屏幕一变小就越界，
+--   越界后 frame 的 IsShown/IsVisible 仍返回 1 却一个像素都画不出来。
+--   仅作读取兼容，由 frames.lua 的 RestoreFramePositions 逐条迁移到新格式。
+--
+-- 拷贝/应用集中在这两个函数，避免档案存取各处硬编码字段名、格式升级时漏改。
+-- ============================================================
+function DFUI:CopyFramePos(pos)
+    if type(pos) ~= "table" then return nil end
+    if pos.point then
+        return { point = pos.point, ox = pos.ox, oy = pos.oy }
+    end
+    return { x = pos.x, y = pos.y }
+end
+
+function DFUI:ApplyFramePos(frame, pos)
+    if not frame or type(pos) ~= "table" then return false end
+    if pos.point then
+        frame:ClearAllPoints()
+        frame:SetPoint(pos.point, UIParent, pos.point, pos.ox, pos.oy)
+        return true
+    elseif pos.x and pos.y then
+        frame:ClearAllPoints()
+        frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
+        return true
+    end
+    return false
+end
+
 -- utility
 function DFUI:GetInfoOrCons(type)
     local name = "Dragonflight-Fix"
@@ -223,7 +256,7 @@ function DFUI:InitTempDB()
             -- 恢复框架位置到 DFUI_FRAMEPOS
             DFUI_FRAMEPOS = {}
             for fname, pos in pairs(tbl) do
-                DFUI_FRAMEPOS[fname] = {x = pos.x, y = pos.y}
+                DFUI_FRAMEPOS[fname] = self:CopyFramePos(pos)
             end
         elseif type(tbl) == "table" then
             self.tempDB[mod] = self.tempDB[mod] or {}
@@ -283,7 +316,7 @@ function DFUI:SaveTempDB()
     if DFUI_FRAMEPOS and next(DFUI_FRAMEPOS) then
         DFUI_PROFILES[cur]["_FramePos"] = {}
         for name, pos in pairs(DFUI_FRAMEPOS) do
-            DFUI_PROFILES[cur]["_FramePos"][name] = {x = pos.x, y = pos.y}
+            DFUI_PROFILES[cur]["_FramePos"][name] = self:CopyFramePos(pos)
         end
     end
 
@@ -332,7 +365,7 @@ function DFUI:CopyProfile(from, tbl)
         if mod == "_FramePos" then
             DFUI_FRAMEPOS = {}
             for fname, pos in pairs(data) do
-                DFUI_FRAMEPOS[fname] = {x = pos.x, y = pos.y}
+                DFUI_FRAMEPOS[fname] = self:CopyFramePos(pos)
             end
         else
             self.tempDB[mod] = {}
@@ -350,7 +383,7 @@ function DFUI:LoadProfile(name)
             -- 恢复框架位置
             DFUI_FRAMEPOS = {}
             for fname, pos in pairs(data) do
-                DFUI_FRAMEPOS[fname] = {x = pos.x, y = pos.y}
+                DFUI_FRAMEPOS[fname] = self:CopyFramePos(pos)
             end
         else
             self.tempDB[mod] = {}

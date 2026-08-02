@@ -74,12 +74,46 @@ DFUI:NewMod("Frames", 2, function()
             local name = frame:GetName()
             if not name then return end
 
-            local x, y = frame:GetLeft(), frame:GetTop()
-            DFUI_FRAMEPOS[name] = {x = x, y = y}
+            local l, r = frame:GetLeft(), frame:GetRight()
+            local t, b = frame:GetTop(), frame:GetBottom()
+            -- 布局还没算出来就别存，免得把 nil 写进档案
+            if not l or not r or not t or not b then return end
+
+            local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+            local cx, cy = (l + r) / 2, (t + b) / 2
+
+            -- 屏幕横竖各分三段，按 frame 中心落点选九宫格里最贴切的那个锚点：
+            -- 贴边的存边距（换屏幕尺寸后仍贴同一条边，不会被顶出去），
+            -- 居中的存"相对屏幕中心的偏移"（动作条这类东西换分辨率后仍然居中）。
+            local hSide, vSide
+            if cx < sw / 3 then hSide = "LEFT"
+            elseif cx > sw * 2 / 3 then hSide = "RIGHT"
+            else hSide = "" end
+
+            if cy < sh / 3 then vSide = "BOTTOM"
+            elseif cy > sh * 2 / 3 then vSide = "TOP"
+            else vSide = "" end
+
+            local point = vSide .. hSide
+            if point == "" then point = "CENTER" end
+
+            local ox, oy
+            if hSide == "LEFT" then ox = l
+            elseif hSide == "RIGHT" then ox = r - sw
+            else ox = cx - sw / 2 end
+
+            if vSide == "BOTTOM" then oy = b
+            elseif vSide == "TOP" then oy = t - sh
+            else oy = cy - sh / 2 end
+
+            DFUI_FRAMEPOS[name] = { point = point, ox = ox, oy = oy }
         end
 
         local function RestoreFramePositions()
             if not DFUI_FRAMEPOS then return end
+
+            local screenW, screenH = UIParent:GetWidth(), UIParent:GetHeight()
+
             for name, pos in pairs(DFUI_FRAMEPOS) do
                 -- 跳过光环锚点（由 auras.lua 的滑块控制位置）
                 if string.find(name, "DFUI_AuraAnchor_") then
@@ -87,8 +121,33 @@ DFUI:NewMod("Frames", 2, function()
                 else
                     local frame = _G[name]
                     if frame then
-                        frame:ClearAllPoints()
-                        frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
+                        if pos.point then
+                            -- 新格式：锚到就近的屏幕角，屏幕尺寸变了也自动跟着走
+                            DFUI:ApplyFramePos(frame, pos)
+                        elseif pos.x and pos.y then
+                            -- 旧格式绝对像素：可能是在别的 uiScale 下存的。先钳回屏幕内
+                            -- （整体越界时 frame 仍 IsVisible=1 却一个像素都画不出来），
+                            -- 再按落定后的位置转成就近角格式，每条只迁一次。
+                            local x, y = pos.x, pos.y
+                            local w, h = frame:GetWidth(), frame:GetHeight()
+                            -- 尺寸拿不到时退回保底值；保底值偏大只会让下面的判定更保守
+                            if not w or w <= 0 then w = 20 end
+                            if not h or h <= 0 then h = 20 end
+
+                            -- 只救"整个 frame 都在屏幕外"的：还露着一部分的一律不动，
+                            -- 免得把特意贴边摆的东西挪走。x=左边缘，y=上边缘。
+                            if y - h >= screenH then y = screenH       -- 整个在屏幕上方
+                            elseif y <= 0 then y = h end               -- 整个在屏幕下方
+                            if x >= screenW then x = screenW - w       -- 整个在屏幕右侧
+                            elseif x + w <= 0 then x = 0 end           -- 整个在屏幕左侧
+
+                            frame:ClearAllPoints()
+                            frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
+
+                            -- 转新格式。此刻 GetLeft 等若还没算出来，SaveFramePosition
+                            -- 会原样返回、保留旧格式，下次登录再迁，不会写坏数据。
+                            SaveFramePosition(frame)
+                        end
                     end
                 end
             end

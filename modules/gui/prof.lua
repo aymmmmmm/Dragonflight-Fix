@@ -465,7 +465,7 @@ DFUI:NewMod("Gui-prof", 4, function()
                 if mod == "_FramePos" then
                     _G.DFUI_FRAMEPOS = {}
                     for fname, pos in pairs(data) do
-                        _G.DFUI_FRAMEPOS[fname] = {x = pos.x, y = pos.y}
+                        _G.DFUI_FRAMEPOS[fname] = DFUI:CopyFramePos(pos)
                     end
                 else
                     DFUI.tempDB[mod] = {}
