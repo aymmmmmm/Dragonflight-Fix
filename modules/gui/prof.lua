@@ -24,6 +24,11 @@ DFUI:NewMod("Gui-prof", 4, function()
                     sanitized["Default"][prof][key] = value[1]
                 end
             end
+            -- 「重置为默认」连内置标准布局一起恢复（CopyProfile 读取时
+            -- 会经 CopyFramePos 深拷贝，这里共享引用不会被写坏）
+            if DFUI.defaultFramePos then
+                sanitized["Default"]["_FramePos"] = DFUI.defaultFramePos
+            end
             return sanitized
         end)(),
 

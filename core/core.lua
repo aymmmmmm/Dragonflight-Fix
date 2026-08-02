@@ -47,11 +47,24 @@ function DFUI:CopyFramePos(pos)
     return { x = pos.x, y = pos.y }
 end
 
+-- SetPoint 的偏移量按"被摆放的 frame 自身坐标系"解释，而新格式的 ox/oy 存的是
+-- UIParent 坐标系的量（见 frames.lua SaveFramePosition）。带 SetScale 的 frame
+-- （PlayerFrame/TargetFrame/动作条/宠物条/焦点框…几乎全都有）两套坐标系不等，
+-- 不换算就会整体按 scale 比例偏移。
+function DFUI:UIParentToFrameScale(frame)
+    local fs = frame:GetEffectiveScale()
+    local us = UIParent:GetEffectiveScale()
+    -- frame 没挂在 UIParent 链上时 GetEffectiveScale 可能给 0/nil，退回 1 等于旧行为
+    if not fs or not us or fs <= 0 then return 1 end
+    return us / fs
+end
+
 function DFUI:ApplyFramePos(frame, pos)
     if not frame or type(pos) ~= "table" then return false end
     if pos.point then
+        local s = self:UIParentToFrameScale(frame)
         frame:ClearAllPoints()
-        frame:SetPoint(pos.point, UIParent, pos.point, pos.ox, pos.oy)
+        frame:SetPoint(pos.point, UIParent, pos.point, pos.ox * s, pos.oy * s)
         return true
     elseif pos.x and pos.y then
         frame:ClearAllPoints()
@@ -266,6 +279,14 @@ function DFUI:InitTempDB()
         end
     end
 
+    -- 档案没带布局、角色也没有历史位置（全新账号/角色/老档案）→
+    -- 套用内置标准布局（core/layout.lua，aym 基准）。有任一已有数据则不碰。
+    if self.defaultFramePos and not next(DFUI_FRAMEPOS) then
+        for fname, pos in pairs(self.defaultFramePos) do
+            DFUI_FRAMEPOS[fname] = self:CopyFramePos(pos)
+        end
+    end
+
     -- add missing defaults to tempDB
     for mod, def in pairs(self.defaults) do
         self.tempDB[mod] = self.tempDB[mod] or {}
@@ -337,6 +358,13 @@ function DFUI:CreateProfile(name)
         DFUI_PROFILES[name][mod] = {}
         for key, value in pairs(def) do
             DFUI_PROFILES[name][mod][key] = value[1]
+        end
+    end
+    -- 新档案自带内置标准布局（aym 基准，core/layout.lua）
+    if self.defaultFramePos then
+        DFUI_PROFILES[name]["_FramePos"] = {}
+        for fname, pos in pairs(self.defaultFramePos) do
+            DFUI_PROFILES[name]["_FramePos"][fname] = self:CopyFramePos(pos)
         end
     end
 end

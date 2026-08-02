@@ -11,6 +11,7 @@
 
 # CORE
 core\core.lua
+core\layout.lua
 core\error.lua
 core\tools.lua
 core\statusbar.lua
